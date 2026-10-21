@@ -18,7 +18,31 @@ type ToolCall struct {
 	Arguments json.RawMessage
 }
 
-type Response struct{ Message Message }
+type FinishReason string
+
+const (
+	FinishStop      FinishReason = "stop"
+	FinishToolCalls FinishReason = "too_calls"
+	FinishLength    FinishReason = "length"
+)
+
+type Usage struct {
+	InputTokens  int
+	OutputTokens int
+}
+
+type Response struct {
+	Message      Message
+	FinishReason FinishReason
+	Usage        Usage
+}
+
+type ModelError struct {
+	StatusCode int
+	Code       string
+	Retryable  bool
+	Err        error
+}
 
 type Model interface {
 	Generate(ctx context.Context, messages []Message) (*Response, error)

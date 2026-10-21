@@ -1,0 +1,44 @@
+package openapi
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+)
+
+type ChatModelConfig struct {
+	APIKey string
+	Model string
+	BaseURL string
+	HTTPClient *http.Client
+}
+
+type ChatModel struct {
+	config ChatModelConfig
+}
+
+func NewChatModel(ctx context.Context, config *ChatModelConfig) (*ChatModel, error) {
+	if config.APIKey == "" || config.BaseURL == "" || config.Model == "" {
+		return nil, fmt.Errorf("param missing")
+	}
+
+	var httpClient *http.Client
+	if config.HTTPClient == nil {
+		httpClient = &http.Client{}
+	} else {
+		httpClient = config.HTTPClient
+	}
+
+	return &ChatModel{config: ChatModelConfig{
+		APIKey: config.APIKey,
+		BaseURL: config.BaseURL,
+		Model: config.Model,
+		HTTPClient: httpClient,
+	}}, nil
+} 
+
+func (cm *ChatModel) Generate(ctx context.Context, messages []model.Message) (*Response, error) {
+	
+}

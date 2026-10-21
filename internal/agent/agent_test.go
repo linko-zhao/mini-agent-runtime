@@ -70,7 +70,7 @@ func TestAgentRun(t *testing.T) {
 
 	t.Run("工具不存在时返回错误", func(t *testing.T) {
 		m := model.NewMock([]model.Response{{Message: model.Message{
-			Role: "assistant",
+			Role:      "assistant",
 			ToolCalls: []model.ToolCall{{ID: "missing-id", Name: "missing"}},
 		}}})
 
@@ -119,4 +119,3 @@ func TestAgentRun(t *testing.T) {
 		require.ErrorIs(t, err, wantErr)
 	})
 }
-
