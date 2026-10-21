@@ -45,7 +45,11 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 				Role:       "tool",
 				ToolCallID: t.ID,
 			}
-			tr, err := a.tools[t.Name].Execute(ctx, t.Arguments)
+			tool, ok := a.tools[t.Name]
+			if !ok {
+				return "", fmt.Errorf("tool %q not found", t.Name)
+			}
+			tr, err := tool.Execute(ctx, t.Arguments)
 			if err != nil {
 				tm.Content = err.Error()
 			} else {
