@@ -1,63 +1,84 @@
 package openapi
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
 
 	"github.com/linko-zhao/mini-agent-runtime/internal/model"
 )
 
-/*
-{
-  "id": "chatcmpl-B9MBs8CjcvOU2jLn4n570S5qMJKcT",
-  "object": "chat.completion",
-  "created": 1741569952,
-  "model": "gpt-6-astra",
-  "choices": [
-    {
-      "index": 0,
-      "message": {
-        "role": "assistant",
-        "content": "Hello! How can I assist you today?",
-        "refusal": null,
-        "annotations": []
-      },
-      "logprobs": null,
-      "finish_reason": "stop"
-    }
-  ],
-  "usage": {
-    "prompt_tokens": 19,
-    "completion_tokens": 10,
-    "total_tokens": 29,
-    "prompt_tokens_details": {
-      "cached_tokens": 0,
-      "audio_tokens": 0
-    },
-    "completion_tokens_details": {
-      "reasoning_tokens": 0,
-      "audio_tokens": 0,
-      "accepted_prediction_tokens": 0,
-      "rejected_prediction_tokens": 0
-    }
-  },
-  "service_tier": "default"
-}
-*/
-type Message struct {
-	Role string `json: "role"`
-	Content string `json: "content"`
-	Refusal string `json: "refusal"`
+// 对应 API 返回的完整 JSON 响应
+type ChatCompletion struct {
+    ID      string   `json:"id"`
+    Object  string   `json:"object"`
+    Created int64    `json:"created"`
+    Model   string   `json:"model"`
+    Choices []Choice `json:"choices"`
+    Usage   *Usage   `json:"usage,omitempty"` // 使用指针，因为某些情况下可能无此字段
 }
 
 type Choice struct {
-	Index int `json: "index"`
-	Message model.Model `json: "message"`
-	FinishReason model.FinishReason `json: "finish_reason`
+    Index        int      `json:"index"`
+    Message      Message  `json:"message"`
+    FinishReason *string  `json:"finish_reason,omitempty"`
 }
 
-type ChatCompletions struct {
-	Choices	[]model.Message `json: "choices"`
-	
+type Message struct {
+    Role    string  `json:"role"`
+    Content *string `json:"content,omitempty"` // 使用指针，当发生工具调用时 Content 可能为 null
+	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
 }
 
+type ToolCall struct {
+    ID       string       `json:"id"`   // 回传结果时要用
+    Type     string       `json:"type"` // "function"
+    Function FunctionCall `json:"function"`
+}
 
+type FunctionCall struct {
+    Name      string `json:"name"`
+    Arguments string `json:"arguments"` // JSON 字符串，需要二次解析
+}
+
+type Usage struct {
+    PromptTokens     int `json:"prompt_tokens"`
+    CompletionTokens int `json:"completion_tokens"`
+    TotalTokens      int `json:"total_tokens"`
+}
+
+func convertResponse(_ context.Context, resp *http.Response) (*model.Response, error) {
+	var completion ChatCompletion
+	if err := json.NewDecoder(resp.Body).Decode(&completion); err != nil {
+		return nil, err
+	}
+	if len(completion.Choices) == 0 {
+		return nil, fmt.Errorf("openai: response has no choices")
+	}
+
+	choice := completion.Choices[0]
+	msg := model.Message{Role: choice.Message.Role}
+	if choice.Message.Content != nil {
+		msg.Content = *choice.Message.Content
+	}
+	for _, tc := range choice.Message.ToolCalls {
+		msg.ToolCalls = append(msg.ToolCalls, model.ToolCall{
+			ID:        tc.ID,
+			Name:      tc.Function.Name,
+			Arguments: json.RawMessage(tc.Function.Arguments),
+		})
+	}
+
+	out := &model.Response{Message: msg}
+	if choice.FinishReason != nil {
+		out.FinishReason = model.FinishReason(*choice.FinishReason)
+	}
+	if completion.Usage != nil {
+		out.Usage = model.Usage{
+			InputTokens:  completion.Usage.PromptTokens,
+			OutputTokens: completion.Usage.CompletionTokens,
+		}
+	}
+	return out, nil
+}

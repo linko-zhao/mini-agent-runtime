@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/linko-zhao/mini-agent-runtime/internal/model"
 )
 
@@ -42,25 +41,25 @@ func NewChatModel(ctx context.Context, config *ChatModelConfig) (*ChatModel, err
 	}}, nil
 } 
 
-func (cm *ChatModel) Generate(ctx context.Context, messages []model.Message) (*Response, error) {
+func (cm *ChatModel) Generate(ctx context.Context, messages []model.Message) (*model.Response, error) {
 	payload := map[string]any{
 		"model": cm.config.Model,
 		"messages": messages,
 	}
 	buf, _ := json.Marshal(payload)
 
-	req, err := http.NewRequest(http.MethodPost, cm.config.BaseURL, bytes.NewReader(buf))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cm.config.BaseURL, bytes.NewReader(buf))
 	if err != nil {
 		return nil, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", config.APIKey))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cm.config.APIKey))
 
 	resp, err := cm.config.HTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 
-	
+	return convertResponse(ctx, resp)
 }
