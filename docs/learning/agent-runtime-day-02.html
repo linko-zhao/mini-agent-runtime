@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Day 02 · 模型适配层与响应规范化 | Agent Runtime</title><style>
+:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#58667b;--line:#e0e6ee;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:920px;margin:auto;padding:32px 22px 70px}.hero{background:#183561;color:white;border-radius:18px;padding:29px 30px}.hero small{opacity:.8;letter-spacing:1px}.hero h1{margin:7px 0;font-size:30px;line-height:1.3}.hero p{color:#e6eefa;margin:0}.chips{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}.chip{border:1px solid #8ea4c8;color:#fff;border-radius:20px;padding:3px 10px;font-size:12px}section{background:var(--paper);border:1px solid var(--line);border-radius:14px;margin-top:18px;padding:22px 26px}h2{font-size:19px;margin:0 0 13px}h3{font-size:15px;margin:17px 0 6px}.time{font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.4px}p{margin:8px 0}a{color:var(--accent)}li{margin:5px 0}code{background:#f0f3f8;padding:2px 5px;border-radius:4px}pre{overflow:auto;background:#142136;color:#e7f3ff;padding:17px;border-radius:10px;font-size:13px;line-height:1.65}pre code{background:transparent;padding:0}.goal{background:var(--pale);border-left:3px solid var(--accent);padding:12px 15px;border-radius:4px}.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0}.check input{margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer;flex:1}.check.done label{text-decoration:line-through;color:var(--sub)}.progress{height:8px;background:#e3e9f2;border-radius:99px;overflow:hidden}.fill{height:100%;background:var(--accent);width:0%;transition:width .2s}.meta{display:flex;justify-content:space-between;font-size:13px;color:var(--sub);margin-bottom:9px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.grid>div{padding:12px;background:#f6f8fc;border-radius:9px}.grid strong{display:block;font-size:19px}.grid span{font-size:12px;color:var(--sub)}footer{margin-top:24px;text-align:center;color:var(--sub);font-size:12px}@media(max-width:600px){main{padding:14px 12px 40px}.hero{padding:22px}.hero h1{font-size:24px}section{padding:18px}.grid{grid-template-columns:1fr}}
+
+.subtle{color:var(--sub);font-size:13px}.note{padding:12px 15px;border-radius:9px;background:#fff8e9;border:1px solid #f2deb2;color:#644b18}.info{padding:12px 15px;border-radius:9px;background:#eff6ff;border:1px solid #d5e4fc}.row{display:flex;gap:12px;flex-wrap:wrap}.badge{font-size:12px;background:#edf3ff;border-radius:7px;padding:2px 8px;color:#2857a7;font-weight:650}.file{color:#2857a7;font-weight:650}.timebox{display:inline-block;color:#2459bd;font-weight:750;font-size:12px;margin-right:8px}.steps{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:12px 0}.steps span{padding:6px 10px;border:1px solid #dbe6f8;background:#f6f9ff;border-radius:8px;font-size:12px}.steps b{color:#6b85ad}.table-wrap{overflow:auto}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px 11px;vertical-align:top}th{background:#f4f7fc}pre{white-space:pre;tab-size:4}code{overflow-wrap:anywhere}pre code{overflow-wrap:normal}.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}.two>div{padding:13px;background:#f6f8fc;border-radius:10px}.two p{font-size:13px;color:var(--sub)}.muted{font-size:13px;color:var(--sub)}@media(max-width:600px){.two{grid-template-columns:1fr}.steps{gap:5px}.steps span{font-size:11px}th,td{padding:8px}}
+</style></head>
+<body><main>
+<header class="hero"><small>MINI AGENT RUNTIME · WEEK 01</small><h1>Day 02 / 56 · 模型适配层与响应规范化</h1><p>2026 年 10 月 20 日，星期二 · Go 实战 · Provider Adapter 与 Runtime 边界</p><div class="chips"><span class="chip">阅读 20 分钟</span><span class="chip">编码 80 分钟</span><span class="chip">测试复盘 20 分钟</span><span class="chip">单文件离线 HTML</span></div></header>
+<section><h2>今日目标与交付</h2><div class="goal">基于 Day 01 的 <code>Model.Generate(ctx, messages)</code>，实现一个真实的 HTTP Model Provider Adapter。将厂商返回的文本、ToolCall、Token Usage、FinishReason 和错误转换为 Runtime 的统一结构，不修改既有 Agent Loop 的职责。</div><div class="grid" style="margin-top:16px"><div><strong>1</strong><span>可替换的 HTTP Provider Adapter</span></div><div><strong>4</strong><span>响应与错误规范化类型</span></div><div><strong>6+</strong><span>离线 httptest 测试场景</span></div></div><p class="note"><strong>进度衔接：</strong>Day 01 已规划实现最小 Agent Loop，Day 02 只扩展模型层，不重新实现 Loop。如果 Day 01 尚未完成，请先补齐 Mock Model → Tool → Model 的基本闭环，再继续本日任务。</p></section>
+<section><div class="time">20 MIN · READ</div><h2>源码与官方文档阅读</h2>
+<h3><span class="timebox">10 分钟</span>阅读 Eino 的模型抽象</h3><p>阅读 <a href="https://github.com/cloudwego/eino/blob/main/components/model/interface.go" target="_blank" rel="noopener noreferrer">Eino / components/model/interface.go</a>，重点查看 <code>BaseModel.Generate</code> 与 <code>Stream</code> 的接口边界；然后浏览 <a href="https://github.com/cloudwego/eino-examples/blob/main/quickstart/chatwitheino/chatmodel/model.go" target="_blank" rel="noopener noreferrer">ChatWithEino / chatmodel/model.go</a> 的 Provider 选择方式。</p><p class="muted">带着问题读：模型厂商的请求参数、响应格式和错误为什么不应该直接出现在 Agent Loop 中？</p>
+<h3><span class="timebox">10 分钟</span>阅读 OpenAI Chat Completions 与 Function Calling</h3><p>阅读 <a href="https://platform.openai.com/docs/api-reference/chat/create" target="_blank" rel="noopener noreferrer">Chat Completions API Reference</a> 和 <a href="https://platform.openai.com/docs/guides/function-calling" target="_blank" rel="noopener noreferrer">Function Calling 指南</a>，找到 <code>choices[].message.tool_calls</code>、<code>finish_reason</code>、<code>usage</code> 和 HTTP 错误结构。</p><p><strong>阅读产出：</strong>在 <code>docs/design.md</code> 写出 2 条边界原则：Runtime 只认识统一数据结构；Adapter 独立处理 Provider 传输和协议细节。</p></section>
+<section><div class="time">80 MIN · BUILD</div><h2>编码任务（时间盒推进）</h2>
+<h3><span class="timebox">任务 A · 15 分钟</span>扩展模型响应与错误类型</h3><p>修改 <code class="file">internal/model/model.go</code>，保留 Day 01 的 <code>Message</code>、<code>ToolCall</code> 和 <code>Model</code> 接口；为 <code>Response</code> 补充完成原因和用量，新增可分类的 <code>ModelError</code>。</p>
+<pre><code>type FinishReason string // 模型本轮结束原因；保留未知值便于兼容
+const (
+    FinishStop      FinishReason = "stop"       // 正常结束
+    FinishToolCalls FinishReason = "tool_calls" // 请求执行工具
+    FinishLength    FinishReason = "length"     // 达到输出长度限制
+)
+
+type Usage struct {
+    InputTokens  int // 本轮输入 token 数
+    OutputTokens int // 本轮输出 token 数
+}
+
+type Response struct {
+    Message      Message      // 归一化的 assistant 消息
+    FinishReason FinishReason // 模型结束原因
+    Usage        Usage        // 本轮 token 用量；缺失时为零值
+}
+
+type ModelError struct {
+    StatusCode int  // HTTP 状态码；传输错误可为 0
+    Code       string // 分类码，如 unauthorized、rate_limited
+    Retryable  bool // 是否适合上层考虑重试（非自动重试）
+    Err        error // 原始错误；实现 Unwrap() 支持 errors.As/Is
+}</code></pre>
+<p class="info"><strong>设计取舍：</strong>保留 <code>Generate(ctx, messages)</code> 的原始签名，避免改动 Day 01 Agent Loop。今天先实现非流式调用；工具定义的注册与模型绑定安排在后续工具系统阶段。模型返回 ToolCall 的解析仍要完成。</p>
+<h3><span class="timebox">任务 B · 35 分钟</span>实现 HTTP Provider Adapter</h3><p>创建 <code class="file">internal/model/openai/adapter.go</code>，以 Chat Completions 风格的 <code>POST /chat/completions</code> 为本日教学接口；使用 <code>net/http</code> 与 <code>encoding/json</code>，不强制引入第三方 SDK。</p>
+<div class="steps"><span>Model.Generate</span><b>→</b><span>编码 Provider 请求</span><b>→</b><span>HTTP Client.Do(ctx)</span><b>→</b><span>解析响应</span><b>→</b><span>model.Response</span></div>
+<div class="table-wrap"><table><thead><tr><th>文件 / 函数</th><th>实现要求</th></tr></thead><tbody><tr><td><code>adapter.go</code><br><code>New(Config)</code></td><td>配置 <code>APIKey</code>、<code>Model</code>、<code>BaseURL</code>、可注入 <code>*http.Client</code>；缺少必要配置返回错误。</td></tr><tr><td><code>Generate</code></td><td>转换 <code>system/user/assistant/tool</code> 消息；设置 Bearer 鉴权；<code>http.NewRequestWithContext</code> 传递取消与超时。</td></tr><tr><td><code>convert.go</code></td><td>将 <code>choices[0].message</code>、<code>tool_calls</code>、<code>usage</code>、<code>finish_reason</code> 转成内部类型。</td></tr><tr><td><code>error.go</code>（可选）</td><td>处理 HTTP 非 2xx、网络错误和响应解码错误；保证错误可通过 <code>errors.As</code> 识别。</td></tr></tbody></table></div>
+<p><strong>边界要求：</strong>不要把 API Key、完整请求头或敏感消息原文写入日志；限制响应体读取大小，避免异常响应耗尽内存。此处是学习阶段实现，尚不要求生产级重试、连接池调优或多 Provider 兼容。</p>
+<h3><span class="timebox">任务 C · 20 分钟</span>规范化 ToolCall 与异常</h3><p>创建 <code class="file">internal/model/openai/convert.go</code>（也可拆出 <code>error.go</code>），实现以下转换规则：</p>
+<div class="two"><div><strong>正常响应</strong><p>文本直接进入 <code>Message.Content</code>；多个工具调用逐一转换，保留 <code>ID</code>、<code>Name</code> 和原始 JSON 参数；工具调用消息角色保持 <code>assistant</code>。</p></div><div><strong>异常响应</strong><p>空 <code>choices</code>、缺失工具名称、非法 JSON 参数返回可判断错误；401 为鉴权错误，429 为限流错误，5xx 可标记为可重试；<code>ctx</code> 取消原样保留错误链。</p></div></div>
+<p class="muted">注意：<code>Retryable</code> 只是错误属性，不代表今天应实现自动重试。重试需要在未来考虑副作用、次数上限和退避策略。</p>
+<h3><span class="timebox">任务 D · 10 分钟</span>更新 Demo 与设计文档</h3><p>修改 <code class="file">cmd/demo/main.go</code>，读取 <code>OPENAI_API_KEY</code>、<code>OPENAI_MODEL</code>、可选 <code>OPENAI_BASE_URL</code>；有密钥时调用一次真实模型，无密钥时提示配置方式，不能让 Mock 单元测试失败。</p><p>在 <code class="file">docs/design.md</code> 记录：为何选用非流式 Chat Completions 作为教学切入点、内部类型与 Provider DTO 的边界、未来 <code>Stream</code> 的演进方向。</p></section>
+<section><div class="time">20 MIN · TEST &amp; REVIEW</div><h2>测试与复盘</h2><p>创建 <code class="file">internal/model/openai/adapter_test.go</code>，使用 <code>httptest.Server</code> 验证实际 HTTP 编码和解析，不使用真实 API Key。</p>
+<div class="table-wrap"><table><thead><tr><th>场景</th><th>验收断言</th></tr></thead><tbody><tr><td>200 + 普通文本</td><td><code>Message.Content</code>、<code>FinishReason</code>、<code>Usage</code> 正确。</td></tr><tr><td>200 + 多个 ToolCall</td><td>调用顺序、ID、名称与 JSON 参数无损保留。</td></tr><tr><td>401 / 429 / 503</td><td><code>errors.As</code> 能取得 <code>ModelError</code>，分类和 <code>Retryable</code> 合理。</td></tr><tr><td>200 + 空 choices / 非法参数</td><td>返回错误，不 panic、不返回伪造成功消息。</td></tr><tr><td>请求取消或超时</td><td><code>errors.Is(err, context.Canceled/DeadlineExceeded)</code> 可判断。</td></tr><tr><td>Day 01 回归</td><td>原有 Mock Model 和 Agent Loop 测试不受影响。</td></tr></tbody></table></div>
+<pre><code>gofmt -w internal/model cmd/demo
+go test ./internal/model/... -v
+go test ./...
+go test -race ./...</code></pre>
+<h3>交互式验收清单</h3><div class="meta"><span>勾选进度保存在当前浏览器（localStorage）</span><span id="count">0 / 7</span></div><div class="progress" role="progressbar" aria-label="学习任务进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="bar"><div class="fill" id="fill"></div></div><div id="checks"></div>
+<h3>复盘问题（写入 docs/design.md）</h3><ol><li>为什么模型 API 的 HTTP 错误不能直接返回给 Agent Loop，而应该归一化？</li><li>若响应同时包含文本与 ToolCall，Runtime 应保留哪些信息？</li><li>哪些错误适合重试，为什么“可重试”不等于“应立即重试”？</li></ol></section>
+<section><h2>完成定义与 Day 03 衔接</h2><p><strong>Definition of Done：</strong>在不联网、不配置真实 API Key 的情况下，所有 <code>httptest</code> 测试和 Day 01 回归测试通过；可在提供密钥时执行一次真实模型请求；响应转换保留 ToolCall ID、Usage 与结束原因；错误可分类、可追踪；提交一个 Git Commit。</p><p><strong>Day 03 预告：</strong>在现有 Agent Loop 上扩展工具元数据和 Tool Registry，建立工具定义向 Model Provider 的传递机制，验证真实模型返回的 ToolCall 能与本地工具正确匹配。不会重复实现 Day 01 的最小 Loop。</p><p class="muted">本日范围：非流式 Adapter。暂不实现 Streaming、自动重试、MCP 或持久化；它们会在后续阶段逐步加入。</p></section>
+<footer>Agent Runtime · 8 周 / 56 天 · 独立离线 HTML · 官方参考链接需联网访问</footer></main>
+<script>
+const items=["完成 Eino 与 OpenAI 文档阅读并记录接口设计取舍", "完善 internal/model/model.go 的 Response / Usage / FinishReason / ModelError", "实现 internal/model/openai/adapter.go 的非流式请求与响应转换", "实现 ToolCall 参数、关联 ID 与错误分类的规范化处理", "通过环境变量配置 Demo；无密钥时 Mock 测试仍能运行", "使用 httptest 覆盖文本、工具调用、401、429、空响应及取消", "go test ./... 与 go test -race ./... 通过；更新设计文档并提交 Commit"];
+const storageKey='mini-agent-runtime-day-02-checklist-v1';
+let saved=[];try{const s=JSON.parse(localStorage.getItem(storageKey)||'[]');if(Array.isArray(s))saved=s}catch(e){}
+const box=document.getElementById('checks');
+items.forEach((s,i)=>{const d=document.createElement('div');d.className='check';const input=document.createElement('input');input.type='checkbox';input.id='day02-task-'+i;input.checked=!!saved[i];const l=document.createElement('label');l.setAttribute('for',input.id);l.textContent=s;d.append(input,l);box.append(d);input.addEventListener('change',()=>{saved[i]=input.checked;try{localStorage.setItem(storageKey,JSON.stringify(saved))}catch(e){}refresh()})});
+function refresh(){let n=0;[...box.children].forEach((d,i)=>{d.classList.toggle('done',!!saved[i]);if(saved[i])n++});const p=n/items.length*100;document.getElementById('count').textContent=n+' / '+items.length;document.getElementById('fill').style.width=p+'%';document.getElementById('bar').setAttribute('aria-valuenow',String(p))}refresh();
+</script></body></html>
