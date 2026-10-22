@@ -51,7 +51,7 @@ type Usage struct {
 func convertResponse(_ context.Context, resp *http.Response) (*model.Response, error) {
 	var completion ChatCompletion
 	if err := json.NewDecoder(resp.Body).Decode(&completion); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("openai: decode completions response error: %v", err)
 	}
 	if len(completion.Choices) == 0 {
 		return nil, fmt.Errorf("openai: response has no choices")

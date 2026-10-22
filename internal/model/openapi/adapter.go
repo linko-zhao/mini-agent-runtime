@@ -23,7 +23,7 @@ type ChatModel struct {
 
 func NewChatModel(ctx context.Context, config *ChatModelConfig) (*ChatModel, error) {
 	if config.APIKey == "" || config.BaseURL == "" || config.Model == "" {
-		return nil, fmt.Errorf("param missing")
+		return nil, fmt.Errorf("openai: missing required configurations")
 	}
 
 	var httpClient *http.Client
@@ -58,7 +58,11 @@ func (cm *ChatModel) Generate(ctx context.Context, messages []model.Message) (*m
 
 	resp, err := cm.config.HTTPClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, wrapTransportError(err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
+		return nil, newHTTPError(resp.StatusCode, err)
 	}
 
 	return convertResponse(ctx, resp)
