@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Day 03 · 工具定义绑定与真实 Agent Loop 联调 | Agent Runtime</title>
+<style>
+:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#58667b;--line:#e0e6ee;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:920px;margin:auto;padding:32px 22px 70px}.hero{background:#183561;color:white;border-radius:18px;padding:29px 30px}.hero small{opacity:.8;letter-spacing:1px}.hero h1{margin:7px 0;font-size:30px;line-height:1.3}.hero p{color:#e6eefa;margin:0}.chips{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}.chip{border:1px solid #8ea4c8;color:#fff;border-radius:20px;padding:3px 10px;font-size:12px}section{background:var(--paper);border:1px solid var(--line);border-radius:14px;margin-top:18px;padding:22px 26px}h2{font-size:19px;margin:0 0 13px}h3{font-size:15px;margin:17px 0 6px}.time{font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.4px}p{margin:8px 0}a{color:var(--accent)}li{margin:5px 0}code{background:#f0f3f8;padding:2px 5px;border-radius:4px}pre{overflow:auto;background:#142136;color:#e7f3ff;padding:17px;border-radius:10px;font-size:13px;line-height:1.65}pre code{background:transparent;padding:0}.goal{background:var(--pale);border-left:3px solid var(--accent);padding:12px 15px;border-radius:4px}.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0}.check input{margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer;flex:1}.check.done label{text-decoration:line-through;color:var(--sub)}.progress{height:8px;background:#e3e9f2;border-radius:99px;overflow:hidden}.fill{height:100%;background:var(--accent);width:0%;transition:width .2s}.meta{display:flex;justify-content:space-between;font-size:13px;color:var(--sub);margin-bottom:9px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.grid>div{padding:12px;background:#f6f8fc;border-radius:9px}.grid strong{display:block;font-size:19px}.grid span{font-size:12px;color:var(--sub)}footer{margin-top:24px;text-align:center;color:var(--sub);font-size:12px}@media(max-width:600px){main{padding:14px 12px 40px}.hero{padding:22px}.hero h1{font-size:24px}section{padding:18px}.grid{grid-template-columns:1fr}}
+
+.subtle{color:var(--sub);font-size:13px}.note{padding:12px 15px;border-radius:9px;background:#fff8e9;border:1px solid #f2deb2;color:#644b18}.info{padding:12px 15px;border-radius:9px;background:#eff6ff;border:1px solid #d5e4fc}.row{display:flex;gap:12px;flex-wrap:wrap}.badge{font-size:12px;background:#edf3ff;border-radius:7px;padding:2px 8px;color:#2857a7;font-weight:650}.file{color:#2857a7;font-weight:650}.timebox{display:inline-block;color:#2459bd;font-weight:750;font-size:12px;margin-right:8px}.steps{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:12px 0}.steps span{padding:6px 10px;border:1px solid #dbe6f8;background:#f6f9ff;border-radius:8px;font-size:12px}.steps b{color:#6b85ad}.table-wrap{overflow:auto}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px 11px;vertical-align:top}th{background:#f4f7fc}pre{white-space:pre;tab-size:4}code{overflow-wrap:anywhere}pre code{overflow-wrap:normal}.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}.two>div{padding:13px;background:#f6f8fc;border-radius:10px}.two p{font-size:13px;color:var(--sub)}.muted{font-size:13px;color:var(--sub)}@media(max-width:600px){.two{grid-template-columns:1fr}.steps{gap:5px}.steps span{font-size:11px}th,td{padding:8px}}
+
+.note{background:#f4f8ff;border:1px solid #d8e5ff;border-radius:9px;padding:11px 14px;margin:12px 0;color:#2c476f}
+.warn{background:#fff8eb;border:1px solid #f3dbab;border-radius:9px;padding:11px 14px;margin:12px 0;color:#77531a}
+.tag{display:inline-block;background:#eaf0fc;color:#2459bd;border-radius:5px;font-size:12px;padding:2px 7px;margin-right:6px}
+.file{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-wrap:anywhere}
+.task-head{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+.task-head h3{margin:15px 0 5px}.task-head .time{white-space:nowrap}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px}th,td{border-bottom:1px solid var(--line);padding:9px 10px;text-align:left;vertical-align:top}th{background:#f6f8fc;color:#3e526f}td code{white-space:normal;overflow-wrap:anywhere}
+pre{white-space:pre;tab-size:4}
+pre code{font-size:13px}
+.flow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0}.flow span{padding:7px 10px;background:#f2f5fb;border:1px solid #dfe7f2;border-radius:8px;font-size:13px}.flow b{color:#6781a8}
+.muted{color:var(--sub);font-size:13px}
+@media(max-width:600px){table{font-size:12px}th,td{padding:7px 6px}.task-head{align-items:flex-start}.flow{gap:5px}}
+</style>
+</head>
+<body>
+<main>
+<header class="hero">
+  <small>MINI AGENT RUNTIME · WEEK 01</small>
+  <h1>Day 03 / 56 · 工具定义绑定与真实 Agent Loop 联调</h1>
+  <p>2026 年 10 月 21 日，星期三 · Go 实战 · 从 Model Adapter 到 Tool Execution 的完整协议闭环</p>
+  <div class="chips"><span class="chip">阅读 20 分钟</span><span class="chip">编码 80 分钟</span><span class="chip">测试复盘 20 分钟</span></div>
+</header>
+
+<section>
+  <h2>今日目标与交付</h2>
+  <div class="goal">在 Day 01 的 Agent Loop 与 Day 02 的 HTTP Provider Adapter 基础上，增加<strong>工具元数据（Tool Definition）</strong>与<strong>模型工具绑定（Tool Binding）</strong>，通过 <code>httptest</code> 验证真实 HTTP 请求格式下的 <strong>Model → Tool → Model</strong> 完整闭环。今天不重新实现 Agent Loop，也不引入 MCP、持久化或复杂 JSON Schema 校验。</div>
+  <div class="grid" style="margin-top:16px"><div><strong>1</strong><span>模型无关的 ToolDefinition</span></div><div><strong>1</strong><span>Provider 工具绑定机制</span></div><div><strong>1</strong><span>端到端离线集成测试</span></div></div>
+  <div class="note"><strong>进度衔接：</strong>目前没有收到 Day 01 / Day 02 的代码完成反馈，不能默认已完成。今天的编码任务以已有 <code>Agent.Run</code>、<code>Model.Generate</code> 和 <code>openai.Adapter</code> 为前置条件；若前置测试未通过，请先修复，不要同时堆叠新功能。</div>
+  <div class="flow"><span>ToolDefinition</span><b>→</b><span>Model Tool Binding</span><b>→</b><span>HTTP tools 字段</span><b>→</b><span>ToolCall</span><b>→</b><span>ToolResult</span><b>→</b><span>最终回答</span></div>
+</section>
+
+<section>
+  <div class="time">20 MIN · READ</div>
+  <h2>源码与官方文档阅读</h2>
+  <h3>1. Eino 的工具元数据与函数工具（10 分钟）</h3>
+  <p>阅读 <a href="https://github.com/cloudwego/eino/blob/main/components/tool/utils/invokable_func.go" target="_blank" rel="noopener noreferrer">Eino <code>components/tool/utils/invokable_func.go</code></a> 中的 <code>InferTool</code>、<code>GoStruct2ToolInfo</code> 和 <code>Info</code>；关注如何从工具输入结构得到 <code>ToolInfo</code>，以及元数据与真正执行函数的关系。</p>
+  <p><strong>带着问题读：</strong>工具为什么需要同时提供“给模型看的 Schema”和“Runtime 可调用的 Execute”？两者为何不能互相替代？</p>
+  <h3>2. OpenAI Function Calling 协议（10 分钟）</h3>
+  <p>阅读 <a href="https://platform.openai.com/docs/guides/function-calling" target="_blank" rel="noopener noreferrer">OpenAI Function Calling 指南</a>，对照 <a href="https://platform.openai.com/docs/api-reference/chat/create" target="_blank" rel="noopener noreferrer">Chat Completions 请求参考</a> 中的 <code>tools</code>、<code>tool_calls</code>、<code>tool_call_id</code>。</p>
+  <p><strong>阅读产出：</strong>在 <code>docs/design.md</code> 写下一个原则：<em>工具元数据由 Runtime 维护，Provider Adapter 只负责协议转换，Tool Executor 才能执行工具。</em></p>
+</section>
+
+<section>
+  <div class="time">80 MIN · BUILD</div>
+  <h2>编码任务（按时间盒推进）</h2>
+
+  <div class="task-head"><h3>任务 A · 定义 ToolDefinition 与可选绑定接口</h3><span class="time">15 MIN</span></div>
+  <p><span class="tag">internal/model/model.go</span><span class="tag">internal/tool/tool.go</span>保留 Day 01 的 <code>Model.Generate(ctx, messages)</code> 签名，避免影响 Mock Model。通过可选接口为支持工具的 Provider 增加能力。</p>
+  <pre><code>// internal/model/model.go
+// ToolDefinition 是 Runtime 统一的工具描述，不包含执行函数。
+type ToolDefinition struct {
+    Name        string          // 工具唯一名称，如 calculator
+    Description string          // 帮助模型判断何时调用该工具
+    Parameters  json.RawMessage // 工具输入的 JSON Schema 对象
+}
+
+// ToolBinder 由支持 Tool Calling 的模型适配器选择性实现。
+// 返回绑定后的 Model，避免修改共享 Adapter 的内部状态。
+type ToolBinder interface {
+    WithTools(defs []ToolDefinition) (Model, error)
+}
+
+// internal/tool/tool.go
+// DescribedTool 是可选能力，不破坏 Day 01 的 Tool 接口。
+type DescribedTool interface {
+    Tool
+    Definition() model.ToolDefinition
+}</code></pre>
+  <p><strong>边界：</strong>定义在 <code>model</code> 包中，Provider 不依赖 <code>tool</code> 包；<code>tool</code> 可依赖 <code>model</code> 的纯数据类型。保留原有 Mock Tool，必要时仅为真实 Provider 的工具增加 <code>Definition()</code>。</p>
+
+  <div class="task-head"><h3>任务 B · 为 Calculator 提供工具元数据</h3><span class="time">20 MIN</span></div>
+  <p><span class="tag">internal/tool/calculator.go</span>沿用 Day 01 的 Calculator 工具，补充 <code>Definition()</code>。本日用 <code>a</code>、<code>b</code> 两个整数作为参数，不执行任意表达式或系统命令。</p>
+  <pre><code>// 仅示例工具元数据；保留你已有的 Execute 实现。
+func (c *Calculator) Definition() model.ToolDefinition {
+    return model.ToolDefinition{
+        Name:        "calculator",
+        Description: "计算两个整数的和",
+        Parameters: json.RawMessage(`{
+            "type": "object",
+            "properties": {
+                "a": {"type": "integer"},
+                "b": {"type": "integer"}
+            },
+            "required": ["a", "b"],
+            "additionalProperties": false
+        }`),
+    }
+}</code></pre>
+  <p><strong>实现要求：</strong><code>Definition().Name</code> 与 <code>Name()</code> 一致；重复工具名称应在组装 Agent 时拒绝；至少检查 <code>Parameters</code> 是合法的 JSON 对象。<strong>今天不实现完整的 JSON Schema 校验器</strong>，它属于第二周的 Tool Infrastructure。</p>
+
+  <div class="task-head"><h3>任务 C · Adapter 实现 Tool Binding 并序列化请求</h3><span class="time">30 MIN</span></div>
+  <p><span class="tag">internal/model/openai/adapter.go</span><span class="tag">internal/model/openai/convert.go</span>为 Day 02 的 HTTP Adapter 实现 <code>model.ToolBinder</code>：将绑定的定义转成 Chat Completions 请求体中的 <code>tools</code>，每轮 <code>Generate</code> 都携带可用工具列表。</p>
+  <pre><code>// 关键形状：以下为 Provider 请求 JSON 片段，不是完整 Go 实现。
+{
+  "tools": [{
+    "type": "function",
+    "function": {
+      "name": "calculator",
+      "description": "计算两个整数的和",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "a": {"type": "integer"},
+          "b": {"type": "integer"}
+        },
+        "required": ["a", "b"],
+        "additionalProperties": false
+      }
+    }
+  }]
+}</code></pre>
+  <p><strong>关键点：</strong> <code>Parameters</code> 应作为 JSON 对象发送，不能被二次编码成字符串。<code>WithTools</code> 建议返回拷贝后的 Adapter；不要在共享实例上直接追加可变的工具列表。Day 02 的 <code>ToolCall.ID</code> 与 <code>Arguments</code> 转换逻辑保持不变。</p>
+
+  <div class="task-head"><h3>任务 D · 在 Agent 初始化阶段连接 Tool 与 Model</h3><span class="time">15 MIN</span></div>
+  <p><span class="tag">internal/agent/agent.go</span><span class="tag">cmd/demo/main.go</span>从已注册工具中提取 <code>ToolDefinition</code>，通过类型断言判断模型是否实现 <code>ToolBinder</code>，绑定后再进入既有 <code>Run</code> 循环。</p>
+  <p><strong>最小约束：</strong>真实 HTTP Adapter 必须能获得工具定义；Mock Model 可以继续使用预设 ToolCall，不强制实现 <code>ToolBinder</code>。如真实 Provider 缺少工具绑定能力，应在初始化阶段报错，而不是运行时静默丢弃工具。</p>
+  <p class="muted">工程建议：在 Agent 构造或配置阶段完成一次绑定；不要每个 Loop Step 重新修改 Adapter。工具注册表初始化后先视为只读，以免引入并发数据竞争。</p>
+</section>
+
+<section>
+  <div class="time">20 MIN · TEST &amp; REVIEW</div>
+  <h2>测试与复盘</h2>
+  <p>主要测试放在 <code>internal/agent/agent_test.go</code> 与 <code>internal/model/openai/adapter_test.go</code>。使用 <code>httptest.Server</code> 充当 Provider，返回两轮预设 HTTP 响应，整个流程无需联网或真实密钥。</p>
+  <table>
+    <thead><tr><th>测试场景</th><th>核心断言</th></tr></thead>
+    <tbody>
+      <tr><td>首次请求携带工具定义</td><td><code>tools[0].function.name</code> 为 <code>calculator</code>；<code>parameters</code> 是 JSON 对象。</td></tr>
+      <tr><td>第一轮返回 ToolCall</td><td>调用 <code>calculator</code> 一次，工具参数 <code>{"a":1,"b":1}</code> 得到 <code>2</code>。</td></tr>
+      <tr><td>第二轮消息回填</td><td>请求历史包含 assistant 的 <code>tool_calls</code> 和 <code>role=tool</code> 消息，<code>tool_call_id</code> 精确匹配。</td></tr>
+      <tr><td>模型最终返回文本</td><td><code>Agent.Run</code> 返回预设最终答案，不继续执行工具。</td></tr>
+      <tr><td>重复名称 / 非法 Schema</td><td>初始化失败；不会向 Provider 发出 HTTP 请求。</td></tr>
+      <tr><td>回归与取消</td><td>Day 01 Mock Loop、Day 02 Adapter 测试仍通过；取消请求可正确终止。</td></tr>
+    </tbody>
+  </table>
+  <pre><code>gofmt -w internal/model internal/tool internal/agent cmd/demo
+go test ./internal/agent/... ./internal/model/... -v
+go test ./...
+go test -race ./...</code></pre>
+  <div class="warn"><strong>测试边界：</strong> <code>httptest</code> 证明协议转换和 Runtime 联调正确，不等于所有真实模型都保证返回符合 Schema 的参数。运行时输入校验、超时与执行权限将在后续阶段继续补齐。</div>
+  <h3>交互式验收清单</h3>
+  <div class="meta"><span>勾选状态仅保存在本地浏览器（localStorage）</span><span id="count">0 / 8</span></div>
+  <div class="progress" role="progressbar" aria-label="学习任务完成进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div>
+  <div id="checks"></div>
+  <h3>复盘问题（记录在 docs/design.md）</h3>
+  <ol>
+    <li>为什么 <code>ToolDefinition</code> 与 <code>Tool.Execute</code> 应保持分离？</li>
+    <li>为什么 <code>WithTools</code> 返回新 Model 比直接修改共享 Adapter 更利于并发安全？</li>
+    <li>当模型返回一个未注册的工具名称时，Runtime 应如何处理？错误是否应该作为工具结果反馈给模型？</li>
+  </ol>
+</section>
+
+<section>
+  <h2>完成定义与 Day 04 衔接</h2>
+  <p><strong>Definition of Done：</strong>基于 Day 01/02 的既有代码，不改变 <code>Model.Generate</code> 接口；<code>ToolDefinition</code> 可传到 Provider 请求；离线 HTTP 双轮交互中 ToolCall ID 与 ToolResult 严格匹配；无真实 API Key 时全部测试通过；<code>go test ./...</code> 与 <code>go test -race ./...</code> 通过；<code>docs/design.md</code> 记录接口边界并提交一次 Git Commit。</p>
+  <p><strong>建议提交：</strong><code>git add . &amp;&amp; git commit -m "feat(runtime): bind tool definitions to model adapter"</code></p>
+  <p><strong>Day 04 预告：</strong>在现有闭环上完善 <strong>context 取消、工具执行超时、maxSteps 边界和错误传播</strong>，建立 Runtime 生命周期控制的最小测试矩阵。Day 04 不引入持久化；后续第二周再深入工具校验与 MCP。</p>
+</section>
+<footer>Agent Runtime · 8 周 / 56 天 · 单文件离线 HTML；官方文档链接需要联网打开</footer>
+</main>
+<script>
+const items = [
+  "阅读 Eino 工具源码与 OpenAI Function Calling 文档，记录元数据与执行边界",
+  "在 model.go 中定义 ToolDefinition 与可选 ToolBinder，不改变 Generate 签名",
+  "为 Calculator 增加 Definition()，确保 Name 一致、Schema 是合法 JSON 对象",
+  "Adapter 的 WithTools 返回独立绑定实例，避免共享可变状态",
+  "Provider HTTP 请求包含正确 tools 字段且 parameters 未被二次编码",
+  "Agent 组装阶段绑定工具；缺失真实 Provider 绑定能力时明确报错",
+  "httptest 验证两轮 Model → Tool → Model、ToolCall ID 关联及异常初始化",
+  "全量测试与 race 检查通过，更新 docs/design.md 并提交 Git Commit"
+];
+const storageKey = 'mini-agent-runtime-day-03-checklist-v1';
+let saved = [];
+try { const parsed = JSON.parse(localStorage.getItem(storageKey) || '[]'); if (Array.isArray(parsed)) saved = parsed; } catch (_) {}
+const box = document.getElementById('checks');
+const bar = document.querySelector('[role="progressbar"]');
+function refresh() {
+  let n = 0;
+  [...box.children].forEach((row, i) => { const done = !!saved[i]; row.classList.toggle('done', done); if (done) n++; });
+  document.getElementById('count').textContent = `${n} / ${items.length}`;
+  const percent = Math.round(n / items.length * 100);
+  document.getElementById('fill').style.width = percent + '%';
+  bar.setAttribute('aria-valuenow', String(percent));
+}
+items.forEach((title, i) => {
+  const row = document.createElement('div'); row.className = 'check';
+  const input = document.createElement('input'); input.type = 'checkbox'; input.id = 'task-' + i; input.checked = !!saved[i];
+  const label = document.createElement('label'); label.htmlFor = input.id; label.textContent = title;
+  row.append(input, label); box.append(row);
+  input.addEventListener('change', () => { saved[i] = input.checked; try { localStorage.setItem(storageKey, JSON.stringify(saved)); } catch (_) {} refresh(); });
+});
+refresh();
+</script>
+</body>
+</html>
