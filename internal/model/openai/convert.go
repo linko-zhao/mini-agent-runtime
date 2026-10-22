@@ -11,41 +11,41 @@ import (
 
 // 对应 API 返回的完整 JSON 响应
 type ChatCompletion struct {
-    ID      string   `json:"id"`
-    Object  string   `json:"object"`
-    Created int64    `json:"created"`
-    Model   string   `json:"model"`
-    Choices []Choice `json:"choices"`
-    Usage   *Usage   `json:"usage,omitempty"` // 使用指针，因为某些情况下可能无此字段
+	ID      string   `json:"id"`
+	Object  string   `json:"object"`
+	Created int64    `json:"created"`
+	Model   string   `json:"model"`
+	Choices []Choice `json:"choices"`
+	Usage   *Usage   `json:"usage,omitempty"` // 使用指针，因为某些情况下可能无此字段
 }
 
 type Choice struct {
-    Index        int      `json:"index"`
-    Message      Message  `json:"message"`
-    FinishReason *string  `json:"finish_reason,omitempty"`
+	Index        int     `json:"index"`
+	Message      Message `json:"message"`
+	FinishReason *string `json:"finish_reason,omitempty"`
 }
 
 type Message struct {
-    Role    string  `json:"role"`
-    Content *string `json:"content,omitempty"` // 使用指针，当发生工具调用时 Content 可能为 null
+	Role      string     `json:"role"`
+	Content   *string    `json:"content,omitempty"` // 使用指针，当发生工具调用时 Content 可能为 null
 	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
 }
 
 type ToolCall struct {
-    ID       string       `json:"id"`   // 回传结果时要用
-    Type     string       `json:"type"` // "function"
-    Function FunctionCall `json:"function"`
+	ID       string       `json:"id"`   // 回传结果时要用
+	Type     string       `json:"type"` // "function"
+	Function FunctionCall `json:"function"`
 }
 
 type FunctionCall struct {
-    Name      string `json:"name"`
-    Arguments string `json:"arguments"` // JSON 字符串，需要二次解析
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"` // JSON 字符串，需要二次解析
 }
 
 type Usage struct {
-    PromptTokens     int `json:"prompt_tokens"`
-    CompletionTokens int `json:"completion_tokens"`
-    TotalTokens      int `json:"total_tokens"`
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
 }
 
 func convertResponse(_ context.Context, resp *http.Response) (*model.Response, error) {

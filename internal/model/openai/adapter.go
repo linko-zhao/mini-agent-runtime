@@ -11,9 +11,9 @@ import (
 )
 
 type ChatModelConfig struct {
-	APIKey string
-	Model string
-	BaseURL string
+	APIKey     string
+	Model      string
+	BaseURL    string
 	HTTPClient *http.Client
 }
 
@@ -21,7 +21,7 @@ type ChatModel struct {
 	config ChatModelConfig
 }
 
-func NewChatModel(ctx context.Context, config *ChatModelConfig) (*ChatModel, error) {
+func NewChatModel(config *ChatModelConfig) (*ChatModel, error) {
 	if config.APIKey == "" || config.BaseURL == "" || config.Model == "" {
 		return nil, fmt.Errorf("openai: missing required configurations")
 	}
@@ -34,16 +34,16 @@ func NewChatModel(ctx context.Context, config *ChatModelConfig) (*ChatModel, err
 	}
 
 	return &ChatModel{config: ChatModelConfig{
-		APIKey: config.APIKey,
-		BaseURL: config.BaseURL,
-		Model: config.Model,
+		APIKey:     config.APIKey,
+		BaseURL:    config.BaseURL,
+		Model:      config.Model,
 		HTTPClient: httpClient,
 	}}, nil
-} 
+}
 
 func (cm *ChatModel) Generate(ctx context.Context, messages []model.Message) (*model.Response, error) {
 	payload := map[string]any{
-		"model": cm.config.Model,
+		"model":    cm.config.Model,
 		"messages": messages,
 	}
 	buf, _ := json.Marshal(payload)

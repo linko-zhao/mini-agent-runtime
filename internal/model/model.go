@@ -45,14 +45,14 @@ type ModelError struct {
 }
 
 func (e *ModelError) Error() string {
-    if e.Err != nil {
-        return e.Code + ": " + e.Err.Error()
-    }
-    return e.Code
+	if e.Err != nil {
+		return e.Code + ": " + e.Err.Error()
+	}
+	return e.Code
 }
 
 func (e *ModelError) Unwrap() error {
-    return e.Err
+	return e.Err
 }
 
 type Model interface {
