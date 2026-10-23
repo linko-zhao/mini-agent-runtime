@@ -31,6 +31,7 @@ func convertRequest(_ context.Context, cm *ChatModel, messages []model.Message) 
 				},
 			})
 		}
+		p.Messages = append(p.Messages, ct)
 	}
 	return &p, nil
 }

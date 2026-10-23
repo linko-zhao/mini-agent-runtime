@@ -2,6 +2,7 @@ package openai
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -211,5 +212,26 @@ func TestGenerateContextDeadlineExceeded(t *testing.T) {
 func TestNewChatModelMissingConfig(t *testing.T) {
 	if _, err := NewChatModel(&ChatModelConfig{}); err == nil {
 		t.Fatal("expected error for empty config")
+	}
+}
+
+func TestWithToolsRejectsDuplicateNames(t *testing.T) {
+	m := newTestModel(t, func(w http.ResponseWriter, r *http.Request) {})
+	def := model.ToolDefinition{Name: "calculator"}
+	if _, err := m.WithTools([]model.ToolDefinition{def, def}); err == nil {
+		t.Fatal("expected error for duplicate tool name")
+	}
+}
+
+func TestWithToolsRejectsNonObjectSchema(t *testing.T) {
+	m := newTestModel(t, func(w http.ResponseWriter, r *http.Request) {})
+	defs := []model.ToolDefinition{
+		{Name: "bad-json", Parameters: json.RawMessage(`{not json`)},
+		{Name: "array-schema", Parameters: json.RawMessage(`[{"type":"object"}]`)},
+	}
+	for _, d := range defs {
+		if _, err := m.WithTools([]model.ToolDefinition{d}); err == nil {
+			t.Errorf("expected error for tool %q parameters %s", d.Name, d.Parameters)
+		}
 	}
 }

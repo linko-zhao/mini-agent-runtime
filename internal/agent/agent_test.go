@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model/openai"
 	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -118,4 +121,126 @@ func TestAgentRun(t *testing.T) {
 		_, err := New(m, nil, 5).Run(context.Background(), "find")
 		require.ErrorIs(t, err, wantErr)
 	})
+}
+
+type describedTool struct {
+	def model.ToolDefinition
+	run func(context.Context, json.RawMessage) (string, error)
+}
+
+func (d describedTool) Name() string { return d.def.Name }
+
+func (d describedTool) Definition() model.ToolDefinition { return d.def }
+
+func (d describedTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
+	return d.run(ctx, args)
+}
+
+type capturedRequest struct {
+	Tools []struct {
+		Type     string `json:"type"`
+		Function struct {
+			Name       string          `json:"name"`
+			Parameters json.RawMessage `json:"parameters"`
+		} `json:"function"`
+	} `json:"tools"`
+	Messages []struct {
+		Role       string `json:"role"`
+		Content    string `json:"content"`
+		ToolCallID string `json:"tool_call_id"`
+		ToolCalls  []struct {
+			ID       string `json:"id"`
+			Function struct {
+				Name      string `json:"name"`
+				Arguments string `json:"arguments"`
+			} `json:"function"`
+		} `json:"tool_calls"`
+	} `json:"messages"`
+}
+
+func newHTTPModel(t *testing.T, handler http.HandlerFunc) model.Model {
+	t.Helper()
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+	m, err := openai.NewChatModel(&openai.ChatModelConfig{
+		APIKey:  "test-key",
+		Model:   "test-model",
+		BaseURL: srv.URL,
+	})
+	require.NoError(t, err)
+	return m
+}
+
+func TestAgentRunWithHTTPProvider(t *testing.T) {
+	var requests []capturedRequest
+	m := newHTTPModel(t, func(w http.ResponseWriter, r *http.Request) {
+		var req capturedRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		requests = append(requests, req)
+		w.Header().Set("Content-Type", "application/json")
+		if len(requests) == 1 {
+			_, _ = w.Write([]byte(`{"choices":[{"index":0,"message":{"role":"assistant","tool_calls":[{"id":"call-1","type":"function","function":{"name":"calculator","arguments":"{\"a\":1,\"b\":1}"}}]},"finish_reason":"tool_calls"}]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"index":0,"message":{"role":"assistant","content":"结果是 2"},"finish_reason":"stop"}]}`))
+	})
+
+	calc := describedTool{
+		def: (&tool.Calculator{}).Definition(),
+		run: (&tool.Calculator{}).Execute,
+	}
+	result, err := New(m, map[string]tool.Tool{"calculator": calc}, 5).Run(context.Background(), "1+1 等于几？")
+	require.NoError(t, err)
+	assert.Equal(t, "结果是 2", result)
+
+	require.Len(t, requests, 2)
+
+	// 首次请求携带工具定义，parameters 为 JSON 对象
+	require.Len(t, requests[0].Tools, 1)
+	assert.Equal(t, "function", requests[0].Tools[0].Type)
+	assert.Equal(t, "calculator", requests[0].Tools[0].Function.Name)
+	var schema map[string]any
+	require.NoError(t, json.Unmarshal(requests[0].Tools[0].Function.Parameters, &schema))
+	assert.Equal(t, "object", schema["type"])
+
+	// 第二轮请求回填 assistant tool_calls 与 role=tool 消息
+	msgs := requests[1].Messages
+	require.Len(t, msgs, 3)
+	require.Len(t, msgs[1].ToolCalls, 1)
+	assert.Equal(t, "assistant", msgs[1].Role)
+	assert.Equal(t, "call-1", msgs[1].ToolCalls[0].ID)
+	assert.Equal(t, "calculator", msgs[1].ToolCalls[0].Function.Name)
+	assert.JSONEq(t, `{"a":1,"b":1}`, msgs[1].ToolCalls[0].Function.Arguments)
+	assert.Equal(t, "tool", msgs[2].Role)
+	assert.Equal(t, "call-1", msgs[2].ToolCallID)
+	assert.Equal(t, "2", msgs[2].Content)
+}
+
+func TestAgentRunInvalidToolDefinition(t *testing.T) {
+	requestCount := 0
+	m := newHTTPModel(t, func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+	})
+
+	dup := model.ToolDefinition{Name: "calculator", Parameters: json.RawMessage(`{"type":"object"}`)}
+	badSchema := model.ToolDefinition{Name: "broken", Parameters: json.RawMessage(`{"type":"array"}`)}
+
+	t.Run("重复工具名称", func(t *testing.T) {
+		tools := map[string]tool.Tool{
+			"a": describedTool{def: dup, run: func(context.Context, json.RawMessage) (string, error) { return "", nil }},
+			"b": describedTool{def: dup, run: func(context.Context, json.RawMessage) (string, error) { return "", nil }},
+		}
+		_, err := New(m, tools, 5).Run(context.Background(), "hi")
+		require.ErrorContains(t, err, "duplicate tool name")
+	})
+
+	t.Run("非法 Schema", func(t *testing.T) {
+		tools := map[string]tool.Tool{
+			"broken": describedTool{def: badSchema, run: func(context.Context, json.RawMessage) (string, error) { return "", nil }},
+		}
+		_, err := New(m, tools, 5).Run(context.Background(), "hi")
+		require.ErrorContains(t, err, "object")
+	})
+
+	assert.Equal(t, 0, requestCount, "初始化失败时不应向 Provider 发出 HTTP 请求")
 }

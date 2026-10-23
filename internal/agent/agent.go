@@ -32,7 +32,11 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 				ts = append(ts, td.Definition())
 			}
 		}
-		a.model, _ = tb.WithTools(ts)
+		bound, err := tb.WithTools(ts)
+		if err != nil {
+			return "", err
+		}
+		a.model = bound
 	}
 
 	for range a.maxSteps {
@@ -67,7 +71,6 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 			}
 			msgs = append(msgs, tm)
 		}
-		fmt.Println(msgs)
 	}
 
 	return "", fmt.Errorf("arrive max steps")

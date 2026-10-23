@@ -68,7 +68,21 @@ func (cm *ChatModel) Generate(ctx context.Context, messages []model.Message) (*m
 
 func (cm *ChatModel) WithTools(defs []model.ToolDefinition) (model.Model, error) {
 	m := *cm
+	seen := map[string]bool{}
 	for _, d := range defs {
+		if seen[d.Name] {
+			return nil, fmt.Errorf("openai: duplicate tool name %q", d.Name)
+		}
+		seen[d.Name] = true
+		if len(d.Parameters) > 0 {
+			var schema map[string]any
+			if err := json.Unmarshal(d.Parameters, &schema); err != nil {
+				return nil, fmt.Errorf("openai: tool %q parameters must be a JSON object: %w", d.Name, err)
+			}
+			if schema["type"] != "object" {
+				return nil, fmt.Errorf("openai: tool %q parameters must be a JSON Schema object with type \"object\"", d.Name)
+			}
+		}
 		m.tools = append(m.tools, ChatCompletionTool{
 			Type: "function",
 			Function: d,
