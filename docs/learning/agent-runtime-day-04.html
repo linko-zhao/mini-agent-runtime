@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Day 04 · Runtime 生命周期控制与前置功能补齐 | Agent Runtime</title><style>:root{--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#58667b;--line:#e0e6ee;--accent:#2459bd}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:920px;margin:auto;padding:32px 22px 70px}.hero{background:#183561;color:#fff;border-radius:18px;padding:29px 30px}.hero h1{margin:7px 0;font-size:30px;line-height:1.3}.hero p{margin:0;color:#e6eefa}.chips{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}.chip{border:1px solid #8ea4c8;border-radius:20px;padding:3px 10px;font-size:12px}section{background:var(--paper);border:1px solid var(--line);border-radius:14px;margin-top:18px;padding:22px 26px}h2{font-size:19px;margin:0 0 13px}h3{font-size:16px;margin:18px 0 6px}.time{font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.4px}p{margin:8px 0}a{color:var(--accent)}li{margin:6px 0}code{background:#f0f3f8;padding:2px 5px;border-radius:4px}pre{overflow:auto;background:#142136;color:#e7f3ff;padding:17px;border-radius:10px;font-size:13px;line-height:1.65}pre code{background:transparent;padding:0}.goal{background:#edf3ff;border-left:3px solid var(--accent);padding:12px 15px;border-radius:4px}.note{background:#fff8e9;border:1px solid #f2deb2;border-radius:9px;padding:11px 14px;color:#644b18}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.grid>div{padding:12px;background:#f6f8fc;border-radius:9px}.grid strong{display:block;font-size:19px}.grid span{font-size:12px;color:var(--sub)}.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0}.check input{margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer;flex:1}.check.done label{text-decoration:line-through;color:var(--sub)}.progress{height:8px;background:#e3e9f2;border-radius:99px;overflow:hidden}.fill{height:100%;background:var(--accent);width:0%;transition:width .2s}.meta{display:flex;justify-content:space-between;font-size:13px;color:var(--sub);margin-bottom:9px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px;vertical-align:top}th{background:#f4f7fc}footer{text-align:center;color:var(--sub);font-size:12px;margin:24px} @media(max-width:600px){main{padding:14px 12px 40px}.hero{padding:22px}.hero h1{font-size:24px}section{padding:18px}.grid{grid-template-columns:1fr}table{font-size:12px}}</style></head>
+<body><main>
+<header class="hero"><small>MINI AGENT RUNTIME · WEEK 01</small><h1>Day 04 / 56 · Runtime 生命周期控制与前置功能补齐</h1><p>2026 年 10 月 22 日，星期四 · Go 实战 · Context、Timeout、maxSteps 与错误传播</p><div class="chips"><span class="chip">阅读 20 分钟</span><span class="chip">编码 80 分钟</span><span class="chip">测试复盘 20 分钟</span><span class="chip">离线 HTML</span></div></header>
+<section><h2>今日目标与交付</h2><div class="goal">沿用 Day 01 的 Agent Loop、Day 02 的 Model Adapter 和 Day 03 的 Tool Binding，补齐生命周期控制：取消传播、工具超时、步数边界与错误链。最终通过离线 Mock 和 httptest 验证。今天不引入 MCP、持久化或并发工具执行。</div><div class="grid" style="margin-top:16px"><div><strong>1</strong><span>端到端工具绑定闭环</span></div><div><strong>4</strong><span>生命周期边界行为</span></div><div><strong>7+</strong><span>测试断言场景</span></div></div><p class="note"><strong>前置说明：</strong>不能根据学习计划推定 Day 01～03 代码已完成。如果 Tool Binding 尚未实现，优先用今日时间补齐 Day 03 的最小闭环；只在前置测试通过后继续生命周期改造。以下任务时间可按实际进度适当顺延。</p></section>
+<section><div class="time">20 MIN · READ</div><h2>源码与文档阅读</h2>
+<h3>10 分钟 · Go Context 生命周期</h3><p>阅读 <a href="https://pkg.go.dev/context" target="_blank" rel="noopener noreferrer">Go context 官方文档</a>，重点关注 <code>WithTimeout</code>、<code>CancelFunc</code>、<code>Err</code>、<code>DeadlineExceeded</code>。回答：父 Context 取消后子 Context 会发生什么？为什么必须调用 cancel？</p>
+<h3>10 分钟 · Eino ADK 执行接口</h3><p>阅读 <a href="https://github.com/cloudwego/eino/tree/main/adk" target="_blank" rel="noopener noreferrer">Eino ADK 源码目录</a>及 <a href="https://www.cloudwego.io/docs/eino/" target="_blank" rel="noopener noreferrer">Eino 官方文档</a>，关注 Runner 与 Agent 之间的执行职责和 Context 传递。记录：Runtime 与 Tool Executor 分别应负责哪些超时和错误处理？</p>
+<p><strong>阅读产出：</strong>在 <code>docs/design.md</code> 写出三条规则：取消检查点、工具超时边界、错误包装与原始错误链保留。</p></section>
+<section><div class="time">80 MIN · BUILD</div><h2>Go 编码任务（按时间盒推进）</h2>
+<h3>任务 A · 10 分钟：前置检查与修正</h3><p>检查 <code>internal/model/model.go</code>、<code>internal/agent/agent.go</code>、<code>internal/model/openai/adapter.go</code>。确认 <code>FinishToolCalls = "tool_calls"</code>；不要在日志中打印完整消息历史、API Key；HTTP Adapter 使用 <code>defer resp.Body.Close()</code> 并限制读取大小。执行现有回归测试，记录失败项（如存在）。</p>
+<h3>任务 B · 35 分钟：补齐 Day 03 Tool Binding（若已完成则用于补测试）</h3><p><code>internal/model/model.go</code>：定义模型无关的 <code>ToolDefinition{Name, Description, Parameters}</code> 和可选的 <code>ToolBinder.WithTools(defs) (Model,error)</code>。</p><p><code>internal/tool/calculator.go</code>：加入 <code>Definition()</code>，让名称与 <code>Name()</code> 一致，参数采用两个整数 <code>a</code>、<code>b</code> 的 JSON Schema。</p><p><code>internal/model/openai/adapter.go</code>：将工具定义正确序列化为请求的 <code>tools</code>，<code>parameters</code> 保持对象而非 JSON 字符串。通过 <code>httptest.Server</code> 验证 ToolCall 回填及第二轮响应。</p><pre><code>// 仅展示关键接口，保留 Day 01 的 Model.Generate 签名
+type ToolDefinition struct {
+    Name        string          // 唯一工具名
+    Description string          // 供模型理解工具用途
+    Parameters  json.RawMessage // 参数 JSON Schema
+}
+type ToolBinder interface {
+    WithTools(defs []ToolDefinition) (Model, error)
+}</code></pre>
+<h3>任务 C · 25 分钟：完善 Agent 生命周期</h3><p><code>internal/agent/agent.go</code>：初始化阶段拒绝 <code>maxSteps &lt;= 0</code>；每轮模型调用前和每次工具执行前检查 <code>ctx.Err()</code>；若 <code>Generate()</code> 返回 <code>nil, nil</code> 则返回可判定错误；超出步数限制时返回上限错误。</p>
+<p><code>internal/agent/agent.go</code> 或 <code>internal/agent/options.go</code>：为工具执行增加正数超时配置；设置了超时时使用 <code>context.WithTimeout(ctx, toolTimeout)</code>，未配置时直接使用父 Context；每次执行结束及时调用 <code>cancel()</code>。使用 <code>fmt.Errorf("tool %s: %w", name, err)</code> 保留错误链。</p>
+<pre><code>// 示意片段：工具执行使用合作式取消，不负责强杀 Goroutine
+toolCtx := ctx
+cancel := func() {}
+if toolTimeout &gt; 0 {
+    toolCtx, cancel = context.WithTimeout(ctx, toolTimeout)
+}
+result, err := selectedTool.Execute(toolCtx, call.Arguments)
+cancel()
+if ctx.Err() != nil {
+    return "", ctx.Err()
+}
+if err != nil {
+    return "", fmt.Errorf("tool %s: %w", call.Name, err)
+}
+_ = result // 后续沿用既有 ToolResult 回填逻辑</code></pre>
+<p class="note"><strong>工程边界：</strong>Context 的取消是合作式的。忽略 ctx 的工具可能阻塞，不能通过简单增加 Goroutine 包装就声称已经实现安全终止；非可信代码执行隔离留到第六周。</p>
+<h3>任务 D · 10 分钟：更新设计文档</h3><p><code>docs/design.md</code> 记录 <code>maxSteps</code> 是模型调用轮数还是工具调用次数、Context 取消优先级、Timeout 与重试之间的界限。<strong>不要</strong>在这里引入自动重试或持久化副作用管理。</p></section>
+<section><div class="time">20 MIN · TEST &amp; REVIEW</div><h2>测试与验收</h2><p>重点在 <code>internal/agent/agent_test.go</code> 与 <code>internal/model/openai/adapter_test.go</code> 中加入以下断言：</p>
+<table><thead><tr><th>场景</th><th>预期</th></tr></thead><tbody>
+<tr><td>真实协议双轮 Tool Calling</td><td>HTTP tools 定义为 JSON 对象，ToolCall ID 与 ToolResult 精确匹配</td></tr>
+<tr><td>调用前 Context 取消</td><td>模型与工具均不会被调用</td></tr>
+<tr><td>工具执行超时</td><td><code>errors.Is(err, context.DeadlineExceeded)</code> 成立</td></tr>
+<tr><td>多工具中途取消</td><td>后续工具不会被执行</td></tr>
+<tr><td><code>maxSteps &lt;= 0</code></td><td>构造或运行时立即返回配置错误</td></tr>
+<tr><td>Model 返回 nil Response</td><td>返回明确错误，不 panic</td></tr>
+<tr><td>模型错误及历史回归</td><td>错误链可判定；Day 01～03 已有测试通过</td></tr>
+</tbody></table>
+<pre><code>gofmt -w internal/agent internal/model internal/tool
+go test ./internal/agent/... ./internal/model/... -v
+go test ./...
+go test -race ./...
+git diff --check</code></pre>
+<h3>交互式验收清单</h3><div class="meta"><span>勾选状态保存在本地浏览器（localStorage）</span><span id="count">0 / 8</span></div><div class="progress" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div><div id="checks"></div><h3>复盘问题</h3><ol><li>为什么工具执行超时不等于工具被强制终止？</li><li>在多个 ToolCall 中途取消时，已经成功执行的副作用如何记录？</li><li>maxSteps 限制轮数与限制工具次数分别有什么取舍？</li></ol></section>
+<section><h2>完成定义与 Day 05 衔接</h2><p><strong>Definition of Done：</strong>Day 03 工具绑定闭环可运行；取消、超时、步数限制、nil Response 等测试通过；<code>go test ./...</code> 与 <code>go test -race ./...</code> 通过；<code>docs/design.md</code> 记录关键取舍并提交一次 Git Commit。若前置任务未完成，请优先补齐，不视作 Day 04 已完成。</p><p><strong>Day 05 预告：</strong>在现有执行循环上设计 Agent Event Stream（Model/Tool/Step/Run 事件），为 SSE 和 Tracing 建立统一事件边界，不提前引入持久化状态机。</p></section>
+<footer>Mini Agent Runtime · 8 周 / 56 天 · 独立离线 HTML · 阅读链接需要联网</footer>
+</main><script>
+const items=["确认 Day 01~03 回归测试基线并修正遗留的调试输出或明显拼写问题","阅读 Go context 与 Eino ADK 执行接口并记录合作式取消边界","补齐 ToolDefinition、ToolBinder 与 Calculator 元数据（若 Day 03 尚未完成）","使用 httptest 验证 Tool Binding 双轮调用闭环","在 Agent.Run 中明确 maxSteps<=0、nil Response、ctx.Err() 行为","工具执行增加可配置超时并保留 context 错误链","完成取消/超时/多工具/步数限制测试，执行 go test -race ./...","更新 docs/design.md 并提交自己的代码变更"];
+const key="mini-agent-runtime-day-04-checklist-v1";let saved=[];try{const v=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(v))saved=v}catch(_){}
+const checks=document.getElementById("checks"),bar=document.querySelector('[role="progressbar"]');
+function refresh(){let n=0;[...checks.children].forEach((r,i)=>{const d=!!saved[i];r.classList.toggle("done",d);if(d)n++});const p=Math.round(n/items.length*100);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=p+"%";bar.setAttribute("aria-valuenow",String(p))}
+items.forEach((t,i)=>{const row=document.createElement("div");row.className="check";const cb=document.createElement("input");cb.type="checkbox";cb.id="task-"+i;cb.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=cb.id;label.textContent=t;row.append(cb,label);checks.append(row);cb.addEventListener("change",()=>{saved[i]=cb.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()})});refresh();
+</script></body></html>
