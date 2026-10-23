@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Day 05 · Agent 执行事件与生命周期回归 | Agent Runtime</title>
+<style>
+:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#58667b;--line:#e0e6ee;--accent:#2459bd;--pale:#edf3ff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+main{max-width:920px;margin:auto;padding:32px 22px 70px}.hero{background:#183561;color:#fff;border-radius:18px;padding:29px 30px}.hero small{opacity:.8;letter-spacing:1px}.hero h1{margin:7px 0;font-size:30px;line-height:1.3}.hero p{margin:0;color:#e6eefa}
+.chips{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}.chip{border:1px solid #8ea4c8;border-radius:20px;padding:3px 10px;font-size:12px}
+section{background:var(--paper);border:1px solid var(--line);border-radius:14px;margin-top:18px;padding:22px 26px}h2{font-size:19px;margin:0 0 13px}h3{font-size:16px;margin:18px 0 6px}.time{font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.4px}
+p{margin:8px 0}a{color:var(--accent)}li{margin:6px 0}code{background:#f0f3f8;padding:2px 5px;border-radius:4px}pre{overflow:auto;background:#142136;color:#e7f3ff;padding:17px;border-radius:10px;font-size:13px;line-height:1.65}pre code{background:transparent;padding:0}
+.goal{background:var(--pale);border-left:3px solid var(--accent);padding:12px 15px;border-radius:4px}.note{background:#fff8e9;border:1px solid #f2deb2;border-radius:9px;padding:11px 14px;color:#644b18}.info{background:#eff6ff;border:1px solid #d5e4fc;border-radius:9px;padding:11px 14px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.grid>div{padding:12px;background:#f6f8fc;border-radius:9px}.grid strong{display:block;font-size:19px}.grid span{font-size:12px;color:var(--sub)}
+.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0}.check input{margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer;flex:1}.check.done label{text-decoration:line-through;color:var(--sub)}
+.progress{height:8px;background:#e3e9f2;border-radius:99px;overflow:hidden}.fill{height:100%;background:var(--accent);width:0%;transition:width .2s}.meta{display:flex;justify-content:space-between;font-size:13px;color:var(--sub);margin-bottom:9px}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px;vertical-align:top}th{background:#f4f7fc}
+.tag{display:inline-block;background:#eaf0fc;color:#2459bd;border-radius:5px;font-size:12px;padding:2px 7px;margin-right:6px}.flow{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:12px 0}.flow span{padding:6px 9px;background:#f6f9ff;border:1px solid #dbe6f8;border-radius:8px;font-size:12px}.flow b{color:#6b85ad}
+.muted{color:var(--sub);font-size:13px}footer{text-align:center;color:var(--sub);font-size:12px;margin:24px}
+@media(max-width:600px){main{padding:14px 12px 40px}.hero{padding:22px}.hero h1{font-size:24px}section{padding:18px}.grid{grid-template-columns:1fr}table{font-size:12px}th,td{padding:8px}pre{font-size:12px}}
+</style>
+</head>
+<body><main>
+<header class="hero"><small>MINI AGENT RUNTIME · WEEK 01</small>
+<h1>Day 05 / 56 · Agent 执行事件与生命周期回归</h1>
+<p>2026 年 10 月 23 日，星期五 · Go 实战 · Event Sink、事件顺序、Run 终态</p>
+<div class="chips"><span class="chip">阅读 20 分钟</span><span class="chip">编码 80 分钟</span><span class="chip">测试复盘 20 分钟</span><span class="chip">独立离线 HTML</span></div>
+</header>
+
+<section><h2>今日目标与交付</h2>
+<div class="goal">在已有 Model → Tool → Model 执行闭环上，建立<strong>可测试的 Agent 生命周期事件接口</strong>。事件发布先采用同步回调，不引入 SSE、Channel 或持久化。<strong>先通过 Day 04 生命周期门禁</strong>，再实现最小 Event Sink；如果前置问题未解决，今天以修复和回归测试作为实际交付。</div>
+<div class="grid" style="margin-top:16px"><div><strong>1</strong><span>最小 EventSink 抽象</span></div><div><strong>7</strong><span>建议的执行事件类型</span></div><div><strong>6+</strong><span>事件顺序与异常测试</span></div></div>
+<p class="note"><strong>基于 2026-10-23 的 main 分支静态检查：</strong><code>internal/agent/agent.go</code> 仍在 Run 中修改共享 <code>a.model</code>，没有检查 nil Response，也没有独立的工具超时控制；<code>internal/model/model.go</code> 中 <code>FinishToolCalls</code> 仍拼写为 <code>too_calls</code>。当前仓库的 <code>docs/design.md</code> 为空。这些不等于测试已失败，但说明 Day 04 的完成定义尚未得到代码验证。今天优先修复，不能把 HTML 计划存在视为编码完成。</p>
+<div class="flow"><span>Agent.Run</span><b>→</b><span>RunStarted</span><b>→</b><span>StepStarted / ModelCompleted</span><b>→</b><span>ToolStarted / ToolCompleted</span><b>→</b><span>RunFinished 或 RunFailed</span></div>
+</section>
+
+<section><div class="time">20 MIN · READ</div><h2>源码与官方文档阅读</h2>
+<h3>10 分钟 · Eino ADK 的事件抽象</h3>
+<p>打开 <a href="https://github.com/cloudwego/eino/blob/main/adk/interface.go" target="_blank" rel="noopener noreferrer">Eino ADK / adk/interface.go</a>，查找 <code>TypedAgentEvent</code>、<code>TypedAgentOutput</code>、<code>TypedAgent.Run</code>，观察事件中 Output、Action、Err 的区分，以及 Runner 如何通过 Iterator 暴露运行过程。对照 <a href="https://github.com/cloudwego/eino-ext/blob/main/skills/eino-agent/reference/runner-and-events.md" target="_blank" rel="noopener noreferrer">Eino Runner &amp; Events 参考</a>。</p>
+<p><strong>阅读问题：</strong>为什么事件不是简单的日志字符串？为什么消费者不应该直接修改 Runtime 内部消息切片？</p>
+<h3>10 分钟 · LangGraph Streaming</h3>
+<p>阅读 <a href="https://docs.langchain.com/oss/python/langgraph/streaming" target="_blank" rel="noopener noreferrer">LangGraph 官方 Streaming 文档</a>，只看 <code>updates</code>、<code>messages</code>、<code>custom</code> 的区别。注意今天的事件是“执行状态事件”，<strong>不是 LLM Token Streaming</strong>。</p>
+<p><strong>阅读产出：</strong>在 <code>docs/design.md</code> 记录事件与状态快照的边界。对照 <a href="https://docs.temporal.io/encyclopedia/event-history" target="_blank" rel="noopener noreferrer">Temporal Event History 官方文档</a>，补一句：今天的内存事件流不是可重放的 Durable Event History。</p>
+</section>
+
+<section><div class="time">80 MIN · BUILD</div><h2>Go 编码任务（时间盒推进）</h2>
+<h3>任务 A · 30 分钟：先补齐 Day 04 生命周期门禁</h3>
+<p><span class="tag">internal/model/model.go</span><span class="tag">internal/agent/agent.go</span><span class="tag">internal/agent/agent_test.go</span></p>
+<table><thead><tr><th>修复点</th><th>验收要求</th></tr></thead><tbody>
+<tr><td><code>FinishToolCalls</code></td><td>常量修正为 <code>"tool_calls"</code>，现有协议测试不回归。</td></tr>
+<tr><td><code>maxSteps &lt;= 0</code></td><td>运行前返回配置错误，不进入模型调用；保留当前 <code>New(...)*Agent</code> API 时可在 Run 入口校验。</td></tr>
+<tr><td>nil Response</td><td>模型返回 <code>nil, nil</code> 时不 panic，返回明确错误。</td></tr>
+<tr><td>取消与工具超时</td><td>每个 ToolCall 前检查父 <code>ctx.Err()</code>；超时用子 Context，调用后立即 <code>cancel()</code>；<code>errors.Is</code> 能判断取消/超时。</td></tr>
+<tr><td>共享模型修改</td><td>不要在 <code>Run</code> 内写 <code>a.model = bound</code>；使用局部 <code>runModel</code> 或在构造阶段完成不可变绑定，避免多个 Run 的数据竞争。</td></tr>
+</tbody></table>
+<p class="note"><strong>进度门禁：</strong>如果上述 30 分钟未能补齐，请将剩余编码时间用于完成 Day 04 的修复及测试，今天的 Event Sink 推迟到下一次学习。不要为了“完成 Day 05”同时留下已知 Runtime 缺陷。</p>
+<h3>任务 B · 15 分钟：定义 Event 与 EventSink</h3>
+<p><span class="tag">internal/agent/event.go（新增）</span>事件只携带可安全观察的元数据：类型、步数、时间、工具名称、ToolCall ID、耗时和分类状态。不要直接放入完整 Prompt、工具参数、工具返回值或 API Key。</p>
+<pre><code>// internal/agent/event.go —— 仅给出建议结构，具体常量自行定义
+type EventType string // RunStarted、StepStarted、ModelCompleted、
+// ToolStarted、ToolCompleted、RunFinished、RunFailed
+
+type Event struct {
+    Type       EventType     // 事件类型
+    Step       int           // 当前模型调用轮数，从 1 开始
+    At         time.Time     // 事件产生时刻
+    ToolName   string        // 工具名称，非工具事件可为空
+    ToolCallID string        // 与消息历史中的 ToolCall.ID 对齐
+    Duration   time.Duration // 模型或工具执行耗时
+    Status     string        // ok、error、cancelled 等非敏感状态
+}
+
+type EventSink interface {
+    Emit(ctx context.Context, e Event) // 同步发布，先不引入异步队列
+}</code></pre>
+<p>建议在 <code>internal/agent/options.go</code> 提供 <code>WithEventSink(sink EventSink)</code>，通过 <code>New(..., opts ...Option)</code> 保持原有构造调用兼容。也可以增加 <code>NewWithOptions</code>，但不要破坏 Day 01～04 的测试。</p>
+<h3>任务 C · 25 分钟：在 Agent Loop 中注入事件</h3>
+<p><span class="tag">internal/agent/agent.go</span><span class="tag">internal/agent/event_test.go</span></p>
+<p>从 <code>Run</code> 开始发出 <code>RunStarted</code>；每轮调用模型前发 <code>StepStarted</code>，成功返回后发 <code>ModelCompleted</code>；每个工具执行前后分别发 <code>ToolStarted</code> 和 <code>ToolCompleted</code>；最终只发一个 <code>RunFinished</code> 或 <code>RunFailed</code>。建议使用命名返回值与 <code>defer</code> 集中处理终态事件，避免每个错误分支重复发布。</p>
+<pre><code>// 建议辅助方法：sink 为 nil 时不产生事件
+func (a *Agent) emit(ctx context.Context, e Event) {
+    if a.sink == nil {
+        return
+    }
+    a.sink.Emit(ctx, e)
+}
+
+// 在工具执行前：先检查 ctx.Err()，再发布 ToolStarted。
+// 工具错误若按现有策略回填给模型，发布 ToolCompleted(error)，
+// 不要错误地同时发布 RunFailed；只有 Run 真正返回错误才是 RunFailed。</code></pre>
+<p class="info"><strong>本日事件语义：</strong>回调在当前 Run goroutine 内同步执行，保证同一次 Run 的事件顺序；Sink 不能阻塞过久。共享 Sink 可能被多个 Run 并发调用，收集器需要互斥保护。教学阶段假设 Sink 是可信代码；Sink panic、背压、异步队列、丢弃策略和 SSE 留到后续迭代。</p>
+<h3>任务 D · 10 分钟：设计文档与演示</h3>
+<p><span class="tag">docs/design.md</span><span class="tag">cmd/demo/main.go（可选）</span>写下事件的顺序、终态唯一性、Sink 同步策略、隐私边界，以及与 LangGraph <code>updates</code>、Eino <code>AgentEvent</code> 的区别。可选：给 Demo 注入打印事件类型的 Sink，禁止输出消息原文。</p>
+</section>
+
+<section><div class="time">20 MIN · TEST &amp; REVIEW</div><h2>测试与验收</h2>
+<table><thead><tr><th>测试场景</th><th>断言</th></tr></thead><tbody>
+<tr><td>模型直接返回文本</td><td><code>RunStarted → StepStarted → ModelCompleted → RunFinished</code>；只出现一个终态事件。</td></tr>
+<tr><td>两轮模型 + 单工具</td><td>ToolStarted/ToolCompleted 成对出现，Step 顺序递增，ToolCallID 与工具消息一致。</td></tr>
+<tr><td>工具执行失败但错误回填</td><td>ToolCompleted 标记 error；如果模型随后正常结束，最终仍为 RunFinished。</td></tr>
+<tr><td>模型返回错误</td><td>RunFailed 恰好一次，不产生 RunFinished。</td></tr>
+<tr><td>Context 在工具前取消</td><td>后续工具不执行，返回 <code>context.Canceled</code>，终态为 RunFailed。</td></tr>
+<tr><td>nil Sink 与共享 Sink</td><td>nil Sink 不影响旧行为；共享收集器有 mutex，race 检查通过。</td></tr>
+<tr><td>回归门禁</td><td>Day 01～04 的 Mock、HTTP 双轮和超时测试全部通过。</td></tr>
+</tbody></table>
+<pre><code>gofmt -w internal/agent internal/model
+go test ./internal/agent/... -v
+go test ./...
+go test -race ./...
+git diff --check</code></pre>
+<h3>交互式任务清单</h3>
+<div class="meta"><span>勾选进度保存在当前浏览器 localStorage</span><span id="count">0 / 8</span></div>
+<div class="progress" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="bar"><div class="fill" id="fill"></div></div>
+<div id="checks"></div>
+<h3>复盘问题</h3>
+<ol><li>为什么事件观察（Event Sink）不能代替持久化状态（Checkpoint）？</li>
+<li>多个 Run 并发时，如何保持每个 Run 内部的事件顺序，又避免把不同 Run 的事件混淆？（可考虑未来增加 RunID）</li>
+<li>工具执行失败并被回填为 ToolResult，应该是 ToolCompleted(error) 还是 RunFailed？为什么？</li></ol>
+</section>
+
+<section><h2>完成定义与 Day 06 衔接</h2>
+<p><strong>Definition of Done：</strong>Day 04 生命周期门禁通过；EventSink 可选注入，不改变原有 Run 返回语义；至少覆盖正常结束、工具调用、工具错误回填、取消和模型失败的事件序列；终态事件恰好一次；<code>go test ./...</code> 与 <code>go test -race ./...</code> 通过；<code>docs/design.md</code> 记录关键设计，提交一次代码 Commit。若 Day 04 尚未补齐，今日完成定义改为“前置修复及回归测试通过”，不虚报事件系统已完成。</p>
+<p><strong>Day 06 预告：</strong>在已验证的 EventSink 上扩展可消费的运行事件（消费者生命周期、取消传播与背压的最小方案），为未来 SSE/Tracing 留接口；如果今天事件抽象未完成，Day 06 优先补齐。Day 07（周日）执行第一周集成与复盘。</p>
+<p class="muted">本日范围：内存同步事件回调。暂不实现 Token Streaming、HTTP SSE、事件持久化、MCP 或 Workflow Replay。</p>
+</section>
+<footer>Mini Agent Runtime · 8 周 / 56 天 · 离线 HTML · 官方链接需联网访问</footer>
+</main>
+<script>
+const items=["阅读 Eino ADK AgentEvent 与 LangGraph Streaming 官方资料，回答事件和持久化日志的区别","核对 Day 04 现有实现并修复 FinishToolCalls、maxSteps、nil Response 与取消检查","工具超时及错误链测试通过；避免 Run 修改共享 a.model","定义 EventType、Event 和 EventSink（不包含敏感原始消息）","Agent Run 注入事件发布，保证 Step/Tool/Run 的事件顺序","Tool 执行错误与 Run 终止错误有明确区分；取消时只产生一次终态事件","用 Mock 收集事件并验证顺序、关联 ID、异常路径和并发使用安全性","执行 go test ./...、go test -race ./...；更新 docs/design.md 并提交代码 Commit"];
+const storageKey="mini-agent-runtime-day-05-checklist-v1";
+let saved=[];
+try { const v=JSON.parse(localStorage.getItem(storageKey)||"[]"); if(Array.isArray(v)) saved=v; } catch (_) {}
+const box=document.getElementById("checks"), bar=document.getElementById("bar");
+function refresh(){
+ let n=0; [...box.children].forEach((row,i)=>{const done=!!saved[i];row.classList.toggle("done",done);if(done)n++;});
+ const p=Math.round(100*n/items.length);
+ document.getElementById("count").textContent=n+" / "+items.length;
+ document.getElementById("fill").style.width=p+"%";
+ bar.setAttribute("aria-valuenow",String(p));
+}
+items.forEach((title,i)=>{
+ const row=document.createElement("div");row.className="check";
+ const cb=document.createElement("input");cb.type="checkbox";cb.id="day05-task-"+i;cb.checked=!!saved[i];
+ const label=document.createElement("label");label.htmlFor=cb.id;label.textContent=title;
+ row.append(cb,label);box.append(row);
+ cb.addEventListener("change",()=>{saved[i]=cb.checked;try{localStorage.setItem(storageKey,JSON.stringify(saved))}catch(_){}refresh();});
+});
+refresh();
+</script>
+</body></html>
