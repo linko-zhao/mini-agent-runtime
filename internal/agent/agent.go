@@ -25,6 +25,16 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 	}
 	msgs := []model.Message{m}
 
+	if tb, ok := a.model.(model.ToolBinder); ok {
+		var ts []model.ToolDefinition
+		for _, t := range a.tools {
+			if td, ok := t.(tool.DescribedTool); ok {
+				ts = append(ts, td.Definition())
+			}
+		}
+		a.model, _ = tb.WithTools(ts)
+	}
+
 	for range a.maxSteps {
 		if ctx.Err() != nil {
 			return "", ctx.Err()

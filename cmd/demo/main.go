@@ -9,22 +9,8 @@ import (
 	"github.com/linko-zhao/mini-agent-runtime/internal/agent"
 	"github.com/linko-zhao/mini-agent-runtime/internal/model"
 	"github.com/linko-zhao/mini-agent-runtime/internal/model/openai"
+	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
 )
-
-// calculator 最小实现：args {"a":1,"b":1}，返回 a+b。
-type calculator struct{}
-
-func (calculator) Name() string { return "calculator" }
-
-func (calculator) Execute(ctx context.Context, args json.RawMessage) (string, error) {
-	var p struct {
-		A, B int
-	}
-	if err := json.Unmarshal(args, &p); err != nil {
-		return "", err
-	}
-	return fmt.Sprint(p.A + p.B), nil
-}
 
 func createModel() (model.Model, error) {
 	apiKey := os.Getenv("OPENAI_API_KEY")
@@ -58,7 +44,7 @@ func main() {
 		panic(err)
 	}
 
-	a := agent.New(m, nil, 5)
+	a := agent.New(m, map[string]tool.Tool{"calculator": &tool.Calculator{}}, 5)
 
 	out, err := a.Run(context.Background(), "Hi")
 	if err != nil {

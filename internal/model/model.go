@@ -58,3 +58,13 @@ func (e *ModelError) Unwrap() error {
 type Model interface {
 	Generate(ctx context.Context, messages []Message) (*Response, error)
 }
+
+type ToolDefinition struct {
+	Name string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Parameters json.RawMessage `json:"parameters,omitempty"`
+}
+
+type ToolBinder interface {
+	WithTools(defs []ToolDefinition) (Model, error)
+}

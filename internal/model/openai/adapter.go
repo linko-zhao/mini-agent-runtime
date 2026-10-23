@@ -19,6 +19,7 @@ type ChatModelConfig struct {
 
 type ChatModel struct {
 	config ChatModelConfig
+	tools []ChatCompletionTool
 }
 
 func NewChatModel(config *ChatModelConfig) (*ChatModel, error) {
@@ -42,10 +43,7 @@ func NewChatModel(config *ChatModelConfig) (*ChatModel, error) {
 }
 
 func (cm *ChatModel) Generate(ctx context.Context, messages []model.Message) (*model.Response, error) {
-	payload := map[string]any{
-		"model":    cm.config.Model,
-		"messages": messages,
-	}
+	payload, _ := convertRequest(ctx, cm, messages)
 	buf, _ := json.Marshal(payload)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cm.config.BaseURL, bytes.NewReader(buf))
@@ -67,3 +65,15 @@ func (cm *ChatModel) Generate(ctx context.Context, messages []model.Message) (*m
 
 	return convertResponse(ctx, resp)
 }
+
+func (cm *ChatModel) WithTools(defs []model.ToolDefinition) (model.Model, error) {
+	m := *cm
+	for _, d := range defs {
+		m.tools = append(m.tools, ChatCompletionTool{
+			Type: "function",
+			Function: d,
+		})
+	}
+	return &m, nil
+}
+
