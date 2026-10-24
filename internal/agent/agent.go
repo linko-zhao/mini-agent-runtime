@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/linko-zhao/mini-agent-runtime/internal/model"
 	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
 )
+
+const toolTimeout = 300 * time.Second
 
 type Agent struct {
 	model    model.Model
@@ -66,7 +69,12 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 				return "", fmt.Errorf("tool %q not found", t.Name)
 			}
 			slog.InfoContext(ctx, "executing tool", "name", t.Name)
-			tr, err := tool.Execute(ctx, t.Arguments)
+			toolCtx, cancel := context.WithTimeout(ctx, toolTimeout)
+			defer cancel()
+			tr, err := tool.Execute(toolCtx, t.Arguments)
+			if toolCtx.Err() != nil {
+				return "", ctx.Err()
+			}
 			if err != nil {
 				slog.ErrorContext(ctx, "tool execution failed", "name", t.Name, "error", err)
 				tm.Content = err.Error()
