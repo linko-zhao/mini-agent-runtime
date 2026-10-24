@@ -58,6 +58,7 @@ func (cm *ChatModel) Generate(ctx context.Context, messages []model.Message) (*m
 	if err != nil {
 		return nil, wrapTransportError(err)
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
 		return nil, newHTTPError(resp.StatusCode, err)

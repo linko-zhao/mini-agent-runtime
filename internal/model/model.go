@@ -22,7 +22,7 @@ type FinishReason string
 
 const (
 	FinishStop      FinishReason = "stop"
-	FinishToolCalls FinishReason = "too_calls"
+	FinishToolCalls FinishReason = "tool_calls"
 	FinishLength    FinishReason = "length"
 )
 

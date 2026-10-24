@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/linko-zhao/mini-agent-runtime/internal/model"
 	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
@@ -39,7 +40,8 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 		a.model = bound
 	}
 
-	for range a.maxSteps {
+	for step := range a.maxSteps {
+		slog.InfoContext(ctx, "generating model response", "step", step+1)
 		if ctx.Err() != nil {
 			return "", ctx.Err()
 		}
@@ -63,8 +65,10 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 			if !ok {
 				return "", fmt.Errorf("tool %q not found", t.Name)
 			}
+			slog.InfoContext(ctx, "executing tool", "name", t.Name)
 			tr, err := tool.Execute(ctx, t.Arguments)
 			if err != nil {
+				slog.ErrorContext(ctx, "tool execution failed", "name", t.Name, "error", err)
 				tm.Content = err.Error()
 			} else {
 				tm.Content = tr
