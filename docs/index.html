@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="description" content="Agent Runtime 八周学习路线与每日 Go 实战文档导航">
+<title>学习文档导航 · Mini Agent Runtime</title>
+<style>
+:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#58667b;--line:#e0e6ee;--accent:#2459bd;--pale:#edf3ff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.7 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:960px;margin:auto;padding:32px 22px 64px}.hero{background:#183561;color:#fff;border-radius:18px;padding:30px}.eyebrow{font-size:12px;letter-spacing:1.2px;opacity:.82}.hero h1{font-size:30px;line-height:1.3;margin:8px 0}.hero p{color:#e6eefa;margin:0;max-width:680px}.chips{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}.chip{border:1px solid #8ea4c8;border-radius:20px;padding:3px 10px;font-size:12px}.intro, .week{background:var(--paper);border:1px solid var(--line);border-radius:14px;margin-top:18px;padding:22px 25px}.intro{background:var(--pale);border-color:#d9e5fa}.intro p{margin:0}.week-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:13px}.week h2{font-size:18px;margin:0}.week-head span,.muted{color:var(--sub);font-size:13px}.cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.card{display:block;text-decoration:none;color:inherit;border:1px solid var(--line);border-radius:11px;padding:14px 16px;transition:border-color .15s,transform .15s,box-shadow .15s}.card:hover,.card:focus-visible{border-color:#91addf;transform:translateY(-1px);box-shadow:0 5px 18px #203d6812;outline:none}.card-top{display:flex;align-items:center;justify-content:space-between;gap:10px}.day{font-size:12px;font-weight:700;color:var(--accent);letter-spacing:.4px}.status{font-size:11px;color:#28734a;background:#eaf7ef;border-radius:20px;padding:2px 8px}.card h3{font-size:15px;margin:6px 0 2px}.card p{font-size:12px;color:var(--sub);margin:0}.future{background:#fafbfd}.future .status{color:#66748a;background:#eef1f5}.footer{text-align:center;color:var(--sub);font-size:12px;margin:22px 0 0}
+@media(max-width:600px){main{padding:14px 12px 40px}.hero{padding:23px}.hero h1{font-size:24px}.week,.intro{padding:18px}.cards{grid-template-columns:1fr}}
+</style>
+</head>
+<body><main>
+<header class="hero"><div class="eyebrow">MINI AGENT RUNTIME · LEARNING PATH</div><h1>Agent Runtime 学习文档</h1><p>八周、56 天，从 Runtime 与 Agent Loop 出发，逐步完成工具编排、状态恢复、记忆、调度、评估与部署。每天 20 分钟阅读、80 分钟编码、20 分钟测试与复盘。</p><div class="chips"><span class="chip">8 周 · 56 天</span><span class="chip">Go 实战</span><span class="chip">独立离线 HTML</span><span class="chip">周日集成复盘</span></div></header>
+<section class="intro"><p><strong>怎么使用：</strong>选择当天文档，按计划阅读、编码并运行验收命令。清单进度保存在浏览器 localStorage 中。路线按实际代码和测试逐日核对；前一天未完成时，先处理依赖门禁，再继续新内容。</p></section>
+<section class="week"><div class="week-head"><h2>第 1 周 · Runtime 与 Agent Loop</h2><span>Day 01–07 · 基础、模型接口、执行闭环</span></div><div class="cards">
+<a class="card" href="learning/agent-runtime-day-01.html"><div class="card-top"><span class="day">DAY 01</span><span class="status">学习计划</span></div><h3>Runtime 核心抽象与最小 Agent Loop</h3><p>模型、工具与 Agent 执行闭环</p></a>
+<a class="card" href="learning/agent-runtime-day-02.html"><div class="card-top"><span class="day">DAY 02</span><span class="status">学习计划</span></div><h3>Agent Runtime 迭代与工具调用</h3><p>沿着既有实现推进接口与行为</p></a>
+<a class="card" href="learning/agent-runtime-day-03.html"><div class="card-top"><span class="day">DAY 03</span><span class="status">学习计划</span></div><h3>OpenAI 兼容模型适配器</h3><p>HTTP 请求、响应映射与错误处理</p></a>
+<a class="card" href="learning/agent-runtime-day-04.html"><div class="card-top"><span class="day">DAY 04</span><span class="status">学习计划</span></div><h3>Agent 生命周期与运行可靠性</h3><p>边界条件、上下文取消与回归验证</p></a>
+<a class="card" href="learning/agent-runtime-day-05.html"><div class="card-top"><span class="day">DAY 05</span><span class="status">学习计划</span></div><h3>执行事件与生命周期回归</h3><p>事件顺序、终态与运行过程观察</p></a>
+<div class="card future"><div class="card-top"><span class="day">DAY 06–07</span><span class="status">待生成</span></div><h3>并发安全与第一周集成复盘</h3><p>按每日任务生成后，将文档放入 learning/</p></div>
+</div></section>
+<section class="week"><div class="week-head"><h2>后续学习路线</h2><span>每天生成对应的独立学习文档</span></div><div class="cards">
+<div class="card future"><div class="card-top"><span class="day">WEEK 02 · 08–14</span><span class="status">待生成</span></div><h3>Tools 与 MCP</h3><p>工具协议、MCP 客户端与集成复盘</p></div>
+<div class="card future"><div class="card-top"><span class="day">WEEK 03 · 15–21</span><span class="status">待生成</span></div><h3>状态机与 Checkpoint</h3><p>执行状态、持久化边界与恢复验证</p></div>
+<div class="card future"><div class="card-top"><span class="day">WEEK 04 · 22–28</span><span class="status">待生成</span></div><h3>中断审批与故障恢复</h3><p>人工介入、安全边界与恢复路径</p></div>
+<div class="card future"><div class="card-top"><span class="day">WEEK 05 · 29–35</span><span class="status">待生成</span></div><h3>Context 与 Memory</h3><p>上下文管理、压缩与记忆策略</p></div>
+<div class="card future"><div class="card-top"><span class="day">WEEK 06 · 36–42</span><span class="status">待生成</span></div><h3>调度与隔离</h3><p>并发调度、资源控制与执行隔离</p></div>
+<div class="card future"><div class="card-top"><span class="day">WEEK 07 · 43–49</span><span class="status">待生成</span></div><h3>Tracing 与 Eval</h3><p>链路观测、质量评估与回归</p></div>
+<div class="card future"><div class="card-top"><span class="day">WEEK 08 · 50–56</span><span class="status">待生成</span></div><h3>部署与最终验收</h3><p>综合集成；Day 56 后进行总结复盘</p></div>
+</div></section>
+<footer class="footer">文档位于 docs/learning/ · 每周第 7 天安排集成复盘 · Day 56 后结束，不自动循环</footer>
+</main></body></html>
