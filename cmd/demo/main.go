@@ -39,12 +39,14 @@ func createModel() (model.Model, error) {
 
 func main() {
 	m, err := createModel()
-
 	if err != nil {
 		panic(err)
 	}
 
-	a := agent.New(m, map[string]tool.Tool{"calculator": &tool.Calculator{}}, 5)
+	a, err := agent.New(m, map[string]tool.Tool{"calculator": &tool.Calculator{}}, 5)
+	if err != nil {
+		panic(err)
+	}
 
 	out, err := a.Run(context.Background(), "Hi")
 	if err != nil {

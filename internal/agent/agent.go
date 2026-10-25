@@ -18,16 +18,8 @@ type Agent struct {
 	maxSteps int
 }
 
-func New(m model.Model, tools map[string]tool.Tool, maxSteps int) *Agent {
-	return &Agent{model: m, tools: tools, maxSteps: maxSteps}
-}
-
-func (a *Agent) Run(ctx context.Context, input string) (string, error) {
-	m := model.Message{
-		Role:    "user",
-		Content: input,
-	}
-	msgs := []model.Message{m}
+func New(m model.Model, tools map[string]tool.Tool, maxSteps int) (*Agent, error) {
+	a := Agent{model: m, tools: tools, maxSteps: maxSteps}
 
 	if tb, ok := a.model.(model.ToolBinder); ok {
 		var ts []model.ToolDefinition
@@ -38,10 +30,20 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 		}
 		bound, err := tb.WithTools(ts)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		a.model = bound
 	}
+
+	return &a, nil
+}
+
+func (a *Agent) Run(ctx context.Context, input string) (string, error) {
+	m := model.Message{
+		Role:    "user",
+		Content: input,
+	}
+	msgs := []model.Message{m}
 
 	for step := range a.maxSteps {
 		slog.InfoContext(ctx, "generating model response", "step", step+1)

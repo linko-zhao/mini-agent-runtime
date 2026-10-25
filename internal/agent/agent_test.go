@@ -36,7 +36,9 @@ func TestAgentRun(t *testing.T) {
 			{Message: model.Message{Role: "assistant", Content: "Hi, I'm an AI assistant"}},
 		})
 
-		r, err := New(m, nil, 5).Run(context.Background(), "Hi")
+		a, err := New(m, nil, 5)
+		require.NoError(t, err)
+		r, err := a.Run(context.Background(), "Hi")
 		require.NoError(t, err)
 		assert.Equal(t, "Hi, I'm an AI assistant", r)
 	})
@@ -62,7 +64,9 @@ func TestAgentRun(t *testing.T) {
 			return "tool result", nil
 		})
 
-		result, err := New(m, map[string]tool.Tool{"lookup": lookup}, 5).Run(context.Background(), "find")
+		a, err := New(m, map[string]tool.Tool{"lookup": lookup}, 5)
+		require.NoError(t, err)
+		result, err := a.Run(context.Background(), "find")
 		require.NoError(t, err)
 		assert.Equal(t, "done", result)
 		require.Len(t, secondRequest, 3)
@@ -77,7 +81,9 @@ func TestAgentRun(t *testing.T) {
 			ToolCalls: []model.ToolCall{{ID: "missing-id", Name: "missing"}},
 		}}})
 
-		_, err := New(m, nil, 5).Run(context.Background(), "find")
+		a, err := New(m, nil, 5)
+		require.NoError(t, err)
+		_, err = a.Run(context.Background(), "find")
 		require.ErrorContains(t, err, `tool "missing" not found`)
 	})
 
@@ -87,7 +93,8 @@ func TestAgentRun(t *testing.T) {
 		}}})
 		lookup := toolFunc(func(context.Context, json.RawMessage) (string, error) { return "result", nil })
 
-		_, err := New(m, map[string]tool.Tool{"lookup": lookup}, 1).Run(context.Background(), "find")
+		a, err := New(m, map[string]tool.Tool{"lookup": lookup}, 1)
+		_, err = a.Run(context.Background(), "find")
 		require.ErrorContains(t, err, "arrive max steps")
 	})
 
@@ -98,8 +105,10 @@ func TestAgentRun(t *testing.T) {
 			return nil, ctx.Err()
 		})
 		done := make(chan error, 1)
+		a, err := New(m, nil, 5)
+		require.NoError(t, err)
 		go func() {
-			_, err := New(m, nil, 5).Run(ctx, "find")
+			_, err := a.Run(ctx, "find")
 			done <- err
 		}()
 		cancel()
@@ -118,7 +127,8 @@ func TestAgentRun(t *testing.T) {
 			return nil, wantErr
 		})
 
-		_, err := New(m, nil, 5).Run(context.Background(), "find")
+		a, err := New(m, nil, 5)
+		_, err = a.Run(context.Background(), "find")
 		require.ErrorIs(t, err, wantErr)
 	})
 }
@@ -189,7 +199,9 @@ func TestAgentRunWithHTTPProvider(t *testing.T) {
 		def: (&tool.Calculator{}).Definition(),
 		run: (&tool.Calculator{}).Execute,
 	}
-	result, err := New(m, map[string]tool.Tool{"calculator": calc}, 5).Run(context.Background(), "1+1 等于几？")
+	a, err := New(m, map[string]tool.Tool{"calculator": calc}, 5)
+	require.NoError(t, err)
+	result, err := a.Run(context.Background(), "1+1 等于几？")
 	require.NoError(t, err)
 	assert.Equal(t, "结果是 2", result)
 
@@ -230,7 +242,7 @@ func TestAgentRunInvalidToolDefinition(t *testing.T) {
 			"a": describedTool{def: dup, run: func(context.Context, json.RawMessage) (string, error) { return "", nil }},
 			"b": describedTool{def: dup, run: func(context.Context, json.RawMessage) (string, error) { return "", nil }},
 		}
-		_, err := New(m, tools, 5).Run(context.Background(), "hi")
+		_, err := New(m, tools, 5)
 		require.ErrorContains(t, err, "duplicate tool name")
 	})
 
@@ -238,7 +250,7 @@ func TestAgentRunInvalidToolDefinition(t *testing.T) {
 		tools := map[string]tool.Tool{
 			"broken": describedTool{def: badSchema, run: func(context.Context, json.RawMessage) (string, error) { return "", nil }},
 		}
-		_, err := New(m, tools, 5).Run(context.Background(), "hi")
+		_, err := New(m, tools, 5)
 		require.ErrorContains(t, err, "object")
 	})
 
