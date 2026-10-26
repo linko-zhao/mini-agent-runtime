@@ -13,7 +13,8 @@ const (
 	RunFinished EventType = "run_finished"
 	ToolStarted EventType = "tool_started"
 	ToolCompleted EventType = "tool_completed"
-	ToolFailed EventType = "tool_failed"
+	StepStarted EventType = "step_started"
+	ModelCompleted EventType = "model_completed"
 )
 
 type Event struct {

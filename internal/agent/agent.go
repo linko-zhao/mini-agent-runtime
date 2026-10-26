@@ -16,10 +16,17 @@ type Agent struct {
 	model    model.Model
 	tools    map[string]tool.Tool
 	maxSteps int
+	eventSink EventSink
 }
 
-func New(m model.Model, tools map[string]tool.Tool, maxSteps int) (*Agent, error) {
+func New(m model.Model, tools map[string]tool.Tool, maxSteps int, opts ...Option) (*Agent, error) {
 	a := Agent{model: m, tools: tools, maxSteps: maxSteps}
+
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&a)
+		}
+	}
 
 	if tb, ok := a.model.(model.ToolBinder); ok {
 		var ts []model.ToolDefinition
