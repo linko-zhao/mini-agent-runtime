@@ -14,7 +14,16 @@ const (
 	ToolStarted EventType = "tool_started"
 	ToolCompleted EventType = "tool_completed"
 	StepStarted EventType = "step_started"
+	StepFinished EventType = "step_finished"
 	ModelCompleted EventType = "model_completed"
+)
+
+type EventStatus string
+
+const (
+	EventOk EventStatus = "ok"
+	EventError EventStatus = "error"
+	EventCancelled EventStatus = "cancelled"
 )
 
 type Event struct {
@@ -24,7 +33,7 @@ type Event struct {
 	ToolName string
 	ToolCallID string
 	Duration time.Duration
-	Status string
+	Status EventStatus
 }
 
 type EventSink interface {
