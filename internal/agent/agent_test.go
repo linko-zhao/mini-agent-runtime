@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -30,6 +31,156 @@ func (f toolFunc) Execute(ctx context.Context, args json.RawMessage) (string, er
 	return f(ctx, args)
 }
 
+type eventCollector struct {
+	mu     sync.Mutex
+	events []Event
+}
+
+func (c *eventCollector) Emit(_ context.Context, e Event) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.events = append(c.events, e)
+}
+
+func (c *eventCollector) snapshot() []Event {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]Event(nil), c.events...)
+}
+
+func TestAgentEvents(t *testing.T) {
+	t.Run("模型直接返回文本", func(t *testing.T) {
+		sink := &eventCollector{}
+		a, err := New(model.NewMock([]model.Response{{Message: model.Message{Role: "assistant", Content: "done"}}}), nil, 2, WithEventSink(sink))
+		require.NoError(t, err)
+		_, err = a.Run(context.Background(), "hi")
+		require.NoError(t, err)
+		events := sink.snapshot()
+		require.Len(t, events, 4)
+		assert.Equal(t, []EventType{RunStarted, StepStarted, ModelCompleted, RunFinished}, []EventType{events[0].Type, events[1].Type, events[2].Type, events[3].Type})
+		assert.Equal(t, 1, countTerminal(events))
+	})
+
+	t.Run("模型两轮调用单工具", func(t *testing.T) {
+		sink := &eventCollector{}
+		calls := 0
+		m := modelFunc(func(context.Context, []model.Message) (*model.Response, error) {
+			calls++
+			if calls == 1 {
+				return &model.Response{Message: model.Message{Role: "assistant", ToolCalls: []model.ToolCall{{ID: "id-1", Name: "lookup"}}}}, nil
+			}
+			return &model.Response{Message: model.Message{Role: "assistant", Content: "done"}}, nil
+		})
+		a, err := New(m, map[string]tool.Tool{"lookup": toolFunc(func(context.Context, json.RawMessage) (string, error) { return "ok", nil })}, 3, WithEventSink(sink))
+		require.NoError(t, err)
+		_, err = a.Run(context.Background(), "hi")
+		require.NoError(t, err)
+		events := sink.snapshot()
+		var starts, completes []Event
+		var steps []int
+		for _, e := range events {
+			switch e.Type {
+			case StepStarted:
+				steps = append(steps, e.Step)
+			case ToolStarted:
+				starts = append(starts, e)
+			case ToolCompleted:
+				completes = append(completes, e)
+			}
+		}
+		require.Len(t, starts, 1)
+		require.Len(t, completes, 1)
+		assert.Equal(t, starts[0].ToolCallID, completes[0].ToolCallID)
+		assert.Equal(t, []int{1, 2}, steps)
+	})
+
+	t.Run("工具错误回填后模型仍可完成", func(t *testing.T) {
+		sink := &eventCollector{}
+		calls := 0
+		m := modelFunc(func(context.Context, []model.Message) (*model.Response, error) {
+			calls++
+			if calls == 1 {
+				return &model.Response{Message: model.Message{Role: "assistant", ToolCalls: []model.ToolCall{{ID: "bad", Name: "lookup"}}}}, nil
+			}
+			return &model.Response{Message: model.Message{Role: "assistant", Content: "recovered"}}, nil
+		})
+		a, err := New(m, map[string]tool.Tool{"lookup": toolFunc(func(context.Context, json.RawMessage) (string, error) { return "", errors.New("failed") })}, 3, WithEventSink(sink))
+		require.NoError(t, err)
+		_, err = a.Run(context.Background(), "hi")
+		require.NoError(t, err)
+		events := sink.snapshot()
+		require.Equal(t, EventError, findEvent(events, ToolCompleted).Status)
+		assert.Equal(t, RunFinished, events[len(events)-1].Type)
+	})
+
+	t.Run("模型错误只产生 RunFailed", func(t *testing.T) {
+		sink := &eventCollector{}
+		a, err := New(modelFunc(func(context.Context, []model.Message) (*model.Response, error) { return nil, errors.New("offline") }), nil, 2, WithEventSink(sink))
+		require.NoError(t, err)
+		_, err = a.Run(context.Background(), "hi")
+		require.Error(t, err)
+		events := sink.snapshot()
+		assert.Equal(t, 1, countTerminal(events))
+		assert.Equal(t, 1, countType(events, RunFailed))
+		assert.Equal(t, 0, countType(events, RunFinished))
+	})
+
+	t.Run("工具前取消时不执行后续工具", func(t *testing.T) {
+		sink := &eventCollector{}
+		ctx, cancel := context.WithCancel(context.Background())
+		m := modelFunc(func(context.Context, []model.Message) (*model.Response, error) {
+			return &model.Response{Message: model.Message{Role: "assistant", ToolCalls: []model.ToolCall{{ID: "first", Name: "lookup"}, {ID: "second", Name: "lookup"}}}}, nil
+		})
+		executions := 0
+		a, err := New(m, map[string]tool.Tool{"lookup": toolFunc(func(context.Context, json.RawMessage) (string, error) { executions++; cancel(); return "ok", nil })}, 2, WithEventSink(sink))
+		require.NoError(t, err)
+		_, err = a.Run(ctx, "hi")
+		require.ErrorIs(t, err, context.Canceled)
+		assert.Equal(t, 1, executions)
+		assert.Equal(t, 1, countType(sink.snapshot(), RunFailed))
+	})
+
+	t.Run("nil sink preserves result and shared sink is safe", func(t *testing.T) {
+		a, err := New(model.NewMock([]model.Response{{Message: model.Message{Role: "assistant", Content: "done"}}}), nil, 2)
+		require.NoError(t, err)
+		result, err := a.Run(context.Background(), "hi")
+		require.NoError(t, err)
+		assert.Equal(t, "done", result)
+		sink := &eventCollector{}
+		a, err = New(model.NewMock([]model.Response{{Message: model.Message{Role: "assistant", Content: "done"}}, {Message: model.Message{Role: "assistant", Content: "done"}}}), nil, 2, WithEventSink(sink))
+		require.NoError(t, err)
+		var wg sync.WaitGroup
+		for range 2 {
+			wg.Add(1)
+			go func() { defer wg.Done(); _, _ = a.Run(context.Background(), "hi") }()
+		}
+		wg.Wait()
+		assert.Equal(t, 2, countType(sink.snapshot(), RunFinished))
+	})
+}
+
+func countType(events []Event, typ EventType) int {
+	count := 0
+	for _, e := range events {
+		if e.Type == typ {
+			count++
+		}
+	}
+	return count
+}
+
+func countTerminal(events []Event) int {
+	return countType(events, RunFinished) + countType(events, RunFailed)
+}
+
+func findEvent(events []Event, typ EventType) Event {
+	for _, e := range events {
+		if e.Type == typ {
+			return e
+		}
+	}
+	return Event{}
+}
 func TestAgentRun(t *testing.T) {
 	t.Run("模型直接返回文本", func(t *testing.T) {
 		m := model.NewMock([]model.Response{
@@ -75,16 +226,23 @@ func TestAgentRun(t *testing.T) {
 		assert.Equal(t, model.Message{Role: "tool", Content: "tool result", ToolCallID: "call-123"}, secondRequest[2])
 	})
 
-	t.Run("工具不存在时返回错误", func(t *testing.T) {
-		m := model.NewMock([]model.Response{{Message: model.Message{
-			Role:      "assistant",
-			ToolCalls: []model.ToolCall{{ID: "missing-id", Name: "missing"}},
-		}}})
-
+	t.Run("工具不存在时将错误回填给模型", func(t *testing.T) {
+		var history []model.Message
+		m := modelFunc(func(_ context.Context, messages []model.Message) (*model.Response, error) {
+			if len(messages) == 1 {
+				return &model.Response{Message: model.Message{Role: "assistant", ToolCalls: []model.ToolCall{{ID: "missing-id", Name: "missing"}}}}, nil
+			}
+			history = append([]model.Message(nil), messages...)
+			return &model.Response{Message: model.Message{Role: "assistant", Content: "done"}}, nil
+		})
 		a, err := New(m, nil, 5)
 		require.NoError(t, err)
-		_, err = a.Run(context.Background(), "find")
-		require.ErrorContains(t, err, `tool "missing" not found`)
+		result, err := a.Run(context.Background(), "find")
+		require.NoError(t, err)
+		assert.Equal(t, "done", result)
+		require.Len(t, history, 3)
+		assert.Equal(t, `tool missing not found`, history[2].Content)
+		assert.Equal(t, "missing-id", history[2].ToolCallID)
 	})
 
 	t.Run("超过 maxSteps 时返回上限错误", func(t *testing.T) {

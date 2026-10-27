@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/linko-zhao/mini-agent-runtime/internal/model"
@@ -13,13 +14,17 @@ import (
 const toolTimeout = 300 * time.Second
 
 type Agent struct {
-	model    model.Model
-	tools    map[string]tool.Tool
-	maxSteps int
+	model     model.Model
+	tools     map[string]tool.Tool
+	maxSteps  int
 	eventSink EventSink
+	sinkMutex sync.Mutex
 }
 
 func New(m model.Model, tools map[string]tool.Tool, maxSteps int, opts ...Option) (*Agent, error) {
+	if maxSteps <= 0 {
+		return nil, fmt.Errorf("maxSteps must greater than 0")
+	}
 	a := Agent{model: m, tools: tools, maxSteps: maxSteps}
 
 	for _, opt := range opts {
@@ -56,7 +61,7 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 	runStartTime := time.Now()
 	a.emit(ctx, Event{
 		Type: RunStarted,
-		At: runStartTime,
+		At:   runStartTime,
 	})
 
 	for step = range a.maxSteps {
@@ -64,47 +69,52 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 		if ctx.Err() != nil {
 			a.emit(ctx, Event{
 				Type: RunFailed,
-				At: time.Now(),
+				At:   time.Now(),
 			})
 			return "", ctx.Err()
 		}
 		stepStartTime := time.Now()
 		a.emit(ctx, Event{
 			Type: StepStarted,
-			Step: step+1,
-			At: stepStartTime,
+			Step: step + 1,
+			At:   stepStartTime,
 		})
 		r, err := a.model.Generate(ctx, msgs)
 		if err != nil {
 			a.emit(ctx, Event{
-				Type: ModelCompleted,
-				Step: step+1,
-				At: time.Now(),
+				Type:     ModelCompleted,
+				Step:     step + 1,
+				At:       time.Now(),
 				Duration: time.Since(stepStartTime),
-				Status: EventError,
+				Status:   EventError,
 			})
-			continue
+			a.emit(ctx, Event{Type: RunFailed, At: time.Now()})
+			return "", fmt.Errorf("model generate error: %w", err)
 		}
 		a.emit(ctx, Event{
-			Type: ModelCompleted,
-			Step: step+1,
-			At: time.Now(),
+			Type:     ModelCompleted,
+			Step:     step + 1,
+			At:       time.Now(),
 			Duration: time.Since(stepStartTime),
-			Status: EventOk,
+			Status:   EventOk,
 		})
 
 		msgs = append(msgs, r.Message)
 
 		if len(r.Message.ToolCalls) == 0 {
 			a.emit(ctx, Event{
-				Type: RunFinished,
-				At: time.Now(),
+				Type:     RunFinished,
+				At:       time.Now(),
 				Duration: time.Since(runStartTime),
 			})
 			return r.Message.Content, nil
 		}
 
 		for _, t := range r.Message.ToolCalls {
+			if ctx.Err() != nil {
+				a.emit(ctx, Event{Type: RunFailed, At: time.Now()})
+				return "", ctx.Err()
+			}
 			tm := model.Message{
 				Role:       "tool",
 				ToolCallID: t.ID,
@@ -112,14 +122,15 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 			tool, ok := a.tools[t.Name]
 			if !ok {
 				tm.Content = fmt.Sprintf("tool %s not found", t.Name)
+				msgs = append(msgs, tm)
 				continue
 			}
 			toolStartTime := time.Now()
 			a.emit(ctx, Event{
-				Type: ToolStarted,
-				Step: step+1,
-				At: toolStartTime,
-				ToolName: t.Name,
+				Type:       ToolStarted,
+				Step:       step + 1,
+				At:         toolStartTime,
+				ToolName:   t.Name,
 				ToolCallID: t.ID,
 			})
 
@@ -130,7 +141,7 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 			if toolCtx.Err() != nil {
 				a.emit(ctx, Event{
 					Type: RunFailed,
-					At: time.Now(),
+					At:   time.Now(),
 				})
 				return "", ctx.Err()
 			}
@@ -143,21 +154,21 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 				tm.Content = tr
 			}
 			a.emit(ctx, Event{
-				Type: ToolCompleted,
-				Step: step+1,
-				At: time.Now(),
-				ToolName: t.Name,
+				Type:       ToolCompleted,
+				Step:       step + 1,
+				At:         time.Now(),
+				ToolName:   t.Name,
 				ToolCallID: t.ID,
-				Duration: time.Since(toolStartTime),
-				Status: toolCallStatus,
+				Duration:   time.Since(toolStartTime),
+				Status:     toolCallStatus,
 			})
 			msgs = append(msgs, tm)
 		}
 
 		a.emit(ctx, Event{
-			Type: StepFinished,
-			Step: step+1,
-			At: time.Now(),
+			Type:     StepFinished,
+			Step:     step + 1,
+			At:       time.Now(),
 			Duration: time.Since(stepStartTime),
 		})
 	}
@@ -165,12 +176,12 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 	if step >= a.maxSteps {
 		a.emit(ctx, Event{
 			Type: RunFailed,
-			At: time.Now(),
+			At:   time.Now(),
 		})
 	} else {
 		a.emit(ctx, Event{
-			Type: RunFinished,
-			At: time.Now(),
+			Type:     RunFinished,
+			At:       time.Now(),
 			Duration: time.Since(runStartTime),
 		})
 	}
@@ -182,5 +193,7 @@ func (a *Agent) emit(ctx context.Context, e Event) {
 	if a.eventSink == nil {
 		return
 	}
+	a.sinkMutex.Lock()
+	defer a.sinkMutex.Unlock()
 	a.eventSink.Emit(ctx, e)
 }
