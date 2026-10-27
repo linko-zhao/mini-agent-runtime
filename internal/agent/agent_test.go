@@ -268,6 +268,20 @@ func TestAgentRun(t *testing.T) {
 		}
 	})
 
+	t.Run("context 超时后退出", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		defer cancel()
+		m := modelFunc(func(ctx context.Context, _ []model.Message) (*model.Response, error) {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		})
+		a, err := New(m, nil, 5)
+		require.NoError(t, err)
+
+		_, err = a.Run(ctx, "find")
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+	})
+
 	t.Run("模型调用失败时错误向上传递", func(t *testing.T) {
 		wantErr := errors.New("model unavailable")
 		m := modelFunc(func(context.Context, []model.Message) (*model.Response, error) {
