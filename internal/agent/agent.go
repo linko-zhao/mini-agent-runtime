@@ -121,9 +121,8 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 			}
 			tool, ok := a.tools[t.Name]
 			if !ok {
-				tm.Content = fmt.Sprintf("tool %s not found", t.Name)
-				msgs = append(msgs, tm)
-				continue
+				a.emit(ctx, Event{Type: RunFailed, At: time.Now()})
+				return "", fmt.Errorf("tool %s not found", t.Name)
 			}
 			toolStartTime := time.Now()
 			a.emit(ctx, Event{

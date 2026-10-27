@@ -226,23 +226,12 @@ func TestAgentRun(t *testing.T) {
 		assert.Equal(t, model.Message{Role: "tool", Content: "tool result", ToolCallID: "call-123"}, secondRequest[2])
 	})
 
-	t.Run("工具不存在时将错误回填给模型", func(t *testing.T) {
-		var history []model.Message
-		m := modelFunc(func(_ context.Context, messages []model.Message) (*model.Response, error) {
-			if len(messages) == 1 {
-				return &model.Response{Message: model.Message{Role: "assistant", ToolCalls: []model.ToolCall{{ID: "missing-id", Name: "missing"}}}}, nil
-			}
-			history = append([]model.Message(nil), messages...)
-			return &model.Response{Message: model.Message{Role: "assistant", Content: "done"}}, nil
-		})
+	t.Run("工具不存在时将错误返回", func(t *testing.T) {
+		m := model.NewMock([]model.Response{{Message: model.Message{Role: "assistant", ToolCalls: []model.ToolCall{{ID: "missing-id", Name: "missing"}}}}})
 		a, err := New(m, nil, 5)
 		require.NoError(t, err)
-		result, err := a.Run(context.Background(), "find")
-		require.NoError(t, err)
-		assert.Equal(t, "done", result)
-		require.Len(t, history, 3)
-		assert.Equal(t, `tool missing not found`, history[2].Content)
-		assert.Equal(t, "missing-id", history[2].ToolCallID)
+		_, err = a.Run(context.Background(), "find")
+		require.Errorf(t, err, "tool missing not found")
 	})
 
 	t.Run("超过 maxSteps 时返回上限错误", func(t *testing.T) {
