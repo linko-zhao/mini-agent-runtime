@@ -1,13 +1,18 @@
 package openai
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/linko-zhao/mini-agent-runtime/internal/model"
 )
+
+const maxCompressed = 1 * 1024 * 1024   // 1 MiB 压缩后
+const maxDecompressed = 10 * 1024 * 1024 // 10 MiB 解压后
 
 func convertRequest(_ context.Context, cm *ChatModel, messages []model.Message) (*ChatCompletionNewParams, error) {
 	p := ChatCompletionNewParams{
@@ -37,8 +42,16 @@ func convertRequest(_ context.Context, cm *ChatModel, messages []model.Message) 
 }
 
 func convertResponse(_ context.Context, resp *http.Response) (*model.Response, error) {
+	gz, err := gzip.NewReader(io.LimitReader(resp.Body, maxCompressed))
+	if err != nil {
+		return nil, err
+	}
+	body, err := io.ReadAll(io.LimitReader(gz, maxDecompressed))
+	if err != nil {
+		return nil, err
+	}
 	var completion ChatCompletion
-	if err := json.NewDecoder(resp.Body).Decode(&completion); err != nil {
+	if err := json.Unmarshal(body, &completion); err != nil {
 		return nil, fmt.Errorf("openai: decode completions response error: %v", err)
 	}
 	if len(completion.Choices) == 0 {
