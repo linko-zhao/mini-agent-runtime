@@ -1,7 +1,6 @@
 package openai
 
 import (
-	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,8 +10,7 @@ import (
 	"github.com/linko-zhao/mini-agent-runtime/internal/model"
 )
 
-const maxCompressed = 1 * 1024 * 1024    // 1 MiB 压缩后
-const maxDecompressed = 10 * 1024 * 1024 // 10 MiB 解压后
+const maxResponseBytes = 4 * 1024 * 1024
 
 func convertRequest(_ context.Context, cm *ChatModel, messages []model.Message) (*ChatCompletionNewParams, error) {
 	p := ChatCompletionNewParams{
@@ -42,11 +40,7 @@ func convertRequest(_ context.Context, cm *ChatModel, messages []model.Message) 
 }
 
 func convertResponse(_ context.Context, resp *http.Response) (*model.Response, error) {
-	gz, err := gzip.NewReader(io.LimitReader(resp.Body, maxCompressed))
-	if err != nil {
-		return nil, err
-	}
-	body, err := io.ReadAll(io.LimitReader(gz, maxDecompressed))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
 	if err != nil {
 		return nil, err
 	}
