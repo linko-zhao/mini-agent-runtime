@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -104,6 +105,12 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 
 		if len(r.Message.ToolCalls) == 0 {
 			a.emit(ctx, Event{
+				Type:     StepFinished,
+				Step:     step + 1,
+				At:       time.Now(),
+				Duration: time.Since(stepStartTime),
+			})
+			a.emit(ctx, Event{
 				Type:     RunFinished,
 				At:       time.Now(),
 				Duration: time.Since(runStartTime),
@@ -136,9 +143,20 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 
 			slog.InfoContext(ctx, "executing tool", "name", t.Name)
 			toolCtx, cancel := context.WithTimeout(ctx, a.toolTimeout)
-			defer cancel()
 			tr, err := tool.Execute(toolCtx, t.Arguments)
+			cancel()
 			if toolCtx.Err() != nil {
+				if errors.Is(toolCtx.Err(), context.DeadlineExceeded) {
+					a.emit(ctx, Event{
+						Type:       ToolCompleted,
+						Step:       step + 1,
+						At:         time.Now(),
+						ToolName:   t.Name,
+						ToolCallID: t.ID,
+						Duration:   time.Since(toolStartTime),
+						Status:     EventError,
+					})
+				}
 				a.emit(ctx, Event{
 					Type: RunFailed,
 					At:   time.Now(),
