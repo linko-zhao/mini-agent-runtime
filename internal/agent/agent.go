@@ -72,7 +72,7 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 				Type: RunFailed,
 				At:   time.Now(),
 			})
-			return "", ctx.Err()
+			return "", fmt.Errorf("run context error: %w", ctx.Err())
 		}
 		stepStartTime := time.Now()
 		a.emit(ctx, Event{
@@ -143,7 +143,7 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 					Type: RunFailed,
 					At:   time.Now(),
 				})
-				return "", ctx.Err()
+				return "", fmt.Errorf("executing tool context timeout: %w", toolCtx.Err())
 			}
 			toolCallStatus := EventOk
 			if err != nil {
