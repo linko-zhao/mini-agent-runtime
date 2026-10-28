@@ -19,7 +19,7 @@ type ChatModelConfig struct {
 
 type ChatModel struct {
 	config ChatModelConfig
-	tools []ChatCompletionTool
+	tools  []ChatCompletionTool
 }
 
 func NewChatModel(config *ChatModelConfig) (*ChatModel, error) {
@@ -85,10 +85,9 @@ func (cm *ChatModel) WithTools(defs []model.ToolDefinition) (model.Model, error)
 			}
 		}
 		m.tools = append(m.tools, ChatCompletionTool{
-			Type: "function",
+			Type:     "function",
 			Function: d,
 		})
 	}
 	return &m, nil
 }
-

@@ -60,9 +60,9 @@ type Model interface {
 }
 
 type ToolDefinition struct {
-	Name string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Parameters json.RawMessage `json:"parameters,omitempty"`
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	Parameters  json.RawMessage `json:"parameters,omitempty"`
 }
 
 type ToolBinder interface {

@@ -25,7 +25,7 @@ func (c *Calculator) Execute(ctx context.Context, args json.RawMessage) (string,
 
 func (c *Calculator) Definition() model.ToolDefinition {
 	return model.ToolDefinition{
-		Name: "calculator",
+		Name:        "calculator",
 		Description: "计算两个整数的和",
 		Parameters: json.RawMessage(`{
             "type": "object",

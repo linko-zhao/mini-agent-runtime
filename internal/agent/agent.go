@@ -11,21 +11,22 @@ import (
 	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
 )
 
-const toolTimeout = 300 * time.Second
+const DefaultToolTimeout = 300 * time.Second
 
 type Agent struct {
-	model     model.Model
-	tools     map[string]tool.Tool
-	maxSteps  int
-	eventSink EventSink
-	sinkMutex sync.Mutex
+	model       model.Model
+	tools       map[string]tool.Tool
+	maxSteps    int
+	eventSink   EventSink
+	sinkMutex   sync.Mutex
+	toolTimeout time.Duration
 }
 
 func New(m model.Model, tools map[string]tool.Tool, maxSteps int, opts ...Option) (*Agent, error) {
 	if maxSteps <= 0 {
 		return nil, fmt.Errorf("maxSteps must greater than 0")
 	}
-	a := Agent{model: m, tools: tools, maxSteps: maxSteps}
+	a := Agent{model: m, tools: tools, maxSteps: maxSteps, toolTimeout: DefaultToolTimeout}
 
 	for _, opt := range opts {
 		if opt != nil {
@@ -134,7 +135,7 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 			})
 
 			slog.InfoContext(ctx, "executing tool", "name", t.Name)
-			toolCtx, cancel := context.WithTimeout(ctx, toolTimeout)
+			toolCtx, cancel := context.WithTimeout(ctx, a.toolTimeout)
 			defer cancel()
 			tr, err := tool.Execute(toolCtx, t.Arguments)
 			if toolCtx.Err() != nil {

@@ -3,20 +3,20 @@ package openai
 import "github.com/linko-zhao/mini-agent-runtime/internal/model"
 
 type ChatCompletionNewParams struct {
-	Model string `json:"model"`
+	Model    string                  `json:"model"`
 	Messages []ChatCompletionMessage `json:"messages"`
-	Tools []ChatCompletionTool `json:"tools,omitempty"` 
+	Tools    []ChatCompletionTool    `json:"tools,omitempty"`
 }
 
 type ChatCompletionMessage struct {
-	Role       string `json:"role"`
-	Content    string `json:"content,omitempty"`
+	Role       string     `json:"role"`
+	Content    string     `json:"content,omitempty"`
 	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
-	ToolCallID string `json:"tool_call_id,omitempty"`
+	ToolCallID string     `json:"tool_call_id,omitempty"`
 }
 
 type ChatCompletionTool struct {
-	Type string `json:"type"`
+	Type     string               `json:"type"`
 	Function model.ToolDefinition `json:"function"`
 }
 

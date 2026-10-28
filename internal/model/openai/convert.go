@@ -11,7 +11,7 @@ import (
 	"github.com/linko-zhao/mini-agent-runtime/internal/model"
 )
 
-const maxCompressed = 1 * 1024 * 1024   // 1 MiB 压缩后
+const maxCompressed = 1 * 1024 * 1024    // 1 MiB 压缩后
 const maxDecompressed = 10 * 1024 * 1024 // 10 MiB 解压后
 
 func convertRequest(_ context.Context, cm *ChatModel, messages []model.Message) (*ChatCompletionNewParams, error) {
@@ -22,16 +22,16 @@ func convertRequest(_ context.Context, cm *ChatModel, messages []model.Message) 
 
 	for _, msg := range messages {
 		ct := ChatCompletionMessage{
-			Role: msg.Role,
-			Content: msg.Content,
+			Role:       msg.Role,
+			Content:    msg.Content,
 			ToolCallID: msg.ToolCallID,
 		}
 		for _, t := range msg.ToolCalls {
 			ct.ToolCalls = append(ct.ToolCalls, ToolCall{
-				ID: t.ID,
+				ID:   t.ID,
 				Type: "function",
 				Function: FunctionCall{
-					Name: t.Name,
+					Name:      t.Name,
 					Arguments: string(t.Arguments),
 				},
 			})
