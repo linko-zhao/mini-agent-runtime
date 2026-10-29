@@ -139,9 +139,10 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 
 			toolCtx, cancel := context.WithTimeout(ctx, a.toolTimeout)
 			tr, err := tool.Execute(toolCtx, t.Arguments)
+			toolErr := toolCtx.Err()
 			cancel()
-			if toolCtx.Err() != nil {
-				if errors.Is(toolCtx.Err(), context.DeadlineExceeded) {
+			if toolErr != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
 					a.emit(ctx, Event{
 						Type:       ToolCompleted,
 						Step:       step + 1,
@@ -156,7 +157,7 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 					Type: RunFailed,
 					At:   time.Now(),
 				})
-				return "", fmt.Errorf("executing tool context timeout: %w", toolCtx.Err())
+				return "", fmt.Errorf("executing tool context error: %w", toolErr)
 			}
 			toolCallStatus := EventOk
 			if err != nil {

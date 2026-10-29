@@ -56,8 +56,8 @@ func TestAgentEvents(t *testing.T) {
 		_, err = a.Run(context.Background(), "hi")
 		require.NoError(t, err)
 		events := sink.snapshot()
-		require.Len(t, events, 4)
-		assert.Equal(t, []EventType{RunStarted, StepStarted, ModelCompleted, RunFinished}, []EventType{events[0].Type, events[1].Type, events[2].Type, events[3].Type})
+		require.Len(t, events, 5)
+		assert.Equal(t, []EventType{RunStarted, StepStarted, ModelCompleted, StepFinished, RunFinished}, []EventType{events[0].Type, events[1].Type, events[2].Type, events[3].Type, events[4].Type})
 		assert.Equal(t, 1, countTerminal(events))
 	})
 
