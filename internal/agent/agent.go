@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/linko-zhao/mini-agent-runtime/internal/model"
@@ -65,7 +64,6 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 	})
 
 	for step = range a.maxSteps {
-		slog.InfoContext(ctx, "generating model response", "step", step+1)
 		if ctx.Err() != nil {
 			a.emit(ctx, Event{
 				Type: RunFailed,
@@ -139,7 +137,6 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 				ToolCallID: t.ID,
 			})
 
-			slog.InfoContext(ctx, "executing tool", "name", t.Name)
 			toolCtx, cancel := context.WithTimeout(ctx, a.toolTimeout)
 			tr, err := tool.Execute(toolCtx, t.Arguments)
 			cancel()
@@ -163,7 +160,6 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 			}
 			toolCallStatus := EventOk
 			if err != nil {
-				slog.ErrorContext(ctx, "tool execution failed", "name", t.Name, "error", err)
 				tm.Content = err.Error()
 				toolCallStatus = EventError
 			} else {
