@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"sync"
 	"time"
 
 	"github.com/linko-zhao/mini-agent-runtime/internal/model"
@@ -19,7 +18,6 @@ type Agent struct {
 	tools       map[string]tool.Tool
 	maxSteps    int
 	eventSink   EventSink
-	sinkMutex   sync.Mutex
 	toolTimeout time.Duration
 }
 
@@ -211,7 +209,5 @@ func (a *Agent) emit(ctx context.Context, e Event) {
 	if a.eventSink == nil {
 		return
 	}
-	a.sinkMutex.Lock()
-	defer a.sinkMutex.Unlock()
 	a.eventSink.Emit(ctx, e)
 }

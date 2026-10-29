@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"sync"
 	"time"
 )
 
@@ -38,4 +39,16 @@ type Event struct {
 
 type EventSink interface {
 	Emit(ctx context.Context, e Event)
+}
+
+type SynchronizedSink struct {
+	mu sync.Mutex
+	sink EventSink
+}
+
+func (s *SynchronizedSink) Emit(ctx context.Context, e Event) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.sink.Emit(ctx, e)
 }
