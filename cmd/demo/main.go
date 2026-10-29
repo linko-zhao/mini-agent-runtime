@@ -10,6 +10,7 @@ import (
 	"github.com/linko-zhao/mini-agent-runtime/internal/model"
 	"github.com/linko-zhao/mini-agent-runtime/internal/model/openai"
 	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
+	"github.com/linko-zhao/mini-agent-runtime/internal/tool/calculator"
 )
 
 func createModel() (model.Model, error) {
@@ -43,7 +44,7 @@ func main() {
 		panic(err)
 	}
 
-	a, err := agent.New(m, map[string]tool.Tool{"calculator": &tool.Calculator{}}, 5)
+	a, err := agent.New(m, map[string]tool.Tool{"calculator": &calculator.Calculator{}}, 5)
 	if err != nil {
 		panic(err)
 	}

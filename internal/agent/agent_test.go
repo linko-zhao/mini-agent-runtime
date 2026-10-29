@@ -13,6 +13,7 @@ import (
 	"github.com/linko-zhao/mini-agent-runtime/internal/model"
 	"github.com/linko-zhao/mini-agent-runtime/internal/model/openai"
 	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
+	"github.com/linko-zhao/mini-agent-runtime/internal/tool/calculator"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -357,8 +358,8 @@ func TestAgentRunWithHTTPProvider(t *testing.T) {
 	})
 
 	calc := describedTool{
-		def: (&tool.Calculator{}).Definition(),
-		run: (&tool.Calculator{}).Execute,
+		def: (&calculator.Calculator{}).Definition(),
+		run: (&calculator.Calculator{}).Execute,
 	}
 	a, err := New(m, map[string]tool.Tool{"calculator": calc}, 5)
 	require.NoError(t, err)

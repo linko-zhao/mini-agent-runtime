@@ -1,11 +1,14 @@
-package tool
+package calculator
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
 )
 
 // calculator 最小实现：args {"a":1,"b":1}，返回 a+b。
@@ -15,10 +18,23 @@ func (c *Calculator) Name() string { return "calculator" }
 
 func (c *Calculator) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	var p struct {
-		A, B int
+		A int `json:"a"`
+		B int `json:"b"`
 	}
-	if err := json.Unmarshal(args, &p); err != nil {
-		return "", err
+	d := json.NewDecoder(bytes.NewReader(args))
+	d.DisallowUnknownFields()
+	if err := d.Decode(&p); err != nil {
+		if strings.HasPrefix(err.Error(), "json: unknown field ") {
+			return "", &tool.Error{
+				Kind: tool.ValidationError,
+				Message: "arguments has unexpected field",
+			}
+		}
+		return "", &tool.Error{
+			Kind: tool.DecodeError,
+			Message: "arguments must be a valid JSON object",
+			Cause: err,
+		}
 	}
 	return fmt.Sprint(p.A + p.B), nil
 }
