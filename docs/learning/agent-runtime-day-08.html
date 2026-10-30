@@ -1,28 +1,101 @@
 <!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Day 08 · Agent 工具抽象与 Eino 接口设计</title><style>
 :root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#58667b;--line:#e0e6ee;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:920px;margin:auto;padding:32px 22px 70px}.hero{background:#183561;color:#fff;border-radius:18px;padding:29px 30px}.hero small{opacity:.8;letter-spacing:1px}.hero h1{margin:7px 0;font-size:30px;line-height:1.3}.hero p{margin:0;color:#e6eefa}.chips{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}.chip{border:1px solid #8ea4c8;border-radius:20px;padding:3px 10px;font-size:12px}section{background:var(--paper);border:1px solid var(--line);border-radius:14px;margin-top:18px;padding:22px 26px}h2{font-size:19px;margin:0 0 13px}h3{font-size:16px;margin:18px 0 6px}.time{font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.4px}p{margin:8px 0}a{color:var(--accent)}li{margin:6px 0}code{background:#f0f3f8;padding:2px 5px;border-radius:4px}pre{overflow:auto;background:#142136;color:#e7f3ff;padding:17px;border-radius:10px;font-size:13px;line-height:1.65}pre code{background:transparent;padding:0}.goal{background:var(--pale);border-left:3px solid var(--accent);padding:12px 15px;border-radius:4px}.note{background:#fff8e9;border:1px solid #f2deb2;border-radius:9px;padding:11px 14px;color:#644b18}.info{background:#eff6ff;border:1px solid #d5e4fc;border-radius:9px;padding:11px 14px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.grid>div{padding:12px;background:#f6f8fc;border-radius:9px}.grid strong{display:block;font-size:19px}.grid span{font-size:12px;color:var(--sub)}.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0}.check input{margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer;flex:1}.check.done label{text-decoration:line-through;color:var(--sub)}.progress{height:8px;background:#e3e9f2;border-radius:99px;overflow:hidden}.fill{height:100%;background:var(--accent);width:0%;transition:width .2s}.meta{display:flex;justify-content:space-between;font-size:13px;color:var(--sub);margin-bottom:9px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px;vertical-align:top}th{background:#f4f7fc}.tag{display:inline-block;background:#eaf0fc;color:#2459bd;border-radius:5px;font-size:12px;padding:2px 7px;margin-right:6px}.muted{color:var(--sub);font-size:13px}footer{text-align:center;color:var(--sub);font-size:12px;margin:24px}@media(max-width:600px){main{padding:14px 12px 40px}.hero{padding:22px}.hero h1{font-size:24px}section{padding:18px}.grid{grid-template-columns:1fr}table{font-size:12px}th,td{padding:8px}pre{font-size:12px}}
 </style></head><body><main><header class="hero"><small>MINI AGENT RUNTIME · WEEK 02 · EINO 源码对照</small><h1>Day 08 / 56 · Agent 工具抽象与 Eino 接口设计</h1><p>把 Tool 视为 Agent 访问外部能力的契约：元信息供模型选择，执行接口供 Runtime 调度，业务实现负责实际访问。</p><div class="chips"><span class="chip">阅读 20 分钟</span><span class="chip">编码 80 分钟</span><span class="chip">测试复盘 20 分钟</span></div></header>
-<section><h2>目标与学习边界</h2><div class="goal">把 Tool 视为 Agent 访问外部能力的契约：元信息供模型选择，执行接口供 Runtime 调度，业务实现负责实际访问。</div><p>按课程设计推进，不以当前项目代码或前一天提交情况作为生成前提。本页代码路径是仓库中的累计参考示例，按本页任务逐步阅读与扩展；它不代表学习者已完成对应实现。业务 Fake 用于展示工具契约，不把 calculator 算法作为主线。</p><p class="note">概念前置：Model 接口、Agent Loop、assistant/tool 消息角色和 context。若不熟悉，可先看本页数据流与接口示例；课程仍按日序继续发布。</p></section>
-<section><div class="time">20 MIN · READ</div><h2>Eino 官方源码阅读</h2><h3>12 分钟 · Eino 的工具接口</h3><p>阅读 <a href="https://github.com/cloudwego/eino/blob/main/components/tool/interface.go">components/tool/interface.go</a>：定位 BaseTool.Info、InvokableTool.InvokableRun、StreamableTool.StreamableRun。理解“只有描述”与“可以执行”为什么是不同能力；记录流式返回的关闭责任。增强多模态接口只了解，不在今天实现。</p><h3>8 分钟 · 工具进入 Agent Loop</h3><p>阅读 <a href="https://github.com/cloudwego/eino/blob/main/compose/tool_node.go">compose/tool_node.go</a> 的 ToolsNode 输入输出注释和 ToolsNodeConfig.Tools；追踪 assistant ToolCalls 到 tool messages 的契约。画出 ToolInfo → 模型选择 → ToolCall → 本地执行 → ToolResult → 模型继续推理的链路。</p><p>阅读产出：标出 Eino 对应符号、画出数据流，并写下一个设计取舍。源码 main 会变化；实际练习时记录所读 commit 或依赖版本。</p></section>
-<section><div class="time">80 MIN · BUILD</div><h2>Go 示例增量（基于 examples 累计演进）</h2>
-<p class="info"><strong>承接前序设计：</strong>复用 <code>examples/internal/model/model.go</code> 中的 <code>ToolDefinition</code>、<code>ToolCall</code>，以及 <code>examples/internal/tool/tool.go</code> 的 <code>Tool/DescribedTool</code> 适配面。所有代码共用仓库根目录 go.mod，不新建每日 Module。</p>
-<h3>20 分钟 · 对齐工具契约</h3><p>阅读 <code>examples/internal/tool/contract.go</code>。<code>Spec{Name, Description, InputSchema}</code> 描述模型可选能力；<code>Described.Meta(ctx)</code> 只提供元信息；<code>Invokable.Invoke(ctx,args)</code> 执行调用。<code>Call</code> 复用 <code>model.ToolCall</code>，因此 ID、Name 和原始 JSON 参数沿用既有消息契约。通过 <code>Adapt</code> 将新接口适配为旧 <code>Tool/DescribedTool</code>，Agent Loop 不必更换调用协议。</p>
-<pre><code>// examples/internal/tool/contract.go
+<section><h2>先理解今天要解决什么问题</h2>
+<div class="goal">今天要能独立回答：一个已经会与模型对话的 Agent，怎样接入新的外部能力，而不用每加一个工具就改一次 Agent Loop？</div>
+<p>第一周建立了“调用模型 → 判断是否有 ToolCall → 执行工具 → 把结果交回模型”的循环。现在用户要求“查找并阅读 Runtime 工具契约”：模型只有已有知识，无法直接读取你的资料库；你需要把检索和读取变成它可选择、Runtime 可执行的能力。</p>
+<p>最直接的实现是在 Loop 里写 <code>switch call.Name</code>，逐个调用搜索、数据库、HTTP。少量工具时可行，但工具增加后，Loop 会混入参数解析、后端连接和业务逻辑。今天通过工具契约把这些变化放到各自的层：<strong>模型提出调用意图，Runtime 组织执行，工具适配业务能力，Store 访问后端。</strong></p>
+<p><strong>学习顺序：</strong>先看下面的一次完整往返，再带着问题读 Eino，最后沿参考示例完成四项增量练习。页面能独立解释设计；代码用于验证理解。若已有累计示例，先遮住实现写出自己的接口草图，再比较差异，无需重新建工程。</p>
+<p class="note">概念前置：<code>Model.Generate</code>、消息历史、assistant/tool 角色、context。它们分别表示“请求一次模型”“保留往返上下文”“区分调用与结果”“传递取消和超时”。课程按路线推进，前序编码未完成时可使用 examples 参考基线继续理解。</p>
+</section>
+<section><h2>把 Agent 的一次工具往返走通</h2>
+<p>用户输入：“查找并阅读 Runtime 工具契约”。先区分两个阶段：启动时装配能力；运行时由消息推动循环。</p>
+<pre aria-label="Agent 工具接入与执行数据流"><code>装配：Store → SearchKnowledge / GetDocument → Registry.Register
+      → Registry.Tools() → Agent.New → ToolDefinition → Model.ToolBinder
+
+运行：用户问题 → Model.Generate(消息历史)
+      → assistant ToolCall → Loop 查注册表 → Tool.Execute
+      → 适配层 Invoke → Store → 工具结果
+      → tool 消息（ToolCallID 对齐）→ Model.Generate → 调用下一工具或回答</code></pre>
+<p><code>Registry.Specs(可见名称)</code> 可以单独查看描述快照；当前 Agent 构造路径通过 <code>Registry.Tools()</code> 适配为旧接口，再由 <code>Definition()</code> 取描述并按 <code>WithVisibleTools</code> 过滤。两者说明同一条边界：给模型的是描述，本地保留的是执行对象。</p>
+<ol>
+<li><strong>装配：</strong>注册 <code>search_knowledge</code> 和 <code>get_document</code>。描述告诉模型“什么时候用、参数是什么”；此时不搜索、不读取资料。</li>
+<li><strong>第一轮：</strong>模型返回 <code>{ID: "search-1", Name: "search_knowledge", Arguments: {"query":"Runtime"}}</code>。这是一份调用请求，尚未访问后端。</li>
+<li><strong>执行与回填：</strong>Runtime 查本地工具，传入参数和本次 context；Store 返回 <code>doc-1</code> 及摘要。Loop 保留 assistant 原始调用，并追加 <code>Role=tool, ToolCallID="search-1"</code> 的结果消息。</li>
+<li><strong>第二轮：</strong>模型获得检索结果后，才能请求 <code>get_document({"id":"doc-1"})</code>，调用 ID 为 <code>read-1</code>。该结果用 <code>ToolCallID="read-1"</code> 回填。</li>
+<li><strong>第三轮：</strong>模型读到正文后返回最终文本；无 ToolCall 时 Loop 结束。检索和读取有数据依赖，不能假定同一批调用自动传递 ID。</li>
+</ol>
+<p class="info"><strong>理解检查：</strong>工具名称用来找到能力，调用 ID 用来找到“这一次调用”的结果。同一个工具可以被调用多次，所以只用名称关联结果会产生歧义。</p>
+<p><strong>示例的观察范围：</strong><code>examples/cmd/knowledge/main.go</code> 使用脚本 Mock 预设上述三轮响应，验证 Runtime 能接好线路；它不证明真实模型会选择正确工具。接真实模型还需要支持 ToolBinder 的适配器，以及清晰的描述与参数协议。</p>
+</section>
+<section><h2>为什么要拆成这些层</h2>
+<table><thead><tr><th>设计</th><th>解决的问题与取舍</th><th>如何验证理解</th></tr></thead><tbody>
+<tr><td>Spec / Meta：描述能力</td><td>模型需要名称、用途和输入格式。将描述与执行分开，枚举能力时就不会访问业务后端，也不需要把 Go 函数或凭据发给模型。代价是必须维持描述与实际参数校验一致。</td><td>调用 Meta / Specs 后，Store 调用次数仍为 0。InputSchema 是输入约定，不能替代 Invoke 的实际校验。</td></tr>
+<tr><td>Invokable.Invoke：执行能力</td><td>Runtime 只依赖统一入口，可调度检索、HTTP 等不同工具。工具自己解析业务参数；Runtime 保留调用 ID、消息和控制流职责。</td><td>把 Store 换成另一个实现，Loop 和 ToolCall 结构不变。</td></tr>
+<tr><td>Registry：名称到实现</td><td>把名称解析从 Loop 的业务分支移到注册表。重名若被覆盖，同一调用可能执行错误实现，因此入口拒绝重复；schema 仅做基本结构检查。</td><td>重复名注册失败；Specs 顺序稳定，修改返回值不会改写内部描述。</td></tr>
+<tr><td>Store：业务后端端口</td><td>Search/Get 定义工具需要的后端能力。Fake 与真实后端可替换，网络和凭据配置留在适配层；代价是多一层接口，但离线测试更容易。</td><td>FakeStore 能完成检索与读取；换后端只需适配 Store，不改 Agent 协议。</td></tr>
+<tr><td>Adapt：兼容已有 Loop</td><td>Day 01 的 Execute 和 Day 03 的 Definition 已被使用。把 Meta/Invoke 转成旧接口，可增量演进，无需同时重写调用方。</td><td>追踪 Execute → Invoke，执行 context 原样传递；构造时的 context 不替代运行时 context。</td></tr>
+</tbody></table>
+<p><strong>今天的边界：</strong>只建立同步工具接入。流式输出、批次执行器、执行授权、重试和 MCP 分别在后续增量加入。模型可见过滤用于提供选择范围，当前执行表仍保留隐藏工具；真正的权限检查必须在执行前另行实现。</p>
+</section>
+<section><div class="time">20 MIN · READ</div><h2>带着设计问题阅读 Eino</h2>
+<h3>12 分钟 · 模型需要知道什么，Runtime 需要执行什么？</h3>
+<p>阅读 <a href="https://github.com/cloudwego/eino/blob/main/components/tool/interface.go">components/tool/interface.go</a>，定位 <code>BaseTool.Info</code>、<code>InvokableTool.InvokableRun</code>、<code>StreamableTool.StreamableRun</code>。先看接口输入输出，回答：为什么 Info 不直接返回业务结果？普通调用与流式调用的消费者有何差别？流式关闭责任在哪里？今天仅理解流式差异。</p>
+<p><strong>产出：</strong>写出 <code>BaseTool.Info → Meta</code>、<code>InvokableRun → Invoke</code> 的职责映射；说明接口形状并不相同，课程使用适配思路而非直接依赖 Eino。</p>
+<h3>8 分钟 · 工具为什么需要 Loop 来连接？</h3>
+<p>阅读 <a href="https://github.com/cloudwego/eino/blob/main/compose/tool_node.go">compose/tool_node.go</a> 的 ToolsNode 输入输出注释与 <code>ToolsNodeConfig.Tools</code>。只找“注册的工具从哪里来、调用请求是什么、结果交给谁”，批次执行细节留到 Day 09。</p>
+<p><strong>产出：</strong>在上面的运行链路标出描述、调用、结果三个位置，各写一句谁产生、谁消费。阅读 main 分支时记录 commit 或依赖版本，便于后续复查。</p>
+</section>
+<section><div class="time">80 MIN · BUILD</div><h2>用四项练习验证搭建思路</h2>
+<p class="info"><strong>承接前序设计：</strong>复用 <code>examples/internal/model/model.go</code> 的 ToolDefinition / ToolCall，<code>examples/internal/tool/tool.go</code> 的 Tool / DescribedTool，以及现有 Agent Loop。共用根 go.mod。<strong>本日增量：</strong>描述/执行分离、注册表、Store 适配和知识工具入口；这些文件在累计参考基线中已提供，以下是自行实现或对照完善的练习，不表示需要再次创建同名文件。</p>
+<h3>任务一 · 20 分钟：先设计工具契约</h3>
+<p><strong>为什么做：</strong>让模型选择能力和 Runtime 执行能力共用工具身份，同时保持不同职责。先写下“模型应看到哪些字段”，再看 <code>examples/internal/tool/contract.go</code>：</p>
+<pre><code>// 接口摘录，非独立可运行文件；完整定义见 contract.go。
 type Spec struct {
     Name, Description string
     InputSchema json.RawMessage
 }
-type Described interface {
-    Meta(context.Context) (Spec, error)
-}
+type Described interface { Meta(context.Context) (Spec, error) }
 type Invokable interface {
     Described
     Invoke(context.Context, json.RawMessage) (string, error)
 }
-// Call 复用既有 model.ToolCall；Adapt 兼容已有 Tool.Execute。</code></pre>
-<h3>20 分钟 · 注册与本轮模型可见集合</h3><p>阅读 <code>examples/internal/tool/registry.go</code> 和 <code>examples/internal/agent/options.go</code>。<code>Register</code> 在入口拒绝空名、重复名及非法 schema；<code>Specs</code> 稳定排序并返回副本，不执行工具。<code>Registry.Tools()</code> 把注册集合适配给既有 <code>agent.New</code>；<code>WithVisibleTools</code> 只控制发给 ModelBinder 的描述集合，运行时仍保留注册能力，不能把“模型看得见”当成授权。</p>
-<h3>25 分钟 · 通过 Store 适配实际能力</h3><p>阅读 <code>examples/internal/tool/knowledge/tools.go</code>：<code>SearchKnowledge</code> 按 query 返回 ID/摘要，<code>GetDocument</code> 按 ID 读取正文。两者通过注入的 <code>Store</code> 调用后端，凭据留在 Store 适配层；Runtime 传递执行 context。<code>FakeStore</code> 和 <code>examples/cmd/knowledge/main.go</code> 展示离线的“检索 → 读取 → 模型总结”往返。当前 FakeStore 不提供生产鉴权；执行授权由后续课程设计。</p>
-<h3>15 分钟 · 对照 Eino 并记录边界</h3><p>在 <code>examples/internal/tool/design.md</code> 对照 <code>Spec/Meta/Invoke</code> 与 Eino ToolInfo/Info/InvokableRun。流式工具今天只做源码阅读，不留空接口；说明模型可见过滤、执行授权、Store 鉴权和超时各自的责任边界。</p></section><section><div class="time">20 MIN · TEST &amp; REVIEW</div><h2>验收与复盘</h2><p><strong>12 分钟测试：</strong>描述枚举稳定；重复/空名拒绝；元信息枚举不触发执行；SearchKnowledge/GetDocument 可注入 FakeStore；调用保留 context；模型可见集合与注册集合分开。</p><pre><code># 从仓库根目录运行；作为学习验收建议，执行前确认本地改动
-go test ./examples/...
+// Call 沿用 model.ToolCall；Adapt 将 Meta/Invoke 接为 Definition/Execute。</code></pre>
+<p><strong>操作与观察：</strong>用 5 分钟画接口、10 分钟实现或对照 Meta/Invoke 与 Adapt、5 分钟追踪新工具如何接进旧 Loop。复用 ToolCall，不再定义第二套 ID/Name/Arguments。</p>
+<p><strong>完成证据：</strong>能够说明 Spec 中为什么没有执行函数和凭据，以及调用 ID 为什么属于调用消息而非业务输入 schema；在适配器中找到本次 Execute context 进入 Invoke 的位置。</p>
+<h3>任务二 · 20 分钟：把能力接到注册表</h3>
+<p><strong>为什么做：</strong>模型返回的是名称；本地必须有确定的名称到对象映射，同时注册集合与模型可见集合可能不同。</p>
+<p><strong>操作与观察：</strong>用 10 分钟实现或对照 <code>examples/internal/tool/registry.go</code> 的 Register / Specs / Tools，5 分钟查看 <code>examples/internal/agent/options.go</code> 的 WithVisibleTools，5 分钟手算“注册 A、B，只展示 A”时两份集合的内容。Specs(nil) 枚举全部，非 nil 空集合枚举零个。</p>
+<p><strong>完成证据：</strong>能解释重名为何拒绝、枚举为何不执行工具、描述为何返回副本；隐藏 B 后仍能在完整注册表找到 B，因此可见过滤不能承担授权。</p>
+<h3>任务三 · 25 分钟：接入检索与读取，并走通三轮对话</h3>
+<p><strong>为什么做：</strong>检索返回文档 ID，读取消费该 ID，可直观看到“工具结果改变下一轮模型输入”。拆成两个工具是今天的教学选择，便于观察依赖；若业务总是同时需要全文，也可设计组合工具，但需重新权衡成本与灵活性。</p>
+<p><strong>操作与观察：</strong>用 10 分钟实现或对照 <code>examples/internal/tool/knowledge/tools.go</code> 的 Store / SearchKnowledge / GetDocument，10 分钟沿 <code>examples/cmd/knowledge/main.go</code> 追踪注册和三轮 Mock，5 分钟写出每次调用与结果的 ID。FakeStore 用于离线验证，实际后端接入只需实现 Store。</p>
+<p><strong>完成证据：</strong>画出 search-1 → doc-1 → read-1 的关系；指出工具返回的字符串如何成为 tool 消息，最终回答为什么还需要再调用一次模型。凭据不进入 Spec；取消 context 沿 Runtime → 工具 → Store 传递。</p>
+<h3>任务四 · 15 分钟：写出自己的设计说明</h3>
+<p><strong>为什么做：</strong>能按步骤写代码还不足以说明理解了搭建方法，需要能预测需求变化会影响哪里。</p>
+<p><strong>操作与观察：</strong>用 10 分钟在 <code>examples/internal/tool/design.md</code> 对照 Eino 映射，并补写“问题 → 分层选择 → 数据流 → 取舍”；5 分钟回答：增加一个 HTTP 工具、替换检索后端、增加执行授权，分别应该改哪一层？</p>
+<p><strong>完成证据：</strong>新工具实现 Meta/Invoke 并注册；替换后端适配 Store；授权在 Runtime 的执行入口新增检查，不能只从描述中隐藏。新增超时/重试策略时，业务工具无需承担整个执行调度。</p>
+</section>
+<section><div class="time">20 MIN · TEST &amp; REVIEW</div><h2>验证设计判断，而不仅是运行成功</h2>
+<p><strong>12 分钟：</strong>从仓库根运行下列命令，先记录预期，再核对实际结果。页面命令是学习者待执行的建议验收，不声明已经通过。</p>
+<pre><code>go test ./examples/...
 go test -race ./examples/...
-go run ./examples/cmd/knowledge</code></pre><p class="note">本页是学习计划。命令与断言为待完成练习，不代表已运行或通过；不要求读取当前工程来决定课题。</p><p><strong>8 分钟复盘：</strong></p><ol><li>元信息与执行能力为何要拆开？</li><li>Eino 的工具描述和 Runtime 执行器各负责什么？</li><li>接入 HTTP、检索或 MCP 时，哪个接口需要适配，哪个接口应保持稳定？</li></ol><h3>交互清单</h3><div class="meta"><span>进度保存在本浏览器 localStorage</span><span id="count"></span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div><div id="checks"></div></section>
-<section><h2>完成定义与次日衔接</h2><p><strong>Definition of Done：</strong>能解释上述 Eino 符号和本地设计的映射；理解并沿示例完成核心接口与 FakeStore 往返；验收结果如实记录；写出一个后续扩展点与一个当前设计限制。</p><p>Day 09：构建类似 ToolsNode 的执行器，把模型返回的一批 ToolCall 安全地转成 tool messages。</p></section><footer>Agent Runtime · 56 天课程 · 离线内容可读，官方源码链接需联网</footer></main><script>const items=["阅读 Eino BaseTool/InvokableTool/StreamableTool","画出工具进入 Agent Loop 的完整数据流","定义描述与执行接口","完成工具注册与本轮可见集合","用 Store 接口适配检索和文档读取","写出与 Eino 接口的对应关系","运行 examples 测试与离线知识工具 Demo 并记录结果","回答复盘问题，准备 Day 09 调度器"],key="mini-agent-runtime-day-08-checklist-v2";let saved=[];try{const v=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(v))saved=v}catch(_){}const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const p=Math.round(n/items.length*100);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=p+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(p))}items.forEach((s,i)=>{const r=document.createElement("div");r.className="check";const c=document.createElement("input");c.type="checkbox";c.id="task-"+i;c.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=c.id;label.textContent=s;r.append(c,label);box.append(r);c.onchange=()=>{saved[i]=c.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();</script></body></html>
+go run ./examples/cmd/knowledge</code></pre>
+<p>离线 Demo 预期打印“本轮模型可见工具： 2”和“工具描述供模型选择，调用由 Runtime 执行。”；这证明预设消息能走通 Loop，不能代替真实模型的工具选择评估。race 检查也仅覆盖实际运行到的路径。</p>
+<table><thead><tr><th>检查位置</th><th>观察行为</th><th>说明的设计</th></tr></thead><tbody>
+<tr><td>tool/registry_test.go</td><td>TestRegistryContract 拒绝空名/重名、稳定枚举、返回副本、枚举不执行</td><td>能力发现与执行解耦，名称映射不能被静默覆盖</td></tr>
+<tr><td>同文件</td><td>TestAdaptPreservesInvocationContext 保留本次执行 context</td><td>适配接口不应切断取消与超时传播</td></tr>
+<tr><td>tool/knowledge/tools_test.go</td><td>TestStoreAdapters 检查 Meta 不访问 Store，非法参数和已取消调用不访问后端</td><td>描述阶段无业务访问，执行入口维护参数边界</td></tr>
+</tbody></table>
+<p class="muted">表中路径均相对 examples/internal。断言通过说明对应边界有验证证据，不等于权限、生产后端或真实模型效果已得到验证。</p>
+<p><strong>8 分钟复盘：</strong>先自己回答，再展开参考思路。</p>
+<details><summary>为什么模型返回 ToolCall 后，还需要 Runtime？</summary><p>ToolCall 只表达名称、参数与 ID；Runtime 找到本地实现、执行并关联结果，把 assistant/tool 消息保留到下一轮历史。后端调用不会因为模型生成了名称而自动发生。</p></details>
+<details><summary>换检索后端和增加一种工具，分别改哪里？</summary><p>换后端实现 Store；新能力实现 Meta/Invoke 并注册，必要时调整模型可见配置。两者都不应要求在 Loop 中新增业务 switch。</p></details>
+<details><summary>隐藏工具为什么不能保证它不会被执行？</summary><p>当前过滤只改变发给模型的描述，完整执行表没有删除该能力。脚本模型或异常请求仍可能返回其名称；执行授权需在调用前检查，留到 Day 11。</p></details>
+<h3>交互清单</h3><div class="meta"><span>进度保存在本浏览器 localStorage</span><span id="count"></span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div><div id="checks"></div>
+</section>
+<section><h2>完成定义与下一步</h2>
+<p><strong>理解验收：</strong>合上代码，用自己的话画出“描述 → 模型调用 → 本地执行 → 结果回填 → 下一轮模型”，说明每层为何存在；面对“接入一个 HTTP 工具”能指出新增与复用位置，并解释一个取舍。</p>
+<p><strong>实作验收：</strong>沿累计示例完成或对照接口、注册、Store 与三轮 Mock 往返，记录测试实际结果和仍不理解的环节。只运行 Demo 尚不足以完成理解验收；尚未完成编码也不阻止学习后续设计。</p>
+<p><strong>Day 09 为什么接着学执行器：</strong>今天解决“单个能力如何被发现和调用”；当模型一次返回多条调用时，还需统一检查调用 ID、安排执行、处理失败并组装结果。下一天将研究类似 ToolsNode 的批次执行边界，复用今天的工具契约。</p>
+</section><footer>Agent Runtime · 56 天课程 · 离线内容可读，官方源码链接需联网</footer></main><script>const items=["阅读 Eino BaseTool/InvokableTool/StreamableTool","画出工具进入 Agent Loop 的完整数据流","定义描述与执行接口","完成工具注册与本轮可见集合","用 Store 接口适配检索和文档读取","写出与 Eino 接口的对应关系","运行 examples 测试与离线知识工具 Demo 并记录结果","回答复盘问题，准备 Day 09 调度器"],key="mini-agent-runtime-day-08-checklist-v2";let saved=[];try{const v=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(v))saved=v}catch(_){}const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const p=Math.round(n/items.length*100);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=p+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(p))}items.forEach((s,i)=>{const r=document.createElement("div");r.className="check";const c=document.createElement("input");c.type="checkbox";c.id="task-"+i;c.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=c.id;label.textContent=s;r.append(c,label);box.append(r);c.onchange=()=>{saved[i]=c.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();</script></body></html>

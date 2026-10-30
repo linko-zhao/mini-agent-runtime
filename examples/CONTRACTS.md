@@ -36,6 +36,8 @@ Module：`github.com/linko-zhao/mini-agent-runtime`，示例包前缀：`github.
 
 生成前读取 README、本契约、前一天 HTML、相关基础章节，以及当天涉及的 examples 文件。根据固定 56 天路线推进，不能以根 internal 的实现状态选题或补课。
 
+每页遵守 `docs/learning/agent-runtime-56-day-schedule.md` 的“教学目标与引导规范”：先说明具体问题、完整 Agent 数据流与设计取舍，每项练习写明“为什么做 → 操作与观察 → 完成证据”，分别验收搭建思路和实作结果。
+
 每页必须给出“承接前序设计”“本日增量”，明确新增/修改/复用的 examples 文件、接口、数据流、错误策略、验收与次日衔接。新增功能复用现有类型，不能每天重建工程、无说明更名或只留下无法组合的伪代码。确需破坏性调整时先提供完整迁移步骤并同步本文件。
 
 当天新增可运行示例应同步更新 examples、相关测试和本契约，连同当天 HTML 和根 index.html 一起提交；根 internal/cmd 是学习者练习，自动化不修改。测试命令从仓库根执行 `go test ./examples/...`、`go test -race ./examples/...`，只记录真实运行结果。伪代码必须标明，缺少运行环境时注明未验证。GitHub 写入前检查最新 main 和涉及路径，基于最新父提交更新，冲突先回读，禁止覆盖无关文件。

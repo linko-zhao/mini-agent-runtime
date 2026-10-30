@@ -1,15 +1,112 @@
 <!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Day 09 · Agent 工具调度与 Eino ToolsNode</title><style>
 :root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#58667b;--line:#e0e6ee;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:920px;margin:auto;padding:32px 22px 70px}.hero{background:#183561;color:#fff;border-radius:18px;padding:29px 30px}.hero small{opacity:.8;letter-spacing:1px}.hero h1{margin:7px 0;font-size:30px;line-height:1.3}.hero p{margin:0;color:#e6eefa}.chips{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}.chip{border:1px solid #8ea4c8;border-radius:20px;padding:3px 10px;font-size:12px}section{background:var(--paper);border:1px solid var(--line);border-radius:14px;margin-top:18px;padding:22px 26px}h2{font-size:19px;margin:0 0 13px}h3{font-size:16px;margin:18px 0 6px}.time{font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.4px}p{margin:8px 0}a{color:var(--accent)}li{margin:6px 0}code{background:#f0f3f8;padding:2px 5px;border-radius:4px}pre{overflow:auto;background:#142136;color:#e7f3ff;padding:17px;border-radius:10px;font-size:13px;line-height:1.65}pre code{background:transparent;padding:0}.goal{background:var(--pale);border-left:3px solid var(--accent);padding:12px 15px;border-radius:4px}.note{background:#fff8e9;border:1px solid #f2deb2;border-radius:9px;padding:11px 14px;color:#644b18}.info{background:#eff6ff;border:1px solid #d5e4fc;border-radius:9px;padding:11px 14px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.grid>div{padding:12px;background:#f6f8fc;border-radius:9px}.grid strong{display:block;font-size:19px}.grid span{font-size:12px;color:var(--sub)}.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0}.check input{margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer;flex:1}.check.done label{text-decoration:line-through;color:var(--sub)}.progress{height:8px;background:#e3e9f2;border-radius:99px;overflow:hidden}.fill{height:100%;background:var(--accent);width:0%;transition:width .2s}.meta{display:flex;justify-content:space-between;font-size:13px;color:var(--sub);margin-bottom:9px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px;vertical-align:top}th{background:#f4f7fc}.tag{display:inline-block;background:#eaf0fc;color:#2459bd;border-radius:5px;font-size:12px;padding:2px 7px;margin-right:6px}.muted{color:var(--sub);font-size:13px}footer{text-align:center;color:var(--sub);font-size:12px;margin:24px}@media(max-width:600px){main{padding:14px 12px 40px}.hero{padding:22px}.hero h1{font-size:24px}section{padding:18px}.grid{grid-template-columns:1fr}table{font-size:12px}th,td{padding:8px}pre{font-size:12px}}
 </style></head><body><main><header class="hero"><small>MINI AGENT RUNTIME · WEEK 02 · EINO 源码对照</small><h1>Day 09 / 56 · Agent 工具调度与 Eino ToolsNode</h1><p>围绕 Agent 的工具执行层设计：接收模型调用意图，解析并校验调用，匹配本地能力，应用执行策略，生成关联正确的结果，再交还 Agent Loop。</p><div class="chips"><span class="chip">阅读 20 分钟</span><span class="chip">编码 80 分钟</span><span class="chip">测试复盘 20 分钟</span></div></header>
-<section><h2>目标与学习边界</h2><div class="goal">围绕 Agent 的工具执行层设计：接收模型调用意图，解析并校验调用，匹配本地能力，应用执行策略，生成关联正确的结果，再交还 Agent Loop。</div><p>按课程设计推进，不以当前项目代码或前一天提交情况作为生成前提。以下目录、接口和验收均为建议的独立练习设计；学习者可按需要迁移到自己的 Runtime。业务 Fake 只用于验证 Agent 工具框架，不把 calculator 等单一示例的实现作为主线。</p><p class="note">概念前置：Model 接口、Agent Loop、assistant/tool 消息角色和 context。若不熟悉，可先看本页数据流与接口示例；课程仍按日序继续发布。</p></section>
-<section><div class="time">20 MIN · READ</div><h2>Eino 官方源码阅读</h2><h3>15 分钟 · Eino ToolsNode 执行链</h3><p>阅读 <a href="https://github.com/cloudwego/eino/blob/main/compose/tool_node.go">compose/tool_node.go</a>：定位 ToolsNodeConfig、ToolInput、genToolCallTasks、Invoke、ExecuteSequentially 和 UnknownToolsHandler。比较它如何生成任务、选择顺序/并行执行，再按原调用顺序构建 ToolMessage。</p><h3>5 分钟 · 中间件边界</h3><p>继续阅读同文件 InvokableToolEndpoint、InvokableToolMiddleware 和 ToolCallMiddlewares。记录“围绕一次工具调用的策略”如何与业务 Invoke 分开；不要假定框架默认错误行为适合所有 Agent。</p><p>阅读产出：标出 Eino 对应符号、画出数据流，并写下一个设计取舍。源码 main 会变化；实际练习时记录所读 commit 或依赖版本。</p></section>
-<section><div class="time">80 MIN · BUILD</div><h2>Go 练习与设计任务</h2><h3>20 分钟 · 建立执行器数据流</h3><p>在独立练习 <code>labs/week02/day09/</code> 建立 <code>executor.go</code>（可复用 Day 08 的设计稿或自带 FakeRegistry，不依赖前一天实际编码完成）。设计 ExecuteBatch(ctx,calls) 接口与 Result{CallID,Name,Content,Status}。在执行副作用前完成整批检查：名称、调用 ID、重复 ID、工具是否存在、本轮是否允许。ID 缺失不能猜造。</p>
-<h3>25 分钟 · 顺序执行与错误分类</h3><p>在 <code>policy.go</code> 写出明确策略：未知工具/参数失败可以转成安全 ToolResult 供模型修正；context 取消和 Runtime 内部失败终止运行。原始内部错误保留在受控诊断中，模型只接收脱敏摘要。先顺序执行；不要自动重试可能写入外部系统的工具。为每次调用派生超时 context 并释放 cancel，说明超时不等于外部副作用已撤销。</p>
-<h3>20 分钟 · 接回 Agent Loop</h3><p>在 <code>loop_test.go</code> 用脚本模型测试：模型第一轮返回 SearchKnowledge 和 GetDocument 调用；执行器得到结果后，Loop 追加 assistant 原始 ToolCalls 与匹配 ID 的 tool messages；第二轮模型生成答案。若 GetDocument 依赖检索得到的 ID，应安排在后续模型轮次，不能假定同批调用存在数据依赖传递。</p>
-<h3>15 分钟 · 并发策略与中间件设计</h3><p>在 <code>design.md</code> 对照 Eino ExecuteSequentially、ToolCallMiddlewares：独立只读调用未来可以有限并发；有依赖或有副作用的调用先顺序执行。并发完成顺序不能破坏结果关联。画出审计/权限检查 → 超时 → Invoke → 结果整形的包装链，权限拒绝必须发生在调用之前。今天只实现顺序版本；并发和审批分别留给后续课程。</p></section>
-<section><div class="time">20 MIN · TEST &amp; REVIEW</div><h2>验收与复盘</h2><p><strong>12 分钟测试：</strong>多调用结果保留正确 CallID；无效批次不触发副作用；未知工具策略可观测；取消时停止后续调用；超时可通过 errors.Is 识别；模型第二轮收到完整 assistant/tool 往返历史；不同完成顺序不影响关联设计。</p><pre><code># 以下为独立练习目录的建议命令，并非仓库已验证命令
-cd labs/week02/day09
-# 若尚无模块，先执行一次：go mod init example.com/agentlab/day09
-go test ./...
-go test -race ./...</code></pre><p class="note">本页是学习计划。命令与断言为待完成练习，不代表已运行或通过；不要求读取当前工程来决定课题。</p><p><strong>8 分钟复盘：</strong></p><ol><li>ToolExecutor 与业务 Tool 的职责如何划分？</li><li>Eino ToolsNode 的顺序/并发选项解决什么问题，为什么依赖调用不能盲目并行？</li><li>工具失败、Run 失败与外部副作用撤销为什么是三个不同问题？</li></ol><h3>交互清单</h3><div class="meta"><span>进度保存在本浏览器 localStorage</span><span id="count"></span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div><div id="checks"></div></section>
-<section><h2>完成定义与次日衔接</h2><p><strong>Definition of Done：</strong>能解释上述 Eino 符号和本地设计的映射；完成核心接口与 Fake 测试；验收结果如实记录；写出一个后续扩展点与一个当前设计限制。</p><p>Day 10：工具执行策略——超时、取消、重试资格、幂等与结果预算；继续对照 Eino 中间件，避免陷入某个测试工具的细节。</p></section><footer>Agent Runtime · 56 天课程 · 离线内容可读，官方源码链接需联网</footer></main><script>const items=["阅读 Eino ToolsNode 的任务生成与结果组装","定义 ExecuteBatch 和结构化结果","执行前检查调用 ID、名称和允许集合","实现顺序执行及可解释的错误策略","处理取消和调用超时","用脚本模型验证两轮工具往返","对照 Eino 中间件设计执行策略链","运行练习测试并写复盘"],key="mini-agent-runtime-day-09-checklist-v2";let saved=[];try{const v=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(v))saved=v}catch(_){}const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const p=Math.round(n/items.length*100);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=p+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(p))}items.forEach((s,i)=>{const r=document.createElement("div");r.className="check";const c=document.createElement("input");c.type="checkbox";c.id="task-"+i;c.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=c.id;label.textContent=s;r.append(c,label);box.append(r);c.onchange=()=>{saved[i]=c.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();</script></body></html>
+<section><h2>为什么工具能调用了，还要学执行器？</h2>
+<div class="goal">今天要能回答：模型一次提出多个工具调用时，Agent 怎样先判断这批请求是否可执行，再逐个执行、关联结果，并正确决定继续还是停止？</div>
+<p>Day 08 解决了“能力如何描述、注册和接入”：模型给出名称与参数，Runtime 找到工具，工具通过 Store 访问后端。接下来用户要求“比较两份已知文档”，模型可能一次返回两个 <code>get_document</code> 调用。这时仅有统一 Invoke 接口还不够：哪个结果对应哪次请求？后一项名称错误时，前一项是否已经执行？某项失败后，还要不要继续？</p>
+<p>最直接的办法是边遍历边执行，但这样会把协议检查、业务调用、超时和消息拼装交织在 Loop 中。今天把<strong>一批调用到一组结果</strong>作为执行边界：Loop 决定何时调用模型、何时结束；执行器组织工具调用；工具只处理自己的业务能力。执行器可以先是同包私有方法，不必立即设计成大型框架。</p>
+<p><strong>学习顺序：</strong>先手算下面的双调用过程，再用反例理解批次检查和错误策略，最后阅读 Eino 并沿累计示例提取执行边界。今天不改变既有公开接口和错误语义。</p>
+<p class="note">概念前置：ToolCall 的 ID/Name/Arguments、assistant/tool 消息、context。前序编码未完成时，可使用 examples 参考基线继续理解，不新建每日 Module。</p>
+</section>
+<section><h2>先把一次批次调用走通</h2>
+<p>场景：用户已经提供 <code>doc-a</code> 与 <code>doc-b</code> 两个 ID，请 Agent 比较正文。它们是独立读取，可以在同一批提出。下列是教学消息示意，示例基线尚未提供这个双文档 Demo；Day 08 的 knowledge 入口仍是三轮“检索 → 读取 → 回答”。</p>
+<pre aria-label="批次执行与 Agent Loop 数据流"><code>Loop → Model.Generate(历史)
+     ← assistant.ToolCalls = [
+          {ID:"read-a", Name:"get_document", Arguments:{"id":"doc-a"}},
+          {ID:"read-b", Name:"get_document", Arguments:{"id":"doc-b"}}
+        ]
+Loop 保存原始 assistant 消息
+     → 执行器：检查整批 ID / 已注册名称
+        → 顺序 Execute(read-a) → Invoke → Store.Get(doc-a)
+        → 顺序 Execute(read-b) → Invoke → Store.Get(doc-b)
+     ← [tool{ToolCallID:"read-a", Content:正文A},
+        tool{ToolCallID:"read-b", Content:正文B}]
+Loop 追加 tool 消息 → Model.Generate(完整历史) → 比较结果，无调用则结束</code></pre>
+<p><strong>三个角色：</strong>Model 产生调用意图；执行器把同批请求变成带原始 ID 的结果；Loop 把结果放进历史并启动下一轮推理。工具名称相同也没关系，<code>read-a</code> 与 <code>read-b</code> 区分两次调用。</p>
+<p><strong>有依赖时怎么办？</strong>若文档 ID 需要先检索才能获得，应像 Day 08 那样先执行检索，将 ID 交给下一轮模型，再请求读取。在同一批里按顺序执行，并不会自动把第一项输出填进第二项参数。</p>
+<p class="info"><strong>先预测：</strong>把第二项工具名改成未注册名称。本课程采用“整批名称/ID 校验失败则终止”的策略，所以第一项也不执行。若先执行第一项再检查第二项，已经产生的外部操作无法靠返回错误撤销。</p>
+</section>
+<section><h2>执行器的设计说明：每道边界解决什么问题</h2>
+<table><thead><tr><th>选择</th><th>为什么这样做与代价</th><th>本日边界</th></tr></thead><tbody>
+<tr><td>先检查整批，再开始执行</td><td>避免可提前发现的协议问题导致部分调用已发生。代价是某一项协议错误会阻止本批其他合法项。</td><td>检查 ID 非空且批内唯一、名称已注册。工具内部校验业务参数，因此不保证所有参数错误都在批次执行前发现。</td></tr>
+<tr><td>先顺序执行</td><td>容易跟踪调用与取消，减少并发策略干扰。代价是独立读取的总耗时更长。</td><td>并发是后续调度策略；顺序执行不等于事务，也不解决参数依赖。</td></tr>
+<tr><td>复用 model.Message 作为结果</td><td>Loop 已经消费 tool 消息，继续使用 Role/Content/ToolCallID，避免另建一套 Result 再转换。</td><td>工具返回内容；执行器填 Role=tool 与原始调用 ID；Loop 管理历史。</td></tr>
+<tr><td>按现有契约分类失败</td><td>参数/业务失败可反馈模型；取消必须阻止后续调用；内部原始错误不能直接暴露。统一行为后才容易演进策略。</td><td>沿用下表，不照搬 Eino 默认行为，也不在本页静默更改错误契约。</td></tr>
+<tr><td>从 Loop 中提取私有方法</td><td>获得清晰边界，同时复用已持有的注册快照、超时与事件配置。暂时仍依赖 Agent，未来需要独立复用时再提取对象。</td><td>agent.New / Run、Tool.Execute、Meta/Invoke 和消息类型保持不变。</td></tr>
+</tbody></table>
+<h3>失败后到底发生什么？</h3>
+<table><thead><tr><th>情况</th><th>本课程的处理</th><th>模型是否继续收到结果</th></tr></thead><tbody>
+<tr><td>缺失/批内重复 ID、未注册名称</td><td>整批预检查阶段终止 Run，工具执行次数为 0</td><td>本轮不继续调用模型</td></tr>
+<tr><td>工具返回受控 tool.Error（参数/业务错误）</td><td>转成受控文本，保留本次 ToolCallID，继续后续工具</td><td>是；模型可据此修正，是否修正仍取决于模型</td></tr>
+<tr><td>工具返回未知内部错误</td><td>回填固定摘要 <code>execution_failed: tool execution failed</code></td><td>是；不传原始错误或凭据</td></tr>
+<tr><td>取消或超时</td><td>通过 errors.Is 识别并终止 Run，不执行后续工具</td><td>不把取消包装成普通工具结果继续推理</td></tr>
+</tbody></table>
+<p><strong>不要混淆：</strong>整批预检查只能拦住此处检查的问题；执行到第二项才发现参数错误时，第一项可能已执行。超时和 Run 失败也不表示外部操作已回滚。本节没有事务、补偿或自动重试。</p>
+<p><strong>可见性与授权：</strong>Day 08 的 WithVisibleTools 过滤描述，不删除执行注册。今天仍按完整注册表检查名称；真正“本轮是否允许执行”的授权检查留给 Day 11，并须在执行前落实，不能拿可见集合代替权限。</p>
+</section>
+<section><div class="time">20 MIN · READ</div><h2>带着边界问题阅读 Eino ToolsNode</h2>
+<h3>15 分钟 · 一条调用怎样成为任务，又怎样成为结果？</h3>
+<p>阅读 <a href="https://github.com/cloudwego/eino/blob/main/compose/tool_node.go">compose/tool_node.go</a>，定位 <code>ToolsNodeConfig</code>、<code>ToolInput</code>、<code>genToolCallTasks</code>、<code>Invoke</code>、<code>ExecuteSequentially</code> 与 <code>UnknownToolsHandler</code>。沿一条 ToolCall 追踪名称解析、任务生成、执行、ToolMessage 组装。</p>
+<p><strong>带着问题：</strong>名称查找发生在哪里？结果如何保留调用 ID 与顺序？选择顺序或并行改变的是哪段流程？未知工具怎样处理？对照本页策略，指出至少一项可配置行为，而非直接认定框架默认值适用于自己的 Agent。</p>
+<p><strong>产出：</strong>把 ToolsNode 映射为本页“批次执行边界”，把工具接口映射为 Day 08 的 Meta/Invoke；画出 Loop 在 ToolsNode 之外还负责什么。</p>
+<h3>5 分钟 · 为什么执行策略适合放在包装层？</h3>
+<p>继续定位 <code>InvokableToolEndpoint</code>、<code>InvokableToolMiddleware</code>、<code>ToolCallMiddlewares</code>。回答：若希望所有工具都记录耗时，应给每个业务 Invoke 写一遍，还是包装统一调用入口？今天只画包装位置，Day 10 再讨论策略细节。记录阅读的 commit 或版本；main 分支符号可能随版本变化。</p>
+</section>
+<section><div class="time">80 MIN · BUILD</div><h2>四项练习：把批次执行边界从 Loop 中提取出来</h2>
+<p class="info"><strong>承接前序设计：</strong>复用 model.ToolCall / Message、Registry.Tools() 提供的旧 Tool 适配快照、既有事件与超时配置。当前累计参考代码的批次检查和执行逻辑仍位于 <code>examples/internal/agent/agent.go</code>。<strong>本日增量：</strong>练习把这段逻辑提取到同包私有方法；下面明确列出拟新增文件，本次学习文档修订未替你实施 Go 重构。</p>
+<table><thead><tr><th>路径</th><th>练习操作</th><th>职责</th></tr></thead><tbody>
+<tr><td>examples/internal/agent/executor.go</td><td>拟新增</td><td>承载整批预检查、顺序调用、结果整形</td></tr>
+<tr><td>examples/internal/agent/agent.go</td><td>修改已有文件</td><td>Run 调用提取方法，保留模型循环和历史管理</td></tr>
+<tr><td>examples/internal/agent/agent_test.go</td><td>复用并补充</td><td>检查消息关联、无效批次、取消和行为保持</td></tr>
+<tr><td>examples/internal/tool/design.md</td><td>补充说明</td><td>记录工具契约与执行器边界、后续策略入口</td></tr>
+<tr><td>examples/internal/model/model.go、examples/internal/tool/tool.go、examples/internal/tool/contract.go</td><td>复用</td><td>保持消息与执行接口不变，共享根 go.mod</td></tr>
+</tbody></table>
+<h3>任务一 · 20 分钟：确定输入输出与整批预检查</h3>
+<p><strong>为什么做：</strong>先说清执行边界的契约，才能提取代码而不改变 Loop 行为。</p>
+<p><strong>操作与观察：</strong>5 分钟手算双读取场景；10 分钟在拟新增 executor.go 中提取整批检查；5 分钟说明 ID、名称、参数分别由谁校验。可采用下面的私有方法形状，它是建议设计签名，尚未在基线实现：</p>
+<pre><code>// 建议设计签名；非独立可运行示例。实现须从 agent.go 增量迁移。
+func (a *Agent) executeBatch(
+    ctx context.Context, calls []model.ToolCall, step int,
+) ([]model.Message, error)
+// 输入：已由 Loop 保存的 assistant 消息中的 ToolCalls。
+// 成功：每条调用产生一条 Role=tool、原 ID 对齐的结果消息。
+// 预检查失败：返回 error，不执行本批任何工具。
+// 取消/超时：返回 error，Loop 终止，不再调用模型。</code></pre>
+<p><strong>完成证据：</strong>给出 [有效 A, 未注册 B] 和 [ID=x, ID=x] 两个反例，工具计数均为 0；同时能解释为何这不保证所有业务参数错误都提前发现。</p>
+<h3>任务二 · 25 分钟：迁移顺序执行与错误整形</h3>
+<p><strong>为什么做：</strong>所有工具需要一致的调用 ID、context 和错误处理，避免每种业务工具自行决定 Agent 是否继续。</p>
+<p><strong>操作与观察：</strong>15 分钟把 agent.go 中的顺序调用、子超时 context、cancel 释放与工具开始/完成事件迁入方法；5 分钟按上表处理错误；5 分钟核对取消后不会执行下一项。保持 Event 的 Step、ToolName、ToolCallID 和终态发布职责不变，避免 Loop 与方法重复发工具事件。</p>
+<p><strong>完成证据：</strong>成功时按输入顺序返回消息；受控错误与未知内部错误分别回填；errors.Is 可识别取消/超时；cancel 在每次调用后释放，超时仍是合作式取消，不声称能强杀工具。</p>
+<h3>任务三 · 20 分钟：把结果接回 Loop，并观察下一轮输入</h3>
+<p><strong>为什么做：</strong>执行成功只有回到模型可见历史，才能帮助 Agent 继续解决用户问题。</p>
+<p><strong>操作与观察：</strong>10 分钟修改 Run：保留原始 assistant 入历史，调用 executeBatch，成功后追加其返回消息；遇到 error 直接按既有失败路径终止。10 分钟在 agent_test.go 用记录输入的脚本模型构造双 get_document 调用，断言第二轮收到原始 assistant 加 read-a/read-b 两条 tool 消息，最后返回文本。</p>
+<p><strong>迁移顺序：</strong>先复制原执行块到新方法并整理局部返回值；再将 Run 原块替换为单次方法调用，删去重复逻辑；最后核对事件与错误行为。agent.New / Run 的签名、各入口调用方和旧工具适配均无需修改。</p>
+<p><strong>完成证据：</strong>模型第二次输入包含完整调用与结果，两个相同名称工具的结果仍按 ID 区分。若第二项取消，Loop 终止；第一项已经发生的外部操作不会撤销。</p>
+<h3>任务四 · 15 分钟：说明未来策略应接在哪里</h3>
+<p><strong>为什么做：</strong>理解搭建思路意味着能面对新增需求定位改动，而不把策略散落进所有业务工具。</p>
+<p><strong>操作与观察：</strong>10 分钟在 design.md 画出“未来执行授权 → 超时包装 → Execute/Invoke → 结果整形”的位置，对照 Eino 中间件；5 分钟说明独立读取可有限并发、依赖读取需后续模型轮次，以及写入调用不能随意重试。今天只保留既有顺序、无自动重试行为。</p>
+<p><strong>完成证据：</strong>能指出新增工具仍走 Day 08 的实现与注册路径；新增策略改执行边界；改变推理终止条件改 Loop。并发和审批留给后续课程，不增加尚未实现的空壳接口。</p>
+</section>
+<section><div class="time">20 MIN · TEST &amp; REVIEW</div><h2>用反例检验设计，而不仅是运行成功</h2>
+<p><strong>12 分钟：</strong>先预测再运行。从仓库根使用累计示例验收命令，不创建 labs 目录或新 go.mod：</p>
+<pre><code>go test ./examples/...
+go test -race ./examples/...
+go test ./examples/internal/agent -run 'TestRoundTrip|TestTimeoutAndBatchValidation|TestTermination|TestVisibleToolsOnlyFiltersDefinitions' -v</code></pre>
+<p class="note">以上是学习者待执行命令，本次文档修订未执行 Go 验收。现有测试可作为回归起点；拟新增的双读取与提取方法需完成后再验证，不能把旧测试通过当作重构已完成。</p>
+<table><thead><tr><th>用例</th><th>预期结果</th><th>验证的搭建判断</th></tr></thead><tbody>
+<tr><td>已有 TestRoundTrip；补充双读取场景</td><td>同名工具的结果保留各自 ID；下一轮模型收到 assistant 和 tool 历史</td><td>调用关联属于执行协议，消息历史属于 Loop</td></tr>
+<tr><td>已有 TestTimeoutAndBatchValidation；补充缺失 ID / 未注册名称</td><td>无效协议批次执行次数为 0；超时终止后续调用</td><td>检查必须在执行前；取消属于控制流</td></tr>
+<tr><td>补充受控错误 / 未知内部错误</td><td>分别回填受控消息 / 固定摘要，保留 ID，不泄漏原始错误</td><td>失败策略统一在执行边界处理</td></tr>
+<tr><td>已有 TestTermination 与可见性测试</td><td>终止行为保持；隐藏描述不等同于撤销注册</td><td>提取职责边界不应悄悄改变已有契约</td></tr>
+</tbody></table>
+<p><strong>8 分钟复盘：</strong>先合上代码作答，再展开参考思路。</p>
+<details><summary>为什么不能边检查边执行？整批检查是否等于事务？</summary><p>后项缺失工具或重复 ID 可提前发现，先执行会造成可避免的部分操作。但检查无法保证后端不失败，业务参数也可能到 Invoke 才发现错误，因此不是事务，也不提供回滚。</p></details>
+<details><summary>同批顺序调用能自动实现“先搜索再用搜索结果读全文”吗？</summary><p>不能。两条调用的参数在模型返回时已确定；若 ID 来自搜索结果，应把搜索结果传给下一轮模型后再产生读取请求，或显式设计组合能力。</p></details>
+<details><summary>明天加超时、重试或授权，应该改哪里？</summary><p>围绕统一执行入口设计策略，不让每个业务工具重复承担调度。超时不代表撤销；写操作重试要先考虑幂等；授权检查必须发生在执行前。Loop 继续负责模型与消息迭代。</p></details>
+<h3>交互清单</h3><div class="meta"><span>进度保存在本浏览器 localStorage</span><span id="count"></span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div><div id="checks"></div>
+</section>
+<section><h2>完成定义与为什么接着学 Day 10</h2>
+<p><strong>理解验收：</strong>不看代码讲清双调用从模型到工具再回到模型的过程；说明执行器、Loop、业务工具各自职责；用一个反例解释整批检查与事务的区别；面对新增工具/策略/终止条件能指出应修改哪层。</p>
+<p><strong>实作验收：</strong>在同一 examples 工程提取私有执行方法，原消息类型与公开接口保持一致；按矩阵补充断言，记录真实运行结果，核对事件、取消和错误回填行为。未完成实作可继续学习后续设计，但应如实登记未验证部分。</p>
+<p><strong>Day 10 的自然衔接：</strong>今天明确了“在哪里统一执行”，下一步才能讨论“执行应遵循哪些策略”：何时超时、什么失败可以重试、如何约束结果大小，以及怎样防止重试重复产生外部副作用。将对照 Eino 中间件继续扩展同一条调用链。</p>
+</section><footer>Agent Runtime · 56 天课程 · 离线内容可读，官方源码链接需联网</footer></main><script>const items=["阅读 Eino ToolsNode 的任务生成与结果组装","设计复用 ToolCall/Message 的批次执行边界","执行前整批检查调用 ID 与已注册名称","实现顺序执行及可解释的错误策略","处理取消和调用超时","用脚本模型验证双读取及下一轮完整历史","对照 Eino 中间件设计执行策略链","运行练习测试并写复盘"],key="mini-agent-runtime-day-09-checklist-v2";let saved=[];try{const v=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(v))saved=v}catch(_){}const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const p=Math.round(n/items.length*100);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=p+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(p))}items.forEach((s,i)=>{const r=document.createElement("div");r.className="check";const c=document.createElement("input");c.type="checkbox";c.id="task-"+i;c.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=c.id;label.textContent=s;r.append(c,label);box.append(r);c.onchange=()=>{saved[i]=c.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();</script></body></html>

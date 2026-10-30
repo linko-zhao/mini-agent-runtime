@@ -14,7 +14,7 @@
 </head>
 <body><main>
 <header class="hero"><div class="eyebrow">MINI AGENT RUNTIME · LEARNING PATH</div><h1>Agent Runtime 学习文档</h1><p>八周、56 天，从 Runtime 与 Agent Loop 出发，逐步完成工具编排、状态恢复、记忆、调度、评估与部署。每天 20 分钟阅读、80 分钟编码、20 分钟测试与复盘。</p><div class="chips"><span class="chip">8 周 · 56 天</span><span class="chip">Go 实战</span><span class="chip">独立离线 HTML</span><span class="chip">周日集成复盘</span></div></header>
-<section class="intro"><p><strong>怎么使用：</strong>选择当天文档，按计划阅读、编码并运行验收命令。清单进度保存在浏览器 localStorage 中。路线按实际代码和测试逐日核对；前一天未完成时，先处理依赖门禁，再继续新内容。</p></section>
+<section class="intro"><p><strong>怎么使用：</strong>选择当天文档，先理解它要解决的问题与 Agent 数据流，再带着设计问题阅读、编码和验证。学习目标是能解释每层为何存在，并判断新需求应改哪一层。清单进度保存在浏览器 localStorage 中；前序练习未完成时，可借助 examples 累计参考基线继续学习。</p></section>
 <section class="week"><div class="week-head"><h2>第 1 周 · Runtime 与 Agent Loop</h2><span>Day 01–07 · 基础、模型接口、执行闭环</span></div><div class="cards">
 <a class="card" href="docs/learning/agent-runtime-day-01.html"><div class="card-top"><span class="day">DAY 01</span><span class="status">学习计划</span></div><h3>Runtime 核心抽象与最小 Agent Loop</h3><p>模型、工具与 Agent 执行闭环</p></a>
 <a class="card" href="docs/learning/agent-runtime-day-02.html"><div class="card-top"><span class="day">DAY 02</span><span class="status">学习计划</span></div><h3>Agent Runtime 迭代与工具调用</h3><p>沿着既有实现推进接口与行为</p></a>
@@ -25,8 +25,8 @@
 <a class="card" href="docs/learning/agent-runtime-day-07.html"><div class="card-top"><span class="day">DAY 07</span><span class="status">学习计划</span></div><h3>第一周集成复盘</h3><p>Runtime、Model、Agent Loop 与工具交互验收</p></a>
 </div></section>
 <section class="week"><div class="week-head"><h2>第 2 周 · Tools 与 MCP</h2><span>Day 08–14 · 工具协议、MCP 客户端与集成复盘</span></div><div class="cards">
-<a class="card" href="docs/learning/agent-runtime-day-08.html"><div class="card-top"><span class="day">DAY 08</span><span class="status">学习计划</span></div><h3>Agent 工具抽象与 Eino 接口设计</h3><p>工具描述、执行能力与注册边界</p></a>
-<a class="card" href="docs/learning/agent-runtime-day-09.html"><div class="card-top"><span class="day">DAY 09</span><span class="status">学习计划</span></div><h3>Agent 工具调度与 Eino ToolsNode</h3><p>调用关联、执行策略与 Agent Loop 往返</p></a>
+<a class="card" href="docs/learning/agent-runtime-day-08.html"><div class="card-top"><span class="day">DAY 08</span><span class="status">学习计划</span></div><h3>Agent 工具抽象与 Eino 接口设计</h3><p>为什么需要工具契约：从检索场景理解描述、执行与结果回传</p></a>
+<a class="card" href="docs/learning/agent-runtime-day-09.html"><div class="card-top"><span class="day">DAY 09</span><span class="status">学习计划</span></div><h3>Agent 工具调度与 Eino ToolsNode</h3><p>为什么需要执行器：批次检查、结果关联与 Loop 分工</p></a>
 <div class="card future"><div class="card-top"><span class="day">DAY 10</span><span class="status">待生成</span></div><h3>工具参数与安全边界</h3><p>输入校验、超时与错误语义</p></div>
 <div class="card future"><div class="card-top"><span class="day">DAY 11</span><span class="status">待生成</span></div><h3>工具执行策略</h3><p>并发、重试和副作用控制</p></div>
 <div class="card future"><div class="card-top"><span class="day">DAY 12</span><span class="status">待生成</span></div><h3>MCP 协议基础</h3><p>Client、Server、Tools 与传输模型</p></div>
