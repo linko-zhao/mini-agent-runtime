@@ -6,6 +6,7 @@
 
 ```sh
 go run ./examples/cmd/demo
+go run ./examples/cmd/knowledge
 go test ./examples/...
 go test -race ./examples/...
 ```
@@ -14,10 +15,12 @@ Demo 不联网、不需要 API Key，输出 `计算结果为 2`。测试使用�
 
 ```text
 examples/
+  cmd/knowledge/main.go            # Day 08 注册、检索→读取→模型往返
   cmd/demo/main.go                 # Model → Tool → Model 离线入口
   internal/model/                 # 消息、响应、Mock、Model/ToolBinder
     openai/                       # HTTP 适配、请求/响应转换、错误分类
   internal/tool/                  # Tool、DescribedTool、受控错误
+    knowledge/                    # SearchKnowledge/GetDocument + FakeStore
     calculator/                   # 严格参数解析的最小业务示例
   internal/agent/                 # Loop、Options、同步事件
   CONTRACTS.md                    # 后续自动化必须读取的契约和迁移规则
@@ -30,8 +33,11 @@ examples/
 | Day 03 | model、tool、openai | 可选 ToolBinder/DescribedTool，不可变绑定 |
 | Day 04 | agent/options.go、agent.go | 合作式取消、单工具超时、有限步数 |
 | Day 05–07 | agent/event.go、agent_test.go | 同步事件、终止事件、共享 Sink 包装器 |
-| Day 08–09 | tool/calculator、agent.go | 参数边界、整批名称/ID 检查、结果关联 |
+| Day 08 | tool/contract.go、registry.go、knowledge、cmd/knowledge | Spec/Meta/Invoke、注册与可见集合、Store 适配 |
+| Day 09 | tool/calculator、agent.go | 参数边界、整批名称/ID 检查、结果关联 |
 
-示例覆盖已发布页面的核心契约，不将近期调整后的第 2 周路线误称为已实现：独立 ToolsNode 执行器、中间件、重试/幂等、权限与 MCP 留给 Day 10–14 按路线增量设计。Eino 是阅读对照，不作为运行依赖。
+Day 08 工具契约现已按线上修订版补齐。后续能力仍按路线推进：独立 ToolsNode 执行器、中间件、重试/幂等、权限与 MCP 留给 Day 10–14 按路线增量设计。Eino 是阅读对照，不作为运行依赖。
 
 Provider 示例构造函数为 `openai.NewChatModel(*ChatModelConfig)`；`BaseURL` 传完整 Chat Completions endpoint，HTTPClient 可注入。真实调用由使用者自行配置 API Key 和超时；本次仅验证模拟 HTTP，不宣称真实 API 已验证。工具 Schema 与实际校验需同步维护；当前 JSON 解码采用 Go 标准库字段匹配规则，不额外拒绝重复键或大小写变体。
+
+Day 08 的接口映射、旧接口兼容及边界见 [工具设计说明](internal/tool/design.md)。流式工具只作为 Eino 阅读对照，今天不提供未完成的 Stream 接口。

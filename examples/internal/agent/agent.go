@@ -13,11 +13,13 @@ import (
 var ErrMaxSteps = errors.New("agent: max steps exceeded")
 
 type Agent struct {
-	model       model.Model
-	tools       map[string]tool.Tool
-	maxSteps    int
-	sink        EventSink
-	toolTimeout time.Duration
+	model         model.Model
+	tools         map[string]tool.Tool
+	maxSteps      int
+	sink          EventSink
+	visibleTools  []string
+	visibilitySet bool
+	toolTimeout   time.Duration
 }
 
 // New 保留 map 注册形状，复制注册表并验证 key == Tool.Name。
@@ -52,6 +54,25 @@ func New(m model.Model, tools map[string]tool.Tool, maxSteps int, opts ...Option
 				return nil, fmt.Errorf("agent: definition name mismatch")
 			}
 			defs = append(defs, d)
+		}
+	}
+	if a.visibilitySet {
+		defs = nil
+		visible := map[string]bool{}
+		for _, name := range a.visibleTools {
+			if _, ok := a.tools[name]; !ok {
+				return nil, fmt.Errorf("agent: visible tool %q not registered", name)
+			}
+			visible[name] = true
+		}
+		for _, name := range names {
+			if visible[name] {
+				t, ok := a.tools[name].(tool.DescribedTool)
+				if !ok {
+					return nil, fmt.Errorf("agent: visible tool %q has no definition", name)
+				}
+				defs = append(defs, t.Definition())
+			}
 		}
 	}
 	if binder, ok := m.(model.ToolBinder); ok {

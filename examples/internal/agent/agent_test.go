@@ -7,6 +7,7 @@ import (
 	"github.com/linko-zhao/mini-agent-runtime/examples/internal/model"
 	"github.com/linko-zhao/mini-agent-runtime/examples/internal/tool"
 	"github.com/linko-zhao/mini-agent-runtime/examples/internal/tool/calculator"
+	"github.com/linko-zhao/mini-agent-runtime/examples/internal/tool/knowledge"
 	"testing"
 	"time"
 )
@@ -88,5 +89,43 @@ func TestTermination(t *testing.T) {
 	}
 	if _, err := a.Run(context.Background(), ""); err == nil {
 		t.Fatal("missing model error")
+	}
+}
+
+type bindingModel struct{ defs []model.ToolDefinition }
+
+func (m *bindingModel) WithTools(defs []model.ToolDefinition) (model.Model, error) {
+	m.defs = defs
+	return m, nil
+}
+func (m *bindingModel) Generate(context.Context, []model.Message) (*model.Response, error) {
+	return &model.Response{Message: model.Message{Role: "assistant", Content: "ok"}}, nil
+}
+func TestVisibleToolsOnlyFiltersDefinitions(t *testing.T) {
+	registry := tool.NewRegistry()
+	ctx := context.Background()
+	store := knowledge.NewFakeStore(nil)
+	if err := registry.Register(ctx, &knowledge.SearchKnowledge{Store: store}); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Register(ctx, &knowledge.GetDocument{Store: store}); err != nil {
+		t.Fatal(err)
+	}
+	m := &bindingModel{}
+	a, err := New(m, registry.Tools(), 2, WithVisibleTools("search_knowledge"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.defs) != 1 || m.defs[0].Name != "search_knowledge" {
+		t.Fatal(m.defs)
+	}
+	if _, ok := a.tools["get_document"]; !ok {
+		t.Fatal("visibility removed registered capability")
+	}
+	if _, err := New(m, registry.Tools(), 2, WithVisibleTools()); err != nil || len(m.defs) != 0 {
+		t.Fatalf("empty visibility: %+v %v", m.defs, err)
+	}
+	if _, err := New(m, registry.Tools(), 2, WithVisibleTools("missing")); err == nil {
+		t.Fatal("unknown visible tool accepted")
 	}
 }

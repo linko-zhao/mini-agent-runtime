@@ -16,7 +16,7 @@ Module：`github.com/linko-zhao/mini-agent-runtime`，示例包前缀：`github.
 
 ## 数据流与错误边界
 
-1. New 复制注册表，验证 map key、Name、Definition 名称一致；排序描述后绑定一次。map 无法检测组装之前已覆盖的重复 key，未来 Registry 应在注册入口拒绝重名。
+1. New 复制注册表，验证 map key、Name、Definition 名称一致；排序描述后绑定一次。旧 map 入口无法检测组装之前已覆盖的重复 key；Day 08 的 Registry.Register 在入口拒绝重名，Registry.Tools 提供旧 API 的适配快照。
 2. Run 的消息历史、步数均为局部变量。模型调用前检查取消；返回 nil 响应或非 assistant 消息是协议错误。
 3. Assistant 消息先入历史；整批预校验非空且批内唯一的 ToolCall ID 和已注册名称，再按顺序调用工具；结果 Role=tool，ToolCallID 引用原始 ID。
 4. 未知工具、协议错误、模型失败、超出步数（`errors.Is(err, agent.ErrMaxSteps)`）、取消与超时终止 Run。没有自动重试或恢复，不能据此保证跨 Run 的 exactly-once。
@@ -30,7 +30,7 @@ Module：`github.com/linko-zhao/mini-agent-runtime`，示例包前缀：`github.
 - 旧页面 `internal/...` → 可运行参考 `examples/internal/...`；旧 `cmd/demo` → `examples/cmd/demo`；调用方仅修改 import 前缀，不能混用两套 Message 类型。
 - Day 08 中 `internal/tool/calculator.go` 的旧路径 → `examples/internal/tool/calculator/calculator.go`，Tool.Name 仍为 calculator。
 - 早期页面对工具错误允许 fail-fast 或回填。本基线统一采用上面的终止/回填策略，调用方用 errors.Is/As 判断，不匹配原始字符串。取消绝不当普通工具结果回填。
-- 早期文档中没有完整构造函数及注册算法；本基线补齐 New、可选配置、注册表复制与批次预校验。未来新增 Registry/Executor 时先适配当前 New 调用，若必须改签名，列明旧→新接口和所有调用方修改。
+- 早期文档中没有完整构造函数及注册算法；本基线补齐 New、可选配置、注册表复制与批次预校验。Day 08 新增 Registry，通过 Tools() 适配当前 New 调用；未来新增 Executor 若必须改签名，列明旧→新接口和所有调用方修改。
 
 ## 后续自动化的执行规则
 
@@ -39,3 +39,14 @@ Module：`github.com/linko-zhao/mini-agent-runtime`，示例包前缀：`github.
 每页必须给出“承接前序设计”“本日增量”，明确新增/修改/复用的 examples 文件、接口、数据流、错误策略、验收与次日衔接。新增功能复用现有类型，不能每天重建工程、无说明更名或只留下无法组合的伪代码。确需破坏性调整时先提供完整迁移步骤并同步本文件。
 
 当天新增可运行示例应同步更新 examples、相关测试和本契约，连同当天 HTML 和根 index.html 一起提交；根 internal/cmd 是学习者练习，自动化不修改。测试命令从仓库根执行 `go test ./examples/...`、`go test -race ./examples/...`，只记录真实运行结果。伪代码必须标明，缺少运行环境时注明未验证。GitHub 写入前检查最新 main 和涉及路径，基于最新父提交更新，冲突先回读，禁止覆盖无关文件。
+
+## Day 08 修订版工具契约（后续以此增量扩展）
+
+- `Spec{Name, Description, InputSchema}` 与 `Described.Meta(context.Context) (Spec, error)` 分离元信息和执行；`Invokable` 嵌入 Described 并提供 `Invoke(context.Context, json.RawMessage) (string, error)`。描述不访问业务 Store，也不含凭据。
+- `Call` 是既有 `model.ToolCall` 的别名，沿用 ID/Name/Arguments，复用消息协议。
+- `NewRegistry()`、`Register(ctx, Invokable)`、`Lookup(name)`、`Specs(visible []string)`。nil 枚举全部，非 nil 空集合枚举零个；注册拒绝空名/重复名/非法 schema，Specs 稳定排序并深拷贝元信息，不执行工具。
+- `Registry.Tools()` 将完整注册集合适配为旧 `map[string]Tool`，`Adapt(ctx, Invokable)` 可单独适配。旧 Tool/DescribedTool 保持不变；无需批量改动已有 Calculator 调用方。
+- `agent.WithVisibleTools(names...)` 控制此 Agent 绑定给模型的描述集合，不删执行注册。不同 Run 若需不同可见集合，创建各自 Agent 并绑定共享的不可变适配器；不在共享 Agent 上修改可见状态。执行授权另由 Day 11 增加。
+- `knowledge.SearchKnowledge/GetDocument` 通过注入的 Store.Search/Get 执行；FakeStore 为离线只读数据。运行时传取消/超时，真实 Store 负责后端鉴权；Runtime 的结果预算和执行授权留待后续章节。
+
+此前示例仅覆盖本地旧版 Day 08 的参数校验内容，缺少线上修订版的能力契约。本次补齐上述契约，保留旧接口适配，完整映射见 `examples/internal/tool/design.md`。后续自动化应先核对 main 上的当前页面，不能以落后的本地副本认定已覆盖章节。

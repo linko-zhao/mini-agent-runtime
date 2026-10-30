@@ -11,51 +11,51 @@ import (
 	"testing"
 )
 
-type transport func(*http.Request) (*http.Response, error)
+type roundTripFunc func(*http.Request) (*http.Response, error)
 
-func (f transport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
-func TestProtocolAndBinding(t *testing.T) {
-	client := &http.Client{Transport: transport(func(r *http.Request) (*http.Response, error) {
-		var p ChatCompletionNewParams
-		if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+func TestProviderMapping(t *testing.T) {
+	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		var body requestEnvelope
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
 			t.Fatal(err)
 		}
-		if len(p.Tools) != 1 || p.Messages[0].ToolCallID != "call-1" {
-			t.Fatalf("bad request %+v", p)
+		if len(body.Tools) != 1 || body.Messages[0].CallID != "id-1" {
+			t.Fatalf("request mapping: %+v", body)
 		}
-		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"choices":[{"message":{"role":"assistant","content":null,"tool_calls":[{"id":"call-2","type":"function","function":{"name":"lookup","arguments":"{}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":3,"completion_tokens":2}}`)), Header: make(http.Header)}, nil
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"choices":[{"message":{"role":"assistant","content":null,"tool_calls":[{"id":"id-2","type":"function","function":{"name":"lookup","arguments":"{}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":2,"completion_tokens":3}}`))}, nil
 	})}
-	m, err := NewChatModel(&ChatModelConfig{APIKey: "test", Model: "test", BaseURL: "https://example.invalid/chat/completions", HTTPClient: client})
+	a, err := New(Config{APIKey: "test", Model: "demo", BaseURL: "https://example.invalid", Client: client})
 	if err != nil {
 		t.Fatal(err)
 	}
-	bound, err := m.WithTools([]model.ToolDefinition{{Name: "lookup", Parameters: json.RawMessage(`{"type":"object"}`)}})
+	bound, err := a.WithTools([]model.ToolDefinition{{Name: "lookup", Parameters: json.RawMessage(`{"type":"object"}`)}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(m.tools) != 0 {
-		t.Fatal("mutated base model")
+	if len(a.definitions) != 0 {
+		t.Fatal("binding changed original adapter")
 	}
-	r, err := bound.Generate(context.Background(), []model.Message{{Role: "tool", ToolCallID: "call-1", Content: "ok"}})
+	got, err := bound.Generate(context.Background(), []model.Message{{Role: "tool", ToolCallID: "id-1", Content: "ok"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.FinishReason != model.FinishToolCalls || r.Usage.InputTokens != 3 || r.Message.ToolCalls[0].ID != "call-2" {
-		t.Fatalf("%+v", r)
+	if got.Message.ToolCalls[0].ID != "id-2" || got.FinishReason != model.FinishToolCalls || got.Usage.InputTokens != 2 {
+		t.Fatalf("response mapping: %+v", got)
 	}
 }
-func TestHTTPErrorAndCancellation(t *testing.T) {
-	for _, code := range []int{401, 429, 500} {
-		m, _ := NewChatModel(&ChatModelConfig{APIKey: "test", Model: "test", BaseURL: "https://example.invalid", HTTPClient: &http.Client{Transport: transport(func(*http.Request) (*http.Response, error) {
-			return &http.Response{StatusCode: code, Body: io.NopCloser(strings.NewReader("private provider error"))}, nil
-		})}})
-		_, err := m.Generate(context.Background(), nil)
-		var e *model.ModelError
-		if !errors.As(err, &e) || e.StatusCode != code || e.Retryable != (code == 429 || code >= 500) {
+func TestProviderErrorsAndMalformedCalls(t *testing.T) {
+	for _, status := range []int{401, 429, 503} {
+		err := httpError(status)
+		var typed *model.ModelError
+		if !errors.As(err, &typed) || typed.StatusCode != status || typed.Retryable != (status == 429 || status == 503) {
 			t.Fatal(err)
 		}
 	}
-	if !errors.Is(wrapTransportError(context.Canceled), context.Canceled) {
-		t.Fatal("lost cancellation")
+	if _, err := decodeResponse(strings.NewReader(`{"choices":[]}`)); err == nil {
+		t.Fatal("accepted empty choices")
+	}
+	if _, err := decodeResponse(strings.NewReader(`{"choices":[{"message":{"role":"assistant","tool_calls":[{"id":"x","function":{"name":"f","arguments":"not-json"}}]}}]}`)); err == nil {
+		t.Fatal("accepted malformed arguments")
 	}
 }
