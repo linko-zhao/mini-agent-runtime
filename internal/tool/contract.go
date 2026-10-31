@@ -10,7 +10,7 @@ import (
 
 type Spec struct {
 	Name, Description string
-	InputSchema json.RawMessage
+	InputSchema       json.RawMessage
 }
 
 type Described interface {
@@ -24,9 +24,9 @@ type Invokable interface {
 
 type Call = model.ToolCall
 
-func cloneSpec(s Spec) Spec { 
+func cloneSpec(s Spec) Spec {
 	s.InputSchema = append(json.RawMessage(nil), s.InputSchema...)
-	return s 
+	return s
 }
 
 func Adapt(ctx context.Context, t Invokable) (DescribedTool, error) {
@@ -37,7 +37,7 @@ func Adapt(ctx context.Context, t Invokable) (DescribedTool, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if err := validateSpec(s); err != nil {
 		return nil, err
 	}
@@ -46,16 +46,16 @@ func Adapt(ctx context.Context, t Invokable) (DescribedTool, error) {
 }
 
 type legacyAdapter struct {
-	spec Spec
+	spec   Spec
 	target Invokable
 }
 
 func (t *legacyAdapter) Name() string { return t.spec.Name }
 func (t *legacyAdapter) Definition() model.ToolDefinition {
 	return model.ToolDefinition{
-		Name: t.spec.Name,
+		Name:        t.spec.Name,
 		Description: t.spec.Description,
-		Parameters: append(json.RawMessage(nil), t.spec.InputSchema...),
+		Parameters:  append(json.RawMessage(nil), t.spec.InputSchema...),
 	}
 }
 func (t *legacyAdapter) Execute(ctx context.Context, args json.RawMessage) (string, error) {

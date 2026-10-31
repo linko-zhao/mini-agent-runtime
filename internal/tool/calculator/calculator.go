@@ -26,14 +26,14 @@ func (c *Calculator) Execute(ctx context.Context, args json.RawMessage) (string,
 	if err := d.Decode(&p); err != nil {
 		if strings.HasPrefix(err.Error(), "json: unknown field ") {
 			return "", &tool.Error{
-				Kind: tool.ValidationError,
+				Kind:    tool.ValidationError,
 				Message: "arguments has unexpected field",
 			}
 		}
 		return "", &tool.Error{
-			Kind: tool.DecodeError,
+			Kind:    tool.DecodeError,
 			Message: "arguments must be a valid JSON object",
-			Cause: err,
+			Cause:   err,
 		}
 	}
 	return fmt.Sprint(p.A + p.B), nil

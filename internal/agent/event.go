@@ -42,7 +42,7 @@ type EventSink interface {
 }
 
 type SynchronizedSink struct {
-	mu sync.Mutex
+	mu   sync.Mutex
 	sink EventSink
 }
 

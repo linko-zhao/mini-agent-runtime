@@ -11,13 +11,13 @@ import (
 )
 
 type Document struct {
-	ID string `json:"id"`
+	ID      string `json:"id"`
 	Summary string `json:"summary"`
 	Content string `json:"content"`
 }
 
 type Hit struct {
-	ID string `json:"id"`
+	ID      string `json:"id"`
 	Summary string `json:"summary"`
 }
 
@@ -26,16 +26,16 @@ type Store interface {
 	Get(context.Context, string) (Document, error)
 }
 
-type SearchKnowledge struct { 
-	Store Store 
+type SearchKnowledge struct {
+	Store Store
 }
 
 func (*SearchKnowledge) Meta(ctx context.Context) (tool.Spec, error) {
 	if err := ctx.Err(); err != nil {
 		return tool.Spec{}, err
 	}
-	return tool.Spec{ 
-		Name: "search_knowledge",
+	return tool.Spec{
+		Name:        "search_knowledge",
 		Description: "按 query 检索文档 ID 和摘要",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"}},"required":["query"],"additionalProperties":false}`),
 	}, nil
@@ -51,7 +51,7 @@ func (t *SearchKnowledge) Invoke(ctx context.Context, args json.RawMessage) (str
 
 	if input.Query == "" {
 		return "", &tool.Error{
-			Kind: tool.ValidationError,
+			Kind:    tool.ValidationError,
 			Message: "query required",
 		}
 	}
@@ -82,7 +82,7 @@ func (*GetDocument) Meta(ctx context.Context) (tool.Spec, error) {
 		return tool.Spec{}, err
 	}
 	return tool.Spec{
-		Name: "get_document",
+		Name:        "get_document",
 		Description: "按文档 ID 读取正文",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false}`),
 	}, nil
@@ -115,9 +115,9 @@ func (t *GetDocument) Invoke(ctx context.Context, args json.RawMessage) (string,
 func decode(raw json.RawMessage, out any) error {
 	fail := func(cause error) error {
 		return &tool.Error{
-			Kind: tool.DecodeError,
+			Kind:    tool.DecodeError,
 			Message: "expected one valid arguments object",
-			Cause: cause,
+			Cause:   cause,
 		}
 	}
 

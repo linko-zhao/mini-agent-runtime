@@ -13,13 +13,13 @@ import (
 const DefaultToolTimeout = 300 * time.Second
 
 type Agent struct {
-	model       model.Model
-	tools       map[string]tool.Tool
-	maxSteps    int
-	eventSink   EventSink
-	visibleTools []string
+	model         model.Model
+	tools         map[string]tool.Tool
+	maxSteps      int
+	eventSink     EventSink
+	visibleTools  []string
 	visibilitySet bool
-	toolTimeout time.Duration
+	toolTimeout   time.Duration
 }
 
 func New(m model.Model, tools map[string]tool.Tool, maxSteps int, opts ...Option) (*Agent, error) {
