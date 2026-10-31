@@ -9,6 +9,7 @@ import (
 	"github.com/linko-zhao/mini-agent-runtime/examples/internal/tool"
 	"github.com/linko-zhao/mini-agent-runtime/examples/internal/tool/knowledge"
 	"log"
+"time"
 )
 
 func main() {
@@ -35,7 +36,14 @@ func run() error {
 		{Message: model.Message{Role: "assistant", ToolCalls: []model.ToolCall{{ID: "read-1", Name: "get_document", Arguments: json.RawMessage(`{"id":"doc-1"}`)}}}},
 		{Message: model.Message{Role: "assistant", Content: "工具描述供模型选择，调用由 Runtime 执行。"}},
 	})
-	a, err := agent.New(m, registry.Tools(), 4, agent.WithVisibleTools("search_knowledge", "get_document"))
+	tools := registry.Tools()
+for name, t := range tools {
+ described, ok := t.(tool.DescribedTool)
+ if !ok { return fmt.Errorf("tool %s is not described", name) }
+ wrapped, err := tool.WithPolicy(described, tool.Policy{Timeout: time.Second, MaxResultBytes:4096})
+ if err != nil { return err }; tools[name] = wrapped
+}
+a, err := agent.New(m, tools, 4, agent.WithVisibleTools("search_knowledge", "get_document"))
 	if err != nil {
 		return err
 	}

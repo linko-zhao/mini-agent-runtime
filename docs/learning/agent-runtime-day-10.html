@@ -1,0 +1,59 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Day 10 · 工具执行策略与 Eino 中间件</title><style>
+:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#58667b;--line:#e0e6ee;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:920px;margin:auto;padding:32px 22px 70px}.hero{background:#183561;color:#fff;border-radius:18px;padding:29px 30px}.hero small{opacity:.8;letter-spacing:1px}.hero h1{margin:7px 0;font-size:30px;line-height:1.3}.hero p{margin:0;color:#e6eefa}.chips{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}.chip{border:1px solid #8ea4c8;border-radius:20px;padding:3px 10px;font-size:12px}section{background:var(--paper);border:1px solid var(--line);border-radius:14px;margin-top:18px;padding:22px 26px}h2{font-size:19px;margin:0 0 13px}h3{font-size:16px;margin:18px 0 6px}.time{font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.4px}p{margin:8px 0}a{color:var(--accent)}li{margin:6px 0}code{background:#f0f3f8;padding:2px 5px;border-radius:4px}pre{overflow:auto;background:#142136;color:#e7f3ff;padding:17px;border-radius:10px;font-size:13px;line-height:1.65}pre code{background:transparent;padding:0}.goal{background:var(--pale);border-left:3px solid var(--accent);padding:12px 15px;border-radius:4px}.note{background:#fff8e9;border:1px solid #f2deb2;border-radius:9px;padding:11px 14px;color:#644b18}.info{background:#eff6ff;border:1px solid #d5e4fc;border-radius:9px;padding:11px 14px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.grid>div{padding:12px;background:#f6f8fc;border-radius:9px}.grid strong{display:block;font-size:19px}.grid span{font-size:12px;color:var(--sub)}.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0}.check input{margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer;flex:1}.check.done label{text-decoration:line-through;color:var(--sub)}.progress{height:8px;background:#e3e9f2;border-radius:99px;overflow:hidden}.fill{height:100%;background:var(--accent);width:0%;transition:width .2s}.meta{display:flex;justify-content:space-between;font-size:13px;color:var(--sub);margin-bottom:9px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px;vertical-align:top}th{background:#f4f7fc}.tag{display:inline-block;background:#eaf0fc;color:#2459bd;border-radius:5px;font-size:12px;padding:2px 7px;margin-right:6px}.muted{color:var(--sub);font-size:13px}footer{text-align:center;color:var(--sub);font-size:12px;margin:24px}@media(max-width:600px){main{padding:14px 12px 40px}.hero{padding:22px}.hero h1{font-size:24px}section{padding:18px}.grid{grid-template-columns:1fr}table{font-size:12px}th,td{padding:8px}pre{font-size:12px}}
+</style></head><body><main>
+<header class="hero"><small>MINI AGENT RUNTIME · WEEK 02 · EINO 源码对照</small><h1>Day 10 / 56 · 工具执行策略与 Eino 中间件</h1><p>工具调用成功接回模型后，怎样控制调用的耗时、失败恢复与输出成本？在既有接口外增加兼容策略层。</p><div class="chips"><span class="chip">阅读 20 分钟</span><span class="chip">编码 80 分钟</span><span class="chip">测试复盘 20 分钟</span></div></header>
+<section><h2>为什么今天要学执行策略？</h2><div class="goal">能解释策略与业务工具、Agent Loop 的职责差异，并能为读取能力选择有限重试、整次超时与结果预算，避免让 Agent 因慢请求、重复副作用或过量正文失控。</div>
+<p>Day 08 建立 Meta/Invoke 与注册适配，Day 09 确立批次 ID 检查、顺序执行及消息回填。现在用户希望“检索文档后生成答案”，后端偶发暂时失败；如果把重试写进每个工具，取消、耗时与错误语义就会不一致。如果对所有工具一律重试，创建工单可能发生两次。</p><p>今天采用<strong>装配时包装一次工具，执行时应用统一策略</strong>：不改变 Tool.Execute，不引入第二套 Call/Message。先预测行为，再阅读 Eino 对应入口，最后对照参考实现。</p></section>
+<section><h2>先走通完整 Agent 数据流</h2><pre><code>装配：Store → SearchKnowledge/GetDocument（Meta/Invoke）
+    → Registry.Register → Registry.Tools（旧 Tool 适配快照）
+    → WithPolicy（保留 Name/Definition）→ Agent.New → 绑定模型描述
+运行：Model.Generate → assistant.ToolCalls
+    → Loop 保存 assistant，整批检查 ID/名称
+    → EventToolStarted → 策略.Execute（总超时、重试资格）
+        → Tool.Execute → Invoke → Store
+        ← 暂时失败：仅显式只读且分类允许，有限重试
+        ← 成功：检查结果字节预算
+    → EventToolCompleted
+    → tool{原始 ToolCallID, Content} → Model.Generate → 最终回答</code></pre>
+<p>知识检索得到文档 ID 后，读取仍在后续模型轮次。一次内部重试沿用同一逻辑调用，不追加额外 tool 消息；模型下一轮重新发起调用则是新的 Agent 决策。现有事件记录逻辑调用总耗时，并未增加每次尝试的审计事件。</p><p>离线 FakeStore 和脚本模型只能验证协议、取消和策略，不证明真实模型会选对工具、后端支持幂等或真实网络重试有效。</p></section>
+<section><h2>承接前序设计与本日增量</h2><table><tr><th>操作</th><th>文件/接口</th><th>承接关系</th></tr>
+<tr><td>复用</td><td>examples/internal/model、tool/contract.go、registry.go、agent/agent.go</td><td>沿用 Message、Call、Meta/Invoke、Registry.Tools、Agent.New/Run；不更改消息或取消错误语义。</td></tr>
+<tr><td>新增</td><td>examples/internal/tool/policy.go、policy_test.go</td><td>WithPolicy 返回兼容 DescribedTool；围绕一次 Execute 添加控制。</td></tr>
+<tr><td>修改</td><td>examples/cmd/knowledge/main.go</td><td>对注册快照装配超时/预算包装，再传给原 Agent.New。</td></tr>
+<tr><td>更新</td><td>examples/README.md、CONTRACTS.md</td><td>记录策略默认值、权限/幂等边界及验证限制。</td></tr></table>
+<p>所有示例共享根 go.mod，包前缀仍为 github.com/linko-zhao/mini-agent-runtime/examples/internal/。Day 09 中提取私有 executeBatch 是建议练习，参考基线的执行块仍在 agent.go；今天将兼容包装接入这条已有调用路径，不把建议签名当成已存在 API。无公开签名迁移；调用方只需在装配工具后增加包装。</p></section>
+<section><h2>为什么这样设计？</h2><table><tr><th>决策</th><th>收益与代价</th></tr>
+<tr><td>超时包住全部尝试和等待</td><td>避免每次重试重置预算造成总耗时失控；更早的父 context/Agent 超时仍优先。取消需要工具合作。</td></tr>
+<tr><td>默认一次；显式只读+分类器才能重试</td><td>避免把模型自报或普通错误当成安全证据。受控 tool.Error、取消/超时不重试；后端暂时性必须由可信分类器识别。</td></tr>
+<tr><td>结果超预算返回受控错误</td><td>保护下一轮上下文；不直接截断 JSON 造成无效结构。当前按字节计数，不能替代 token 预算或阻止上游已分配的大结果。</td></tr>
+<tr><td>包装器保留描述和旧接口</td><td>原 Loop、注册和消息协议不用迁移；尚非 Eino 完整的可组合中间件链，也未实现流式工具。</td></tr>
+</table><p class="note"><strong>幂等边界：</strong>ReadOnly 由应用配置，不是授权或外部副作用撤销。写入工具今天不自动重试；如服务端明确支持幂等键，后续需定义键的业务范围、存储、过期和确认协议，不能用 ToolCallID 或进程内 map 宣称跨 Run exactly-once。超时之后外部操作可能已经发生。</p></section>
+<section><div class="time">20 MIN · READ</div><h2>带着问题阅读 Eino 与 Go 官方资料</h2><h3>12 分钟 · Eino 的包装入口</h3><p>阅读 <a href="https://github.com/cloudwego/eino/blob/main/compose/tool_node.go">compose/tool_node.go</a>，定位 InvokableToolEndpoint、InvokableToolMiddleware、ToolMiddleware、ToolsNodeConfig.ToolCallMiddlewares 和 Invoke。问题：包装在哪一层拿到调用信息？顺序/并行与每次调用策略是什么关系？框架默认错误行为是否等于课程策略？</p><p>产出：将 Endpoint 映射为单次工具执行，Middleware 映射为统一包装；本课 WithPolicy 是兼容旧接口的最小实现，不声称与 Eino API 相同。源码链接已核对，main 可能变化，学习时记录版本。</p><h3>8 分钟 · 取消与错误链</h3><p>阅读 <a href="https://pkg.go.dev/context#WithTimeout">context.WithTimeout</a> 与 <a href="https://go.dev/blog/go1.13-errors">Go 错误链</a>。回答：为什么总超时要在尝试循环之外？为什么 errors.Is(ctx error) 要优先于重试分类器？画出父/子 context 的预算关系。</p></section>
+<section><div class="time">80 MIN · BUILD</div><h2>四项连续演进练习</h2>
+<h3>任务一 · 20 分钟：先预测，再读 Policy 包装</h3><p><strong>为什么做：</strong>把跨业务策略集中起来，保持既有 Tool 调用契约。<strong>操作与观察：</strong>5 分钟画装配和执行链，10 分钟阅读新增 policy.go，5 分钟对照 Name/Definition 转发。下面是参考实现的接口摘录，不是独立可运行程序：</p><pre><code>type Policy struct {
+    Timeout time.Duration
+    MaxAttempts int
+    ReadOnly bool
+    Retryable func(error) bool
+    RetryDelay time.Duration
+    MaxResultBytes int
+}
+func WithPolicy(t DescribedTool, p Policy) (DescribedTool, error)</code></pre><p><strong>完成证据：</strong>能说明为什么不修改 Meta/Invoke、Registry.Tools 和 Agent.New；零 Timeout/MaxResultBytes 表示禁用对应限制，零 MaxAttempts 规范化为一次，负配置被拒绝。</p>
+<h3>任务二 · 25 分钟：理解超时与重试的控制流</h3><p><strong>为什么做：</strong>重试不应绕过取消或扩大副作用。<strong>操作与观察：</strong>10 分钟跟踪总超时 → Execute → ctx.Err → 错误分类 → 次数限制 → 可取消等待；10 分钟预测第一次失败第二次成功、受控参数错误、等待时取消；5 分钟修改 policy_test.go 的分类器并观察次数断言。每次尝试复制 Arguments，避免业务实现污染下一次输入。</p><p><strong>完成证据：</strong>只读暂时失败可恢复；取消、超时、受控错误不重试；写工具配置多个尝试在装配时失败；等待使用 timer/select，取消后不会开始下一次尝试。当前延迟固定且默认零，生产退避/jitter 需另行设计。</p>
+<h3>任务三 · 20 分钟：观察预算怎样影响下一轮模型</h3><p><strong>为什么做：</strong>大结果会消耗上下文，失败策略要在调用层保持一致。<strong>操作与观察：</strong>10 分钟观察 MaxResultBytes 对中文 UTF-8 字节的计数，10 分钟追踪超限 ExecutionError 如何经既有 Agent 转成受控 tool 消息。对比取消错误如何终止整个 Run。</p><p><strong>完成证据：</strong>超限原文不进入模型；逻辑调用保持原 ID；tool 事件耗时包含重试；能解释工具失败反馈与 Run 终止的区别。</p>
+<h3>任务四 · 15 分钟：装配知识工具并演示</h3><p><strong>为什么做：</strong>策略必须落到 Agent 实际路径。<strong>操作与观察：</strong>先看 cmd/knowledge 如何将 Registry.Tools() 的 DescribedTool 用 WithPolicy 包装，再传给原 Agent.New；示例给读取工具设置1秒总超时和4096字节预算，默认一次尝试，不启用真实网络重试。运行入口验证检索 → 文档读取 → 回答的既有流程。</p><pre><code># 从仓库根执行；共享根 go.mod
+go run ./examples/cmd/knowledge</code></pre><p><strong>完成证据：</strong>装配策略不改变模型描述和业务 Store；能指出若要增加写入授权应改哪里，而非靠 ReadOnly 开关当权限检查。</p></section>
+<section><div class="time">20 MIN · TEST &amp; REVIEW</div><h2>实作验收与理解验收</h2><p><strong>12分钟：</strong>阅读 policy_test.go，先预测次数/错误，再运行：</p><pre><code>go test ./examples/...
+go test -race ./examples/...</code></pre><table><tr><th>测试</th><th>证据与设计判断</th></tr>
+<tr><td>TestPolicyReadRetryAndBudget</td><td>暂时失败恢复、参数副本、定义转发、中文结果超字节预算被拒绝。</td></tr>
+<tr><td>TestPolicyNoUnsafeRetry / DefaultNoRetry</td><td>拒绝未授权重试配置；默认、永久错误、受控错误与取消类错误都不盲目重试。</td></tr>
+<tr><td>TestPolicyCancellationAndTimeout / CancellationDuringRetryWait</td><td>合作式超时、预取消和等待中取消保持错误链，后续尝试不执行。</td></tr>
+<tr><td>全部 examples 回归</td><td>原有工具协议、消息往返、注册和模型适配测试仍须通过；race 不报告并不证明未执行路径安全。</td></tr></table>
+<p class="note"><strong>本次真实验收状态：</strong>已尝试两条要求命令，均返回 <code>Go: Unknown option: test</code>；当前 /usr/bin/go 不是 Go 语言工具链，gofmt 也不可用。下载 Go 1.22.2 时代理端口连接失败。因此示例的编译、测试、race 与演示运行均<strong>未验证</strong>，不报告通过；请在可用 Go 环境重新运行。本页与 examples 及契约一起发布，不以环境缺失改变课程进度。</p>
+<p><strong>8分钟复盘：</strong></p><ol><li>不看代码讲述：一次读取失败后重试成功，结果怎样沿原 ID 返回下一轮模型？</li><li>需求变成创建工单，为什么不能只把 MaxAttempts 调大？幂等保证需要哪个系统提供？</li><li>如果后端不响应 context，包装器还能保证1秒返回吗？为什么不靠额外 goroutine 宣称解决？</li><li>如果要求每次尝试都审计，应扩展哪一层，如何避免重复发布 Run 终态？</li></ol>
+<h3>交互清单</h3><div class="meta"><span>仅表示学习自评，不代表测试通过</span><span id="count">0 / 8</span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div><div id="checks"></div></section>
+<section><h2>Definition of Done 与 Day 11 衔接</h2><p>理解验收：能解释策略插入点、一次逻辑调用与尝试、取消/业务失败的差异，以及幂等承诺的边界。实作验收：两条 examples 测试在可用环境通过，演示保持消息协议，新增用例验证次数、错误与预算。当前实作尚未在本环境验证。</p><p>Day 11 进入工具可见性、执行授权与审计：Day 08 的“模型看得见什么”和今天的“怎样执行”都不能回答“本次用户是否有权执行”。下一节把授权检查放在副作用之前，继续沿同一套接口演进。</p></section><footer>Agent Runtime · Day 10 / 56 · 离线内容可读 · <a href="../../index.html">返回学习首页</a></footer></main>
+<script>
+const items=["解释策略层在 Agent 数据流中的位置","对照 Eino 中间件与本课兼容包装","区分总超时与每次尝试超时","预测只读暂时失败和写入重试风险","跟踪取消与错误链","验证字节预算与模型结果整形","在可用Go环境运行两条examples测试并记录结果","不看代码完成设计推演"];
+const key="agent-runtime-day10-v1";let saved=[];try{const v=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(v))saved=v}catch(_){}const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const p=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=p+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(p))}items.forEach((s,i)=>{const r=document.createElement("div");r.className="check";const c=document.createElement("input");c.type="checkbox";c.id="task-"+i;c.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=c.id;label.textContent=s;r.append(c,label);box.append(r);c.onchange=()=>{saved[i]=c.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+</script></body></html>

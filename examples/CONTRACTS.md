@@ -52,3 +52,13 @@ Module：`github.com/linko-zhao/mini-agent-runtime`，示例包前缀：`github.
 - `knowledge.SearchKnowledge/GetDocument` 通过注入的 Store.Search/Get 执行；FakeStore 为离线只读数据。运行时传取消/超时，真实 Store 负责后端鉴权；Runtime 的结果预算和执行授权留待后续章节。
 
 此前示例仅覆盖本地旧版 Day 08 的参数校验内容，缺少线上修订版的能力契约。本次补齐上述契约，保留旧接口适配，完整映射见 `examples/internal/tool/design.md`。后续自动化应先核对 main 上的当前页面，不能以落后的本地副本认定已覆盖章节。
+
+## Day 10 增量：兼容执行策略包装
+
+- 新增 WithPolicy(DescribedTool, Policy) (DescribedTool,error)，包装后 Name/Definition 不变，Execute 仍复用 json.RawMessage 与 context；Registry.Tools() 结果可逐项包装后传给 Agent.New。没有公开接口迁移、没有新的 Module。
+- Policy.Timeout 限制整个逻辑调用，覆盖所有尝试和等待；父 context/Agent.WithToolTimeout 若更早到期则优先生效。仍要求工具合作取消，不用后台 goroutine 强杀。
+- MaxAttempts=0 默认1；大于1必须 ReadOnly=true 且给出 Retryable。只对非受控且分类为暂时性的问题重试；tool.Error、context.Canceled、DeadlineExceeded 不重试。RetryDelay 等待响应取消；每次尝试收到独立参数副本。
+- MaxResultBytes=0 不限；正值按 UTF-8 字节数限制成功结果。超出时返回受控 ExecutionError，模型收不到超限原文；不直接截断可能包含结构化 JSON 的结果。
+- 同一逻辑调用的 ID/历史消息与工具事件仍由 Agent 管理；内部重试不会额外追加 tool messages，事件耗时覆盖整个逻辑调用。模型下一轮重新请求不是本次重试。
+- ReadOnly 是应用装配时的可信断言，不信任模型自报；未来 Day11 授权与能力分类不能被此开关替代。没有跨 Run 去重、持久化幂等或 exactly-once 保证。写入如需重试，须另行设计服务端幂等键与确认协议。
+- 新增 policy_test.go 验证默认不重试、资格拒绝、受控错误不重试、显式读取暂时失败恢复、取消/超时、取消等待和结果预算。当前环境缺 Go 工具链，验收命令已尝试但未能执行；尚未验证编译/运行。
