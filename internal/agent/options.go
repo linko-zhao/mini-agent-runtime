@@ -15,3 +15,11 @@ func WithToolTimeout(toolTimeout time.Duration) Option {
 		a.toolTimeout = toolTimeout
 	}
 }
+
+func WithVisibleTools(names ...string) Option {
+	snapshot := append([]string(nil), names...)
+	return func(a *Agent) {
+		a.visibilitySet = true
+		a.visibleTools = append([]string(nil), snapshot...)
+	}
+}

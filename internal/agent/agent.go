@@ -17,6 +17,8 @@ type Agent struct {
 	tools       map[string]tool.Tool
 	maxSteps    int
 	eventSink   EventSink
+	visibleTools []string
+	visibilitySet bool
 	toolTimeout time.Duration
 }
 
