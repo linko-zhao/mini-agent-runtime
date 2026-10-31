@@ -13,19 +13,22 @@ const (
 	EventStepStarted    EventType = "step_started"
 	EventModelCompleted EventType = "model_completed"
 	EventToolStarted    EventType = "tool_started"
+	EventToolAuthorized EventType = "tool_authorized"
+	EventToolDenied     EventType = "tool_denied"
 	EventToolCompleted  EventType = "tool_completed"
 	EventRunFinished    EventType = "run_finished"
 	EventRunFailed      EventType = "run_failed"
 )
 
 type Event struct {
-	Type       EventType
-	Step       int
-	At         time.Time
-	ToolName   string
-	ToolCallID string
-	Duration   time.Duration
-	Status     string
+	Type        EventType
+	Step        int
+	At          time.Time
+	ToolName    string
+	ToolCallID  string
+	PrincipalID string // trusted opaque ID on authorization decision events only
+	Duration    time.Duration
+	Status      string
 }
 type EventSink interface{ Emit(context.Context, Event) }
 

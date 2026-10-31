@@ -19,7 +19,7 @@ Module：`github.com/linko-zhao/mini-agent-runtime`，示例包前缀：`github.
 1. New 复制注册表，验证 map key、Name、Definition 名称一致；排序描述后绑定一次。旧 map 入口无法检测组装之前已覆盖的重复 key；Day 08 的 Registry.Register 在入口拒绝重名，Registry.Tools 提供旧 API 的适配快照。
 2. Run 的消息历史、步数均为局部变量。模型调用前检查取消；返回 nil 响应或非 assistant 消息是协议错误。
 3. Assistant 消息先入历史；整批预校验非空且批内唯一的 ToolCall ID 和已注册名称，再按顺序调用工具；结果 Role=tool，ToolCallID 引用原始 ID。
-4. 未知工具、协议错误、模型失败、超出步数（`errors.Is(err, agent.ErrMaxSteps)`）、取消与超时终止 Run。没有自动重试或恢复，不能据此保证跨 Run 的 exactly-once。
+4. 未知工具、协议错误、模型失败、超出步数（`errors.Is(err, agent.ErrMaxSteps)`）、取消与超时终止 Run。默认没有自动重试或恢复；Day10 显式只读策略可启用有限重试，不能据此保证跨 Run 的 exactly-once。
 5. 工具参数/业务错误以受控 `tool.Error` 回填，未知内部错误统一回填 `execution_failed: tool execution failed`，不泄漏原始错误文本。`tool.Error.Cause` 与 `model.ModelError.Err` 支持 Unwrap。
 6. 超时是合作式取消，不启动隔离 goroutine，不强杀工具。零超时表示禁用，负值构造失败；父 Context 仍生效。
 7. 每次 Run 发布一个 started 和一个 finished/failed；每次已开始的模型/工具调用发布 completed。Event 使用 Day 06 的 `EventRunStarted` 等常量与 Day 05 的 `Status string`，Step 从 1 开始。共享 Sink 用同一个 `NewSynchronizedSink` 包装器；下游不能重入包装器。
@@ -48,7 +48,7 @@ Module：`github.com/linko-zhao/mini-agent-runtime`，示例包前缀：`github.
 - `Call` 是既有 `model.ToolCall` 的别名，沿用 ID/Name/Arguments，复用消息协议。
 - `NewRegistry()`、`Register(ctx, Invokable)`、`Lookup(name)`、`Specs(visible []string)`。nil 枚举全部，非 nil 空集合枚举零个；注册拒绝空名/重复名/非法 schema，Specs 稳定排序并深拷贝元信息，不执行工具。
 - `Registry.Tools()` 将完整注册集合适配为旧 `map[string]Tool`，`Adapt(ctx, Invokable)` 可单独适配。旧 Tool/DescribedTool 保持不变；无需批量改动已有 Calculator 调用方。
-- `agent.WithVisibleTools(names...)` 控制此 Agent 绑定给模型的描述集合，不删执行注册。不同 Run 若需不同可见集合，创建各自 Agent 并绑定共享的不可变适配器；不在共享 Agent 上修改可见状态。执行授权另由 Day 11 增加。
+- `agent.WithVisibleTools(names...)` 控制此 Agent 绑定给模型的描述集合，不删执行注册。不同 Run 若需不同可见集合，创建各自 Agent 并绑定共享的不可变适配器；不在共享 Agent 上修改可见状态。执行授权由 Day11 的 WithAuthorizer 单独配置。
 - `knowledge.SearchKnowledge/GetDocument` 通过注入的 Store.Search/Get 执行；FakeStore 为离线只读数据。运行时传取消/超时，真实 Store 负责后端鉴权；Runtime 的结果预算和执行授权留待后续章节。
 
 此前示例仅覆盖本地旧版 Day 08 的参数校验内容，缺少线上修订版的能力契约。本次补齐上述契约，保留旧接口适配，完整映射见 `examples/internal/tool/design.md`。后续自动化应先核对 main 上的当前页面，不能以落后的本地副本认定已覆盖章节。
@@ -62,3 +62,33 @@ Module：`github.com/linko-zhao/mini-agent-runtime`，示例包前缀：`github.
 - 同一逻辑调用的 ID/历史消息与工具事件仍由 Agent 管理；内部重试不会额外追加 tool messages，事件耗时覆盖整个逻辑调用。模型下一轮重新请求不是本次重试。
 - ReadOnly 是应用装配时的可信断言，不信任模型自报；未来 Day11 授权与能力分类不能被此开关替代。没有跨 Run 去重、持久化幂等或 exactly-once 保证。写入如需重试，须另行设计服务端幂等键与确认协议。
 - 新增 policy_test.go 验证默认不重试、资格拒绝、受控错误不重试、显式读取暂时失败恢复、取消/超时、取消等待和结果预算。当前环境缺 Go 工具链，验收命令已尝试但未能执行；尚未验证编译/运行。
+
+## Day 11 增量：执行授权与决策审计
+
+### 稳定接口与装配
+
+- 新增 tool.Principal{ID string}、WithPrincipal(ctx,Principal)、PrincipalFromContext(ctx)。仅承载已认证宿主提供的请求主体，不能信任模型的参数/文本自报身份；不存令牌、密码或 Prompt。
+- tool.Authorizer.Authorize(context.Context, Call) error 复用现有 Call（model.ToolCall 别名）。Agent 传入独立 Arguments 副本，授权器不能修改即将执行的参数缓冲区。
+- NewCapabilityAuthorizer(map[string]Capability,map[string][]Capability) 复制规则与授权配置；ReadCapability/WriteCapability 是独立能力，没有隐式继承。未配置工具或未知/缺失主体返回 ErrForbidden，取消保留 context 错误。该实现构造后只读，可共享；自定义授权器也必须支持预期的并发 Run。
+- 新增 agent.WithAuthorizer(tool.Authorizer)；Agent.New/Run 和既有 Tool/Meta/Invoke 形状不变。省略选项保留旧行为，不代表已经启用授权；显式传 nil 在 New 报错。
+- 装配路径仍是 Registry.Tools → Day10 WithPolicy → Agent.New。WithVisibleTools 不删注册，Policy.ReadOnly 不授权；权限来自独立且可信的配置。
+
+### 执行顺序与失败
+
+Run 保存 assistant 后先校验整批调用 ID/名称，再做整批授权；任何拒绝/授权服务错误/取消均停止 Run，不调用本批工具，也不再调用模型。ErrForbidden 经包装保留 errors.Is；自定义授权器错误保留原始错误链，仅返回受信宿主，不进入模型历史。已有工具参数/业务错误回填语义不变。
+
+整批授权只是调用开始前的判断，不构成事务、执行承诺或跨系统锁。允许决策后仍可能被取消或被后端资源级 ACL 拒绝；前面的操作不能自动撤销。当前授权是静态工具级能力快照，不解析资源/租户权限，也不在内部每次重试时重新授权。实时撤权须由宿主/后端执行层另外设计与校验。
+
+### 审计信号与兼容迁移
+
+- Event 新增 EventToolAuthorized/EventToolDenied，增加 PrincipalID；其余字段继续使用 Step、ToolName、ToolCallID、At、Status。允许为 ok；明确拒绝为 denied；授权器故障为 error，取消为 cancelled。
+- 决策事件在执行前发出；前项允许、后项拒绝时，会有“允许”记录但本批执行次数仍为0。调用开始/完成仍由原事件表示；Run 保持一个终态。
+- 事件不含 Arguments、结果正文、令牌或原始错误；主体使用可信不透明标识。Emit 仍同步且无返回值，不保证审计持久化、交付或抗篡改，也没有“落盘成功后才执行”的事务保证。共享 Sink 沿用同一个 SynchronizedSink 包装器。
+- 基线采用命名字段 Event 构造，无需修改；历史外部消费者如按位置构造 Event，须改为命名字段。事件 switch 应接受新类型。未开启授权时不增加决策事件，旧测试行为保持。
+- 调用方只需从可信会话生成 WithPrincipal，并给 New 增加 WithAuthorizer；不更换模型、消息、工具适配或 module。
+
+### 验证结果
+
+新增 access_test.go 与 authorization_test.go 覆盖配置快照、默认拒绝、并发读取、可见性与授权分离、整批零执行、错误链、参数副本、取消和显式 nil 配置。官方 Go1.22.2 下 go test ./examples/... 与 go test -race ./examples/... 均通过；knowledge 与 access 两个离线入口实际运行成功。此前 Day10 “未验证”条目保留为当时历史状态，本次累计测试已覆盖这些文件。
+
+授权守卫只覆盖启用了 WithAuthorizer 的 Agent.Run 路径；宿主若直接调用 Execute/Invoke，必须自行施加同等授权。审计事件仅在配置 WithEventSink 时交给消费者；示例授权测试使用收集器验证决策，两个演示入口主要验证执行路径，不声称写入审计存储。

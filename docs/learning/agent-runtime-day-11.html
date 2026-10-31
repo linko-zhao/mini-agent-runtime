@@ -1,0 +1,84 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>Day 11 · 工具可见性、执行授权与审计</title><style>
+:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#58667b;--line:#e0e6ee;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:920px;margin:auto;padding:32px 22px 70px}.hero{background:#183561;color:#fff;border-radius:18px;padding:29px 30px}.hero small{opacity:.8;letter-spacing:1px}.hero h1{margin:7px 0;font-size:30px;line-height:1.3}.hero p{margin:0;color:#e6eefa}.chips{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}.chip{border:1px solid #8ea4c8;border-radius:20px;padding:3px 10px;font-size:12px}section{background:var(--paper);border:1px solid var(--line);border-radius:14px;margin-top:18px;padding:22px 26px}h2{font-size:19px;margin:0 0 13px}h3{font-size:16px;margin:18px 0 6px}.time{font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.4px}p{margin:8px 0}a{color:var(--accent)}li{margin:6px 0}code{background:#f0f3f8;padding:2px 5px;border-radius:4px}pre{overflow:auto;background:#142136;color:#e7f3ff;padding:17px;border-radius:10px;font-size:13px;line-height:1.65}pre code{background:transparent;padding:0}.goal{background:var(--pale);border-left:3px solid var(--accent);padding:12px 15px;border-radius:4px}.note{background:#fff8e9;border:1px solid #f2deb2;border-radius:9px;padding:11px 14px;color:#644b18}.info{background:#eff6ff;border:1px solid #d5e4fc;border-radius:9px;padding:11px 14px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.grid>div{padding:12px;background:#f6f8fc;border-radius:9px}.grid strong{display:block;font-size:19px}.grid span{font-size:12px;color:var(--sub)}.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0}.check input{margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer;flex:1}.check.done label{text-decoration:line-through;color:var(--sub)}.progress{height:8px;background:#e3e9f2;border-radius:99px;overflow:hidden}.fill{height:100%;background:var(--accent);width:0%;transition:width .2s}.meta{display:flex;justify-content:space-between;font-size:13px;color:var(--sub);margin-bottom:9px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px;vertical-align:top}th{background:#f4f7fc}.tag{display:inline-block;background:#eaf0fc;color:#2459bd;border-radius:5px;font-size:12px;padding:2px 7px;margin-right:6px}.muted{color:var(--sub);font-size:13px}footer{text-align:center;color:var(--sub);font-size:12px;margin:24px}@media(max-width:600px){main{padding:14px 12px 40px}.hero{padding:22px}.hero h1{font-size:24px}section{padding:18px}.grid{grid-template-columns:1fr}table{font-size:12px}th,td{padding:8px}pre{font-size:12px}}
+</style></head><body><main>
+<header class="hero"><small>MINI AGENT RUNTIME · WEEK 02 · EINO 源码对照</small><h1>Day 11 / 56 · 工具可见性、执行授权与审计</h1><p>模型提出调用意图，宿主决定是否有权执行。把工具描述、调用策略和权限判断放回各自职责。</p><div class="chips"><span class="chip">阅读 20 分钟</span><span class="chip">编码 80 分钟</span><span class="chip">测试复盘 20 分钟</span></div></header>
+<section><h2>为什么隐藏工具还不够？</h2><div class="goal">能解释可见性和授权的区别，沿现有 Agent 数据流添加执行前的权限检查，并用零执行反例验证拒绝没有越过副作用边界。</div>
+<p>Day 08 的注册表知道有哪些能力，WithVisibleTools 决定模型看到哪些描述。Day 09 保证同批调用 ID 和结果对应，Day 10 约束耗时、重试资格与结果预算。现在用户只是知识库读者，模型却请求 publish_document。即使没有向模型展示该工具，Runtime 若只按已注册名称分派，仍可能执行写入。</p>
+<p>今天解决“这个可信调用者能否执行这项能力”，而不是继续调整检索工具的业务算法。权限由应用及后端决定；提示词里写“不要调用”或模型自报身份不能代替授权。整个课程仍按既定进度推进，不依据学习者的根 internal/cmd 实现判断完成。</p></section>
+<section><h2>先走通允许与拒绝两条过程</h2><pre><code>装配：Store → Meta/Invoke → Registry.Tools → Day10 WithPolicy
+    → Agent.New(..., WithVisibleTools(...), WithAuthorizer(policy))
+请求：宿主认证会话 → WithPrincipal(ctx, Principal{ID:"knowledge-reader"})
+    → Model.Generate → assistant.ToolCalls → 保存原 assistant
+    → 整批 ID/已注册名称检查 → 整批 Authorize(ctx, Call)
+       ├ 任何拒绝/故障/取消：决策事件 → RunFailed
+       │                    本批 Execute 次数为0，不再调用模型
+       └ 全部允许：决策事件 → ToolStarted
+              → Policy.Execute → Invoke → Store（仍检查资源级权限）
+              → ToolCompleted → tool{原 ToolCallID, Content}
+              → Model.Generate(完整历史) → 最终答案</code></pre>
+<p><strong>先预测：</strong>同批 [允许的读取 A，拒绝的写入 B]。我们的实现先完成整批授权，因此 A 也不执行。审计中可能已经有“A 允许”决策，但它不是“A 已执行”。这不是事务：整批允许后，后端失败或取消仍可能造成部分操作已发生。</p>
+<p>离线脚本模型可证明 Runtime 对恶意或错误调用仍执行检查；不能证明真实认证、租户 ACL、后端权限、实时撤权或审计存储已经部署。</p></section>
+<section><h2>三道边界分别负责什么？</h2><table><thead><tr><th>边界</th><th>输入/目的</th><th>不能替代</th></tr></thead><tbody>
+<tr><td>可见性 WithVisibleTools</td><td>选择给模型的描述，降低误选和上下文成本</td><td>不删除执行注册，不是访问控制</td></tr>
+<tr><td>执行策略 WithPolicy</td><td>限制时间、重试资格和输出预算</td><td>ReadOnly 配置不授予读取权限</td></tr>
+<tr><td>执行授权 WithAuthorizer</td><td>使用可信主体和服务端能力表，允许或拒绝调用</td><td>本课工具级规则不替代文档/租户级后端 ACL</td></tr>
+</tbody></table>
+<p>课程采用静态、不可变的工具级能力快照：read 与 write 是独立授权；未声明工具、未知或缺失主体默认拒绝。不同用户的 Principal 放在各自 Run 的 context，不存进共享 Agent 字段。实际服务中只能由完成认证的宿主注入；本课的 reader 字符串是离线演示身份。</p>
+<p class="note">为了保持前序 API 兼容，省略 WithAuthorizer 仍是旧行为，<strong>不会自动启用权限检查</strong>。宿主对不可信模型开放工具时必须显式配置授权；WithAuthorizer(nil) 则在 New 阶段报错。</p></section>
+<section><h2>承接前序设计与本日增量</h2><table><thead><tr><th>操作</th><th>路径</th><th>职责与迁移</th></tr></thead><tbody>
+<tr><td>复用</td><td>examples/internal/model、tool/contract.go、registry.go、policy.go</td><td>沿用 ToolCall/Message、Meta/Invoke、旧 Tool 适配和 Day10 策略；共享根 go.mod</td></tr>
+<tr><td>新增</td><td>examples/internal/tool/access.go、access_test.go</td><td>可信主体 context、Authorizer、不可变能力规则</td></tr>
+<tr><td>修改</td><td>examples/internal/agent/agent.go、options.go</td><td>添加 WithAuthorizer 和整批执行前授权；New/Run 签名不变</td></tr>
+<tr><td>扩展</td><td>examples/internal/agent/event.go、authorization_test.go</td><td>授权决策事件、PrincipalID 与集成反例</td></tr>
+<tr><td>修改/新增</td><td>examples/cmd/knowledge/main.go、examples/cmd/access/main.go</td><td>前者读取允许，后者隐藏写工具仍被请求但零执行</td></tr>
+<tr><td>更新</td><td>examples/README.md、CONTRACTS.md</td><td>记录配置责任、失败语义、兼容迁移与验收结果</td></tr>
+</tbody></table><p>授权复用 <code>tool.Call</code>（既有 model.ToolCall 的别名），不新建另一套消息类型。Agent 交给自定义 Authorizer 的 Arguments 是副本，避免授权器修改实际执行输入。基线使用命名字段构造 Event；新增 PrincipalID 不要求修改这些构造。历史按位置构造 Event 的外部示例应迁移为命名字段，事件 switch 需要识别新类型。</p></section>
+<section><h2>设计选择与代价</h2><table><thead><tr><th>选择</th><th>为什么与限制</th></tr></thead><tbody>
+<tr><td>整批开始前授权</td><td>后项被拒绝时不会先执行前项；代价是一次拒绝阻止本批其他合法调用。只校验能力，不保证业务参数和资源 ACL 都已通过。</td></tr>
+<tr><td>拒绝或授权服务错误终止 Run</td><td>避免把授权失败当作普通工具结果让模型反复试探。errors.Is 能识别 ErrForbidden；原因链返回可信宿主，不进入模型历史。</td></tr>
+<tr><td>配置快照不变、主体来自 context</td><td>可在并发请求间共享，降低串用户风险；不提供实时撤权。长任务和后端仍需当前资源级鉴权。</td></tr>
+<tr><td>审计复用 EventSink</td><td>不引入第二套观测系统；只有同步信号，没有落盘、可靠交付或抗篡改保证。后续可观测性章节再演进。</td></tr>
+</tbody></table><p>权限检查发生在 Day10 Policy 重试外部；当前一个逻辑调用只按快照授权一次，不在每次内部尝试重新授权。写入本来就不自动重试。未来如果要求实时撤权或审批，应定义新的执行协议，而非修改模型提示词。</p></section>
+<section><div class="time">20 MIN · READ</div><h2>带着问题读 Eino 与 Go 官方资料</h2><h3>12 分钟 · Eino 的调用包装入口</h3><p>阅读 <a href="https://github.com/cloudwego/eino/blob/main/compose/tool_node.go">compose/tool_node.go</a> 中 ToolInput、InvokableToolEndpoint、InvokableToolMiddleware、ToolCallMiddlewares 和 Invoke。找出 Name、Arguments、CallID 的来源，思考：可信用户身份来自哪里？应该在工具副作用之前还是返回之后检查？</p><p><strong>阅读产出：</strong>画出“中间件检查 → 业务工具 → 结果”的位置，再对照本课的批次 preflight。单调用中间件可以保护每个工具，但不自动保证同批后项拒绝时前项零执行。本课因此将整批能力检查放在 Loop 的已有批次边界；Eino 是扩展点对照，不声称它自动实现本课程的能力策略。</p><h3>8 分钟 · context 中的请求身份</h3><p>阅读 <a href="https://pkg.go.dev/context#WithValue">context.WithValue</a>，关注请求范围数据与自定义键类型。问题：为什么用私有键避免冲突？为什么 WithPrincipal 只传主体标识而不存令牌？为什么有这个 helper 不代表已经完成认证？</p><p>源码链接和上述 Eino 符号已核对；main 会演进，学习时记录阅读版本。</p></section>
+<section><div class="time">80 MIN · BUILD</div><h2>四项连续练习：先预测行为，再对照参考实现</h2>
+<h3>任务一 · 20 分钟：划清三个集合，建立可信主体</h3><p><strong>为什么做：</strong>注册、模型可见和有权执行不是同一个集合。<strong>操作与观察：</strong>5分钟画出三个集合，10分钟阅读 access.go 的输入复制与默认拒绝，5分钟用 reader/writer 两类主体手算授权结果。下列是既有参考实现的接口摘录，不是独立程序：</p><pre><code>type Principal struct { ID string }
+type Authorizer interface {
+    Authorize(context.Context, Call) error
+}
+// 只允许可信宿主在认证后调用：
+// ctx = tool.WithPrincipal(ctx, tool.Principal{ID: session.SubjectID})</code></pre><p><strong>完成证据：</strong>能解释为何不能从模型 Arguments 取 SubjectID；新增工具若没有能力规则会被拒绝；write 不隐式包含 read。修改构造输入后，已经建立的能力快照不改变。</p>
+<h3>任务二 · 20 分钟：将授权放进已有批次边界</h3><p><strong>为什么做：</strong>仅在业务工具里散落检查难以统一失败语义，也可能在后项拒绝前已执行前项。<strong>操作与观察：</strong>10分钟跟踪 agent.go 中名称/ID 检查后的授权循环，再看真正 Execute 所在的第二个循环；5分钟构造 [read,write] 反例；5分钟解释 Authorizer 错误或 context 取消为何终止。</p><p><strong>完成证据：</strong>TestAuthorizationDeniesWholeBatchBeforeExecution 的读取和写入计数都为0，模型只调用一次，RunFailed 恰好一次且没有 ToolStarted。自定义授权器不能通过修改 Arguments 改变实际工具输入。</p>
+<h3>任务三 · 25 分钟：装配真实路径，验证可见性不是授权</h3><p><strong>为什么做：</strong>新增接口必须接回实际 Agent，而不是停留在设计稿。<strong>操作与观察：</strong>10分钟对照 cmd/knowledge 中的能力表、主体注入和原 Day10 包装；10分钟运行 cmd/access 的隐藏写工具反例；5分钟比较“隐藏但权限允许的读取”和“可见但权限拒绝的写入”。现有公开 New/Run、Meta/Invoke 和消息类型均不更换。</p><pre><code>// 摘录，完整装配见 examples/cmd/knowledge/main.go
+authorizer, err := tool.NewCapabilityAuthorizer(
+    map[string]tool.Capability{
+        "search_knowledge": tool.ReadCapability,
+        "get_document": tool.ReadCapability,
+    },
+    map[string][]tool.Capability{
+        "knowledge-reader": {tool.ReadCapability},
+    },
+)
+// 检查 err 后，在原 New 调用增加 agent.WithAuthorizer(authorizer)。
+</code></pre><p><strong>完成证据：</strong>knowledge 仍完成检索 → 读取 → 回答；access 输出授权拒绝且写入次数为0。更换工具可见集合不会自动改变授权结果。</p>
+<h3>任务四 · 15 分钟：读懂决策审计，解释尚未解决的问题</h3><p><strong>为什么做：</strong>权限判断必须能追踪，但“记录允许”不能混同“操作成功”。<strong>操作与观察：</strong>5分钟核对新增 EventToolAuthorized/EventToolDenied；5分钟沿原 ID 看主体、工具名、Step 和 Status；5分钟推演审计 Sink 阻塞、进程崩溃、授权后权限被撤销会怎样。</p><p><strong>完成证据：</strong>事件没有参数、正文、令牌或原始错误；允许/明确拒绝/故障/取消分别为 ok/denied/error/cancelled。只有配置 WithEventSink 才有消费者接收记录，授权测试注入了收集器；共享 Sink 沿用同一 SynchronizedSink 包装。能说明这些同步信号不构成持久审计、权限锁、事务或副作用回滚。</p></section>
+<section><div class="time">20 MIN · TEST &amp; REVIEW</div><h2>用反例验收搭建判断</h2><p><strong>12分钟实作：</strong>从仓库根执行，不建立每日 Module：</p><pre><code>go test ./examples/...
+go test -race ./examples/...
+go run ./examples/cmd/knowledge
+go run ./examples/cmd/access</code></pre>
+<table><thead><tr><th>测试/演示</th><th>对应的不变量</th></tr></thead><tbody>
+<tr><td>TestCapabilityAuthorizationSnapshot</td><td>配置深拷贝；缺失主体、未知工具和未授予能力均拒绝</td></tr>
+<tr><td>TestCapabilityValidationCancellationAndConcurrency</td><td>拒绝非法配置；保留取消；不可变授权器可并发读取</td></tr>
+<tr><td>TestAuthorizationDeniesWholeBatchBeforeExecution</td><td>同批后项拒绝，前项也零执行；审计 ID/主体与 Run 终态正确</td></tr>
+<tr><td>TestAuthorizationVisibilityIsNotPermission</td><td>隐藏描述不删注册；执行许可单独控制；允许路径保持 tool 消息关联</td></tr>
+<tr><td>TestAuthorizationFailureAndArgumentIsolation / CancellationAndNilOption</td><td>授权服务失败也不执行；保留原因链；参数副本；取消优先；显式 nil 被拒绝</td></tr>
+<tr><td>knowledge / access</td><td>离线允许路径完成回答；隐藏写工具请求被拒绝，写入次数为0</td></tr>
+</tbody></table>
+<p class="info"><strong>本次真实验证：</strong>官方 Go 1.22.2 linux/amd64 下，两条 examples 测试命令均通过（退出码0）；knowledge 与 access 入口实际运行成功。累计验收也覆盖 Day10 策略。这里只验证参考示例，不宣称真实登录、后端资源权限、生产审计或模型行为已验证。</p>
+<p><strong>8分钟理解验收：</strong></p><ol><li>不看代码，解释从宿主认证到模型下一轮的完整控制流；拒绝后谁停止了哪一步？</li><li>需求改成按租户隔离文档，工具级 read 能力为什么不够？应改哪个接口实现和哪个后端检查？</li><li>审计出现 read-a 允许、write-b 拒绝，却没有 ToolStarted，是否矛盾？解释批次预检查与执行的区别。</li><li>如果授权后立即撤权，当前快照能保证即时生效吗？后端还需提供什么能力？</li></ol>
+<h3>学习清单</h3><div class="meta"><span>仅记录当前浏览器自评进度</span><span id="count">0 / 8</span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div><div id="checks"></div></section>
+<section><h2>Definition of Done 与 Day 12 衔接</h2><p>理解上：能分清可见性、策略、执行授权与后端资源 ACL，能说明审计信号的含义和局限。实现上：允许路径保留原 ID/历史，拒绝/故障/取消路径零执行，配置快照与并发测试通过；New/Run 和原工具适配保持兼容。本次参考示例已按上述命令完成验证。</p><p>Day 12 学习 MCP 的初始化、能力协商、tools/list 与 tools/call。远端公布了工具，仍不表示本次用户有权执行；新的协议适配将继续复用今天明确的授权边界，下一步先理解协议而不复制业务工具。</p></section>
+<footer>Agent Runtime · Day 11 / 56 · 离线学习内容 · <a href="../../index.html">返回学习首页</a></footer></main>
+<script>
+const items=["说明注册、可见与执行授权的区别","对照 Eino 调用包装与本课批次边界","理解可信主体来源和默认拒绝","预测同批读取允许、写入拒绝时的零执行","运行 knowledge 与 access 演示","检查授权事件的ID、主体和脱敏边界","运行两条examples验收并记录实际结果","不看代码完成资源权限与撤权需求推演"];
+const key="agent-runtime-day11-v1";let saved=[];try{const v=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(v))saved=v}catch(_){}const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const p=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=p+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(p))}items.forEach((s,i)=>{const r=document.createElement("div");r.className="check";const c=document.createElement("input");c.type="checkbox";c.id="task-"+i;c.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=c.id;label.textContent=s;r.append(c,label);box.append(r);c.onchange=()=>{saved[i]=c.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+</script></body></html>

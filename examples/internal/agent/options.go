@@ -1,6 +1,9 @@
 package agent
 
-import "time"
+import (
+	"github.com/linko-zhao/mini-agent-runtime/examples/internal/tool"
+	"time"
+)
 
 type Option func(*Agent)
 
@@ -14,4 +17,10 @@ func WithToolTimeout(d time.Duration) Option { return func(a *Agent) { a.toolTim
 func WithVisibleTools(names ...string) Option {
 	snapshot := append([]string(nil), names...)
 	return func(a *Agent) { a.visibilitySet = true; a.visibleTools = append([]string(nil), snapshot...) }
+}
+
+// WithAuthorizer enables preflight authorization for every tool batch.
+// Omission preserves legacy behavior; explicitly passing nil is a construction error.
+func WithAuthorizer(auth tool.Authorizer) Option {
+	return func(a *Agent) { a.authorizationSet = true; a.authorizer = auth }
 }

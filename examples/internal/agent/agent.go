@@ -13,13 +13,15 @@ import (
 var ErrMaxSteps = errors.New("agent: max steps exceeded")
 
 type Agent struct {
-	model         model.Model
-	tools         map[string]tool.Tool
-	maxSteps      int
-	sink          EventSink
-	visibleTools  []string
-	visibilitySet bool
-	toolTimeout   time.Duration
+	model            model.Model
+	tools            map[string]tool.Tool
+	maxSteps         int
+	sink             EventSink
+	visibleTools     []string
+	visibilitySet    bool
+	toolTimeout      time.Duration
+	authorizer       tool.Authorizer
+	authorizationSet bool
 }
 
 // New 保留 map 注册形状，复制注册表并验证 key == Tool.Name。
@@ -33,6 +35,9 @@ func New(m model.Model, tools map[string]tool.Tool, maxSteps int, opts ...Option
 		if opt != nil {
 			opt(a)
 		}
+	}
+	if a.authorizationSet && a.authorizer == nil {
+		return nil, fmt.Errorf("agent: nil authorizer")
 	}
 	if a.toolTimeout < 0 {
 		return nil, fmt.Errorf("agent: negative timeout")
@@ -141,6 +146,32 @@ func (a *Agent) Run(ctx context.Context, input string) (output string, runErr er
 			seen[call.ID] = true
 			if _, ok := a.tools[call.Name]; !ok {
 				return "", &tool.Error{Kind: tool.NotFoundError, Message: "tool not registered"}
+			}
+		}
+		// Authorization is a whole-batch preflight, before any side effects.
+		// A custom authorizer receives a copy of arguments, not the executable buffer.
+		if a.authorizer != nil {
+			principal, _ := tool.PrincipalFromContext(ctx)
+			for _, call := range r.Message.ToolCalls {
+				check := call
+				check.Arguments = append([]byte(nil), call.Arguments...)
+				err := a.authorizer.Authorize(ctx, check)
+				if ctx.Err() != nil {
+					err = ctx.Err()
+				}
+				kind := EventToolAuthorized
+				decisionStatus := "ok"
+				if err != nil {
+					kind = EventToolDenied
+					decisionStatus = status(err)
+					if errors.Is(err, tool.ErrForbidden) {
+						decisionStatus = "denied"
+					}
+				}
+				a.emit(ctx, Event{Type: kind, Step: step, ToolName: call.Name, ToolCallID: call.ID, PrincipalID: principal.ID, Status: decisionStatus})
+				if err != nil {
+					return "", fmt.Errorf("agent: authorization failed: %w", err)
+				}
 			}
 		}
 		for _, call := range r.Message.ToolCalls {
