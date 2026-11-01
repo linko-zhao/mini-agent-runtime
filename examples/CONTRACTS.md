@@ -92,3 +92,29 @@ Run 保存 assistant 后先校验整批调用 ID/名称，再做整批授权；�
 新增 access_test.go 与 authorization_test.go 覆盖配置快照、默认拒绝、并发读取、可见性与授权分离、整批零执行、错误链、参数副本、取消和显式 nil 配置。官方 Go1.22.2 下 go test ./examples/... 与 go test -race ./examples/... 均通过；knowledge 与 access 两个离线入口实际运行成功。此前 Day10 “未验证”条目保留为当时历史状态，本次累计测试已覆盖这些文件。
 
 授权守卫只覆盖启用了 WithAuthorizer 的 Agent.Run 路径；宿主若直接调用 Execute/Invoke，必须自行施加同等授权。审计事件仅在配置 WithEventSink 时交给消费者；示例授权测试使用收集器验证决策，两个演示入口主要验证执行路径，不声称写入审计存储。
+
+## Day 12 增量：MCP 协议层（固定2025-06-18）
+
+### 复用与新增接口
+
+- 新增 examples/internal/mcp：ProtocolVersion、Transport.Send(context.Context,[]byte)([]byte,error)、NewClient、Initialize、ListTools(ctx,cursor)、CallTool(ctx,name,json.RawMessage)。旧 model.Message/ToolCall、Tool.Execute、Meta/Invoke、Agent.New/Run 不变，无新 module 或依赖。
+- Descriptor、ToolsPage、ToolResult 是带 JSON 标签的线协议数据，并非第二套 Runtime Tool/Call/Message。Day13 将 Descriptor 映射到已有 tool.Spec、将客户端调用适配到 Invoke；今天尚未注册远端工具到 Agent。
+- DemoServer 仅作单会话内存夹具，读取既有 Invokable.Meta 并调用 Invoke；cmd/mcp 复用 knowledge.GetDocument/FakeStore。它没有生产服务器认证，也不假定客户端身份自动成为服务器权限。
+
+### 生命周期、能力和错误
+
+- Client 串行化单会话请求并支持排队取消；初始化前不能发工具请求。Initialize 校验版本、ServerInfo 和 Capabilities，发无ID的 initialized 通知且不得收到响应，完成后才 ready。
+- 只支持固定协议版本；协商结果不同则拒绝，不声称自动兼容最新版本。tools 能力缺失时阻止 list/call；不是工具不存在或用户无权执行的同义词。
+- JSON-RPC整型请求ID由Client独立分配，不复用模型ToolCallID；响应检查jsonrpc=2.0、ID匹配及result/error互斥。该子集的方法result必须为object，列表tools与调用content必须为array；不做完整JSON Schema、多模态或所有MCP扩展校验。
+- ListTools 返回一页和不透明 nextCursor，不自动翻页；后续调用方需限制分页次数和检查跨页名称冲突。保留InputSchema、Annotations，不能把远端readOnlyHint当作授权/安全重试证明。
+- ToolResult 保留所有原始内容块和structuredContent；isError=true是一次有效工具执行结果，Go error为nil。JSON-RPC错误返回可errors.As识别的RPCError，Error()只给代码，原始Message/Data仅供受控诊断；传输/取消错误支持errors.Is。Day13再定义面向模型的安全映射，不能直接泄露内部错误。
+- 有效RPC错误不自动失效会话。传输或协议不确定后标记failed，禁止自动重放initialize或tools/call；排队尚未发送时取消不改变其他调用状态。恢复应创建新的连接/会话；不能仅对已经初始化的同一传输重发initialize。
+- 固定响应预算1MiB在Transport返回之后检查，仅限制本客户端后续解析，不保证实际网络传输层的内存预算。真实传输仍需自己的帧大小、流处理和资源清理策略。
+
+### 明确不在本日实现的内容
+
+没有生产stdio/Streamable HTTP、服务端主动请求/通知、OAuth/会话头、完整并发多路复用或持久会话恢复。Transport是单请求JSON教学端口；真实工程应使用成熟SDK。MCP结束连接通过传输资源关闭，不存在本课自造的shutdown RPC。Day11本地授权与后端资源权限继续成立，但今天的直接协议演示不声称已走Agent授权链。
+
+### 实际验证
+
+新增client_test覆盖初始化与notification顺序、缺失能力、版本拒绝、消息ID、畸形响应、大小限制、错误层次、分页、原始内容保留、取消与禁止重放。官方Go1.22.2下累计 go test ./examples/...、go test -race ./examples/... 均通过；cmd/mcp演示实际运行成功。旧Day10未验证说明保留为历史记录，本日累计验收继续覆盖其策略代码。

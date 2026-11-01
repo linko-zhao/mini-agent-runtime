@@ -1,0 +1,88 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>Day 12 · MCP 生命周期与工具协议</title><style>
+:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#58667b;--line:#e0e6ee;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:920px;margin:auto;padding:32px 22px 70px}.hero{background:#183561;color:#fff;border-radius:18px;padding:29px 30px}.hero small{opacity:.8;letter-spacing:1px}.hero h1{margin:7px 0;font-size:30px;line-height:1.3}.hero p{margin:0;color:#e6eefa}.chips{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}.chip{border:1px solid #8ea4c8;border-radius:20px;padding:3px 10px;font-size:12px}section{background:var(--paper);border:1px solid var(--line);border-radius:14px;margin-top:18px;padding:22px 26px}h2{font-size:19px;margin:0 0 13px}h3{font-size:16px;margin:18px 0 6px}.time{font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.4px}p{margin:8px 0}a{color:var(--accent)}li{margin:6px 0}code{background:#f0f3f8;padding:2px 5px;border-radius:4px}pre{overflow:auto;background:#142136;color:#e7f3ff;padding:17px;border-radius:10px;font-size:13px;line-height:1.65}pre code{background:transparent;padding:0}.goal{background:var(--pale);border-left:3px solid var(--accent);padding:12px 15px;border-radius:4px}.note{background:#fff8e9;border:1px solid #f2deb2;border-radius:9px;padding:11px 14px;color:#644b18}.info{background:#eff6ff;border:1px solid #d5e4fc;border-radius:9px;padding:11px 14px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.grid>div{padding:12px;background:#f6f8fc;border-radius:9px}.grid strong{display:block;font-size:19px}.grid span{font-size:12px;color:var(--sub)}.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0}.check input{margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer;flex:1}.check.done label{text-decoration:line-through;color:var(--sub)}.progress{height:8px;background:#e3e9f2;border-radius:99px;overflow:hidden}.fill{height:100%;background:var(--accent);width:0%;transition:width .2s}.meta{display:flex;justify-content:space-between;font-size:13px;color:var(--sub);margin-bottom:9px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px;vertical-align:top}th{background:#f4f7fc}.tag{display:inline-block;background:#eaf0fc;color:#2459bd;border-radius:5px;font-size:12px;padding:2px 7px;margin-right:6px}.muted{color:var(--sub);font-size:13px}footer{text-align:center;color:var(--sub);font-size:12px;margin:24px}@media(max-width:600px){main{padding:14px 12px 40px}.hero{padding:22px}.hero h1{font-size:24px}section{padding:18px}.grid{grid-template-columns:1fr}table{font-size:12px}th,td{padding:8px}pre{font-size:12px}}
+</style></head><body><main>
+<header class="hero"><small>MINI AGENT RUNTIME · WEEK 02 · MCP / EINO 源码对照</small><h1>Day 12 / 56 · MCP 生命周期与工具协议</h1><p>本地工具接口之外，怎样发现和调用另一个进程或服务提供的能力？先弄清协议会话，再设计 Agent 适配。</p><div class="chips"><span class="chip">阅读 20 分钟</span><span class="chip">编码 80 分钟</span><span class="chip">测试复盘 20 分钟</span><span class="chip">固定协议 2025-06-18</span></div></header>
+<section><h2>为什么现在需要 MCP？</h2><div class="goal">能解释 Host、Client、Server 的职责，画出 initialize → initialized → tools/list → tools/call 的过程，并区分能力声明、执行授权、协议错误和工具执行结果。</div>
+<p>前几天已经把工具描述、调用调度、超时重试和执行授权分层。若另一个团队提供文档服务，直接共享它的 Go 对象无法跨进程；每个后端各定义一套发现和调用 API，又会增加适配成本。MCP（Model Context Protocol）为宿主与能力服务提供约定的会话和消息格式。</p>
+<p>Host 是管理用户会话与 Agent 的应用；它为 Server 建立 MCP Client。模型并非直接发送 MCP 报文的网络客户端，仍然只提出工具调用意图。Server 发布描述并执行请求，具体业务权限也仍由服务端决定。</p><p>今天只完成<strong>协议会话层</strong>。参考实现发送真实 JSON-RPC JSON，使用内存传输复用已有 GetDocument；Day 13 再把它适配成既有 Meta/Invoke 工具。不要把演示输出文档等同于已接入真实 MCP 网络服务或真实模型。</p></section>
+<section><h2>先走通完整数据流，标出今天的位置</h2><pre><code>完整 Agent 目标：
+Host 认证用户 → Agent.Run → Model.Generate → ToolCall
+ → Day11 本地授权 → Day10 执行策略
+ → [Day13 MCP工具适配器] → MCP Client → Server → 后端
+ ← 工具结果 → 保留原 ToolCallID 的 tool 消息 → 下一轮 Model
+
+今天实际运行：
+Host 创建 Client(Transport) 和离线 DemoServer(GetDocument)
+ → initialize(协议版本、客户端信息、客户端能力)
+ ← 初始化结果(服务器版本、信息、服务器能力)
+ → notifications/initialized（通知，无ID，无响应）
+ → tools/list(cursor) ← 描述列表与可选nextCursor
+ → tools/call(name,arguments) ← content、isError、可选structuredContent</code></pre>
+<p>装配阶段建立连接和协商，并发现元信息；运行阶段执行具体工具请求。初始化前不能查询工具。服务器声明 tools 能力后才能使用相关方法；发现到工具仍不等于当前用户获得权限。</p>
+<p><strong>先预测：</strong>服务端接收到了调用，但响应丢失。这时客户端不能简单重发：原操作可能已经发生。本课将传输或协议不确定后的会话标为 failed，不自动重放；真正重连、会话恢复和业务幂等需另行设计。</p></section>
+<section><h2>三个容易混淆的“版本/ID”</h2><table><thead><tr><th>字段</th><th>用途</th><th>本课约定</th></tr></thead><tbody>
+<tr><td>jsonrpc = 2.0</td><td>消息信封格式</td><td>请求和响应均检查；不是MCP版本</td></tr>
+<tr><td>protocolVersion = 2025-06-18</td><td>MCP协议版本协商</td><td>固定教学版本；服务器返回其他版本则拒绝，不声称使用最新版</td></tr>
+<tr><td>JSON-RPC request ID</td><td>协议请求/响应配对</td><td>Client分配递增整数；通知没有ID</td></tr>
+<tr><td>model.ToolCall.ID</td><td>模型请求与tool消息配对</td><td>保持原课程结构；不能拿协议ID替换它，Day13负责跨边界关联</td></tr>
+</tbody></table>
+<p>示意请求均对应本日实现的真实字段。以下 tools/call 信封可在传输测试中观察：</p><pre><code>{"jsonrpc":"2.0","id":3,"method":"tools/call",
+ "params":{"name":"get_document","arguments":{"id":"doc-1"}}}
+
+{"jsonrpc":"2.0","id":3,"result":{
+ "content":[{"type":"text","text":"工具返回的文档内容"}],
+ "isError":false}}</code></pre><p>result 与 error 只能有一个。工具执行失败可以是合法 result，带 isError=true；它与 JSON-RPC error 不同。不要把所有失败都压成一个字符串再决定重试。</p></section>
+<section><h2>承接前序设计与本日增量</h2><table><thead><tr><th>操作</th><th>文件</th><th>职责/兼容关系</th></tr></thead><tbody>
+<tr><td>新增</td><td>examples/internal/mcp/types.go</td><td>固定版本、JSON-RPC与MCP线协议数据，不替换Runtime消息或tool.Spec</td></tr>
+<tr><td>新增</td><td>examples/internal/mcp/client.go</td><td>串行会话、协商、能力检查、ID检查、发现和调用</td></tr>
+<tr><td>新增</td><td>examples/internal/mcp/fake.go、client_test.go</td><td>内存JSON对端与成功/反例测试，复用既有Invokable</td></tr>
+<tr><td>新增</td><td>examples/cmd/mcp/main.go</td><td>启动离线协议演示，复用knowledge.GetDocument与FakeStore</td></tr>
+<tr><td>复用</td><td>examples/internal/model、agent、tool</td><td>ToolCall/Message、Meta/Invoke、Registry、Policy、Authorizer均保持不变</td></tr>
+<tr><td>更新</td><td>examples/README.md、CONTRACTS.md</td><td>记录协议子集、错误语义、真实验收及Day13适配边界</td></tr>
+</tbody></table><p>所有示例共享根 go.mod，不建立每日Module、不增加SDK依赖。Descriptor 是带 JSON 标签的远端数据，Runtime 仍使用原 Spec；Day13会显式映射它们，不让线协议结构侵入模型消息和业务工具。</p></section>
+<section><h2>四个设计选择及代价</h2><table><thead><tr><th>选择</th><th>为什么这样做</th><th>还没有解决什么</th></tr></thead><tbody>
+<tr><td>先协商再操作</td><td>避免在未知版本/能力下发送调用；initialized通知完成后才ready</td><td>没有完整服务端主动消息、动态能力刷新和版本降级</td></tr>
+<tr><td>工具能力与权限分开</td><td>tools表示协议功能；本地调用者权限仍由Day11检查</td><td>本课不是OAuth或资源ACL实现；远端readOnlyHint也不是安全重试证明</td></tr>
+<tr><td>保留结果内容块</td><td>避免把image/resource等内容静默丢掉；保留structuredContent供后续适配</td><td>只检查基本形状，不做完整多模态/schema校验；Day13需明确支持或拒绝哪些类型</td></tr>
+<tr><td>固定内存传输、会话内串行</td><td>先验证消息和状态，不把端口、进程和SDK配置混进协议学习</td><td>没有真实stdio/Streamable HTTP、并发多路复用、HTTP会话头或传输资源管理</td></tr>
+</tbody></table>
+<p>stdio 与 Streamable HTTP 是传输方案，报文方法相同但分帧、生命周期与鉴权不同。本课 Transport.Send 接收完整JSON并返回完整响应；它不是完整网络协议栈。真实工程优先使用成熟SDK。</p><p class="note">内存示例没有要关闭的进程或连接；真实连接结束由传输资源清理完成，不要从其他协议照搬一个不存在的 MCP shutdown RPC。固定1MiB响应预算在Send返回后检查，只限制后续解析，真实传输仍需独立的缓冲区/帧大小限制。</p></section>
+<section><div class="time">20 MIN · READ</div><h2>带着问题读规范和 Eino 扩展</h2>
+<h3>12分钟 · MCP官方生命周期与工具协议</h3><p>阅读固定版本的 <a href="https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle">Lifecycle</a> 与 <a href="https://modelcontextprotocol.io/specification/2025-06-18/server/tools">Tools</a>，查找 initialize、notifications/initialized、tools/list、nextCursor、tools/call、content、isError；传输概念参照 <a href="https://modelcontextprotocol.io/specification/2025-06-18/basic/transports">Transports</a>。</p><p><strong>问题与产出：</strong>画出第一条消息和ready之前的通知；解释为什么通知无ID、能力缺失时为什么不能直接调用工具、分页游标为什么要原样往返。给出工具执行失败与协议错误各一个例子。</p>
+<h3>8分钟 · Eino如何接收已经初始化的客户端？</h3><p>阅读 <a href="https://github.com/cloudwego/eino-ext/blob/main/components/tool/mcp/mcp.go">eino-ext/components/tool/mcp/mcp.go</a>，定位 Config.Cli、GetTools、toolHelper.Info、toolHelper.InvokableRun。沿 ListTools → ToolInfo → CallTool 的路径找出协议到工具接口的转换点。</p><p><strong>问题与产出：</strong>为什么源码要求Cli先初始化？哪些代码负责发现，哪些负责执行，返回结构在哪里整形？将这条适配路径映射到课程的Spec/Meta/Invoke。阅读只做对照，今天不照抄SDK依赖；旧README的SSE例子也不是本课Streamable HTTP实现。</p><p>上述规范及Eino源码路径已核对；main会变化，阅读时记录版本。课程固定2025-06-18，不将其称为当前最新版本。</p></section>
+<section><div class="time">80 MIN · BUILD</div><h2>四项连续演进练习：先设计，再对照参考</h2>
+<h3>任务一 · 20分钟：定义Host/Client/Server与协议端口</h3><p><strong>为什么做：</strong>避免把“模型调用工具”和“网络发送协议”混成一个接口。<strong>操作与观察：</strong>5分钟手画完整Agent路径；10分钟阅读types.go并标出哪些是线协议、哪些继续复用Runtime；5分钟区分以下方法和前序Invoke。以下是参考接口摘录，不是独立程序：</p><pre><code>type Transport interface {
+    Send(context.Context, []byte) ([]byte, error)
+}
+func NewClient(t Transport) (*Client, error)
+func (c *Client) Initialize(ctx context.Context) (InitializeResult, error)
+func (c *Client) ListTools(ctx context.Context, cursor string) (ToolsPage, error)
+func (c *Client) CallTool(ctx context.Context, name string,
+    args json.RawMessage) (ToolResult, error)</code></pre><p><strong>完成证据：</strong>能解释为什么保留一套线协议Descriptor并不意味着替换原tool.Spec；指出ModelToolCallID和JSON-RPC ID分别在哪里生成、消费。</p>
+<h3>任务二 · 25分钟：跟踪初始化和会话失效</h3><p><strong>为什么做：</strong>一个可用连接不等于一个完成协商的会话。<strong>操作与观察：</strong>10分钟预测未初始化list、版本不匹配、初始化通知失败；10分钟沿client.go中的new → ready/failed与请求门控追踪；5分钟解释错误后为什么不自动重试。初始化result需要版本、能力与ServerInfo，initialized通知不能收到响应。</p><p><strong>完成证据：</strong>生命周期测试观察到initialize、无ID通知、list、call的顺序；版本/通知失败后不重放初始化；排队取消不发送请求。传输忽略context时，本层也不能强制终止它。</p>
+<h3>任务三 · 20分钟：发现一页工具，区分三种失败</h3><p><strong>为什么做：</strong>协议边界必须保留足够信息，后续Agent才能选择恢复还是终止。<strong>操作与观察：</strong>10分钟跟踪ListTools的tools和nextCursor、CallTool的content/structuredContent/isError；10分钟先预测再运行未知工具、缺失文档、响应ID错误和响应丢失的测试。</p><table><thead><tr><th>情况</th><th>本课返回与会话</th></tr></thead><tbody>
+<tr><td>缺失文档等业务失败</td><td>ToolResult.IsError=true，Go error为nil，保留内容块，待Day13安全映射</td></tr>
+<tr><td>有效JSON-RPC error</td><td>返回*RPCError，可errors.As识别；会话仍可用，Error()不直接输出远端Message/Data</td></tr>
+<tr><td>传输/取消或畸形协议响应</td><td>保留错误链；已发送请求可能被执行，会话failed，不自动重放</td></tr>
+</tbody></table><p><strong>完成证据：</strong>游标是不透明字符串；客户端只请求一页，不会隐式反复翻页。非文本内容未丢失；descriptor和result shape被检查，但完整schema与业务校验仍由服务端/成熟SDK负责。</p>
+<h3>任务四 · 15分钟：运行既有知识工具的协议往返</h3><p><strong>为什么做：</strong>用同一业务能力验证新边界，避免重写测试工具掩盖架构变化。<strong>操作与观察：</strong>5分钟看fake.go如何读取GetDocument.Meta、执行Invoke；5分钟运行cmd/mcp；5分钟对照Eino的GetTools/InvokableRun，画出Day13适配器应接在哪一层。</p><pre><code># 从仓库根执行；不新建go.mod
+go run ./examples/cmd/mcp</code></pre><p><strong>完成证据：</strong>观察到版本2025-06-18、工具数量1、doc-1正文JSON。能解释今天没有运行Agent Loop，直接协议夹具也没有自动套用Day11授权；公开Server仍需独立认证与资源权限。</p></section>
+<section><div class="time">20 MIN · TEST &amp; REVIEW</div><h2>用协议反例验收理解</h2><p><strong>12分钟实作：</strong>先预测每类错误，再从仓库根执行：</p><pre><code>go test ./examples/...
+go test -race ./examples/...
+go run ./examples/cmd/mcp</code></pre><table><thead><tr><th>测试</th><th>对应设计不变量</th></tr></thead><tbody>
+<tr><td>TestLifecycleAndToolErrors</td><td>协商/通知先于工具操作；请求ID递增；业务isError、RPCerror分离；有效RPC错误不杀会话</td></tr>
+<tr><td>TestInitializeFailureNeverReplays / NoToolsCapability</td><td>版本/通知失败不重放；缺失tools能力时不发送工具操作</td></tr>
+<tr><td>TestMalformedResponsesFailSession</td><td>ID/版本不匹配、result/error冲突、空结果和超限响应被拒绝</td></tr>
+<tr><td>TestPaginationAndStructuredContentPreserved</td><td>游标原样往返；内容块与structuredContent不被扁平化丢失</td></tr>
+<tr><td>TestCancellationAndQueuedCall</td><td>排队取消不发消息；传输取消保留context错误；不重用不确定会话</td></tr>
+<tr><td>TestCallInputAndContentValidation / InvalidDescriptorsAndTransportFailure</td><td>本地非法输入不发出；坏描述/内容被拒绝；丢失响应不自动重试</td></tr>
+</tbody></table>
+<p class="info"><strong>本次真实验证：</strong>官方Go1.22.2 linux/amd64下，两条累计examples测试命令均退出码0，cmd/mcp实际运行成功。覆盖内存JSON-RPC、FakeStore和已有Runtime回归；没有连接真实MCP网络服务、没有验证真实模型选择或生产认证。</p>
+<p><strong>8分钟理解验收：</strong></p><ol><li>不看代码，讲出Host、Client、Server、Model各负责什么，以及ready之前发生哪些消息。</li><li>新增一个远端文档Server时，业务工具实现、线协议客户端和AgentLoop分别需要改什么？</li><li>如果Server的annotations声明readOnlyHint=true，为什么不能自动给Day10配置安全重试或给Day11授予权限？</li><li>请求已发出但响应丢失，与result.isError=true有何区别？哪种情况下重发写操作可能重复生效？</li></ol>
+<h3>学习清单</h3><div class="meta"><span>保存浏览器自评进度，不替代验收证据</span><span id="count">0 / 8</span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div><div id="checks"></div></section>
+<section><h2>Definition of Done 与 Day 13 衔接</h2><p>理解上：能手画会话生命周期、区分能力和权限、区分三个错误层次，并说明两个ID域为何不能混用。实现上：初始化顺序、ID匹配、拒绝畸形消息、取消与内容保留有测试，累计examples与race通过。本次参考示例已完成这些验证；完整网络SDK不属于本日交付。</p><p>Day13将Descriptor映射到既有Spec，将CallTool接到Invoke，再经过Registry、WithPolicy、WithAuthorizer接回模型工具往返。重点是复用前序契约、处理名称冲突与错误/内容映射，不复制业务工具；发现到远端能力仍不意味着获得执行授权。</p></section>
+<footer>Agent Runtime · Day12 / 56 · 离线内容可读 · <a href="../../index.html">返回学习首页</a></footer></main>
+<script>
+const items=["解释Host、Client、Server和Model的分工","手画initialize到tools/call的消息顺序","区分协议版本、JSON-RPC ID和模型ToolCallID","对照Eino初始化客户端与GetTools适配边界","观察分页与原始内容块保留","预测协议/传输失败和isError的不同处理","运行累计examples与race并记录结果","推演Day13适配及权限边界"];
+const key="agent-runtime-day12-v1";let saved=[];try{const v=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(v))saved=v}catch(_){}const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const p=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=p+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(p))}items.forEach((s,i)=>{const r=document.createElement("div");r.className="check";const c=document.createElement("input");c.type="checkbox";c.id="task-"+i;c.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=c.id;label.textContent=s;r.append(c,label);box.append(r);c.onchange=()=>{saved[i]=c.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+</script></body></html>

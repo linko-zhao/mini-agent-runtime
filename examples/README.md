@@ -1,6 +1,6 @@
 # Agent Runtime 累计示例
 
-这是依据 Day 01–11 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
+这是依据 Day 01–12 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
 
 共享仓库根目录的 `go.mod`（Go 1.22.2），无需新建 Module，也不导入根目录 `internal` 中的练习实现。所有命令在仓库根目录运行：
 
@@ -8,6 +8,7 @@
 go run ./examples/cmd/demo
 go run ./examples/cmd/knowledge
 go run ./examples/cmd/access
+go run ./examples/cmd/mcp
 go test ./examples/...
 go test -race ./examples/...
 ```
@@ -38,6 +39,7 @@ examples/
 | Day 09 | tool/calculator、agent.go | 参数边界、整批名称/ID 检查、结果关联 |
 | Day 10 | tool/policy.go、cmd/knowledge | 整次超时、显式只读重试、结果预算 |
 | Day 11 | tool/access.go、agent、cmd/access | 可信主体、批次执行授权、授权审计信号 |
+| Day 12 | internal/mcp、cmd/mcp | MCP 初始化、能力协商、JSON-RPC 工具发现与调用 |
 
 Day 08 工具契约现已按线上修订版补齐。后续能力仍按路线推进：独立 ToolsNode 执行器、中间件、重试/幂等、权限与 MCP 留给 Day 10–14 按路线增量设计。Eino 是阅读对照，不作为运行依赖。
 
@@ -72,3 +74,16 @@ Day 08 的接口映射、旧接口兼容及边界见 [工具设计说明](intern
 - go run ./examples/cmd/access：通过，授权拒绝且模拟写入次数为0。
 
 这次验证覆盖累计 Day10 策略测试；上文 Day10 发布时未能运行的记录是历史状态，现已由本次累计验收补充。测试不证明真实认证/后端 ACL 或生产审计持久化已经完成。
+
+## Day 12：MCP 协议练习
+
+新增 examples/internal/mcp/{types,client,fake,client_test}.go 与 examples/cmd/mcp/main.go。仍共享根 go.mod，不新增 SDK 依赖，也不替换 Tool/Meta/Invoke 或 Agent 消息。MCP Client 是 Host 访问 Server 的协议层；Day13 再做 Runtime Tool 适配。
+
+- 固定协议版本2025-06-18，依次执行 initialize、无ID的 notifications/initialized，再 tools/list、tools/call。
+- Transport.Send 收发完整 JSON-RPC JSON；DemoServer 在内存中复用既有 knowledge.GetDocument 和 FakeStore，不启动端口或进程。
+- 这是串行请求的教学子集，不是完整 SDK：无真实 stdio/Streamable HTTP、服务器主动请求/通知、OAuth、完整多模态校验或传输关闭管理。只有内存资源，不发明 MCP shutdown 方法。
+- capabilities.tools 只表示协议能力，不授权；远端 annotations 也不能自动决定只读重试。直接调用 DemoServer 没有套用 Day11 Agent 授权，这是可信离线夹具，不是可公开的业务服务器。
+- JSON-RPC 请求ID与模型 ToolCallID 属于不同域。nextCursor 按不透明字符串原样往返，调用者负责分页；工具结果 isError 与 RPC error、传输错误分开。原始内容块/structuredContent 保留，Day13 再决定如何映射模型输入。
+- 传输/协议失败后会话失效，避免自动重放可能已发生的远端操作。排队中取消不发请求；传输本身仍须合作取消。真实连接的重连和清理由成熟 SDK/宿主另行实现。
+
+本日验收：官方Go1.22.2下 go test ./examples/... 与 go test -race ./examples/... 通过；go run ./examples/cmd/mcp 实际输出协议版本2025-06-18、工具数量1与 doc-1 的文档JSON。验证覆盖内存JSON消息，不代表真实MCP网络连接或真实模型集成通过。
