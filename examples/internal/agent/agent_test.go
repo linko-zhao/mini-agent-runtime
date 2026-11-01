@@ -129,3 +129,35 @@ func TestVisibleToolsOnlyFiltersDefinitions(t *testing.T) {
 		t.Fatal("unknown visible tool accepted")
 	}
 }
+
+// A later invalid call must prevent even the first valid call from executing.
+func TestBatchPreflight(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		second model.ToolCall
+	}{
+		{"unknown tool", model.ToolCall{ID: "b", Name: "missing"}},
+		{"duplicate ID", model.ToolCall{ID: "a", Name: "wait"}},
+		{"missing ID", model.ToolCall{Name: "wait"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := &waitTool{}
+			calls := []model.ToolCall{{ID: "a", Name: "wait"}, tc.second}
+			modelCalls := 0
+			m := modelFunc(func(context.Context, []model.Message) (*model.Response, error) {
+				modelCalls++
+				return &model.Response{Message: model.Message{Role: "assistant", ToolCalls: calls}}, nil
+			})
+			a, err := New(m, map[string]tool.Tool{"wait": w}, 2, WithToolTimeout(time.Millisecond))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := a.Run(context.Background(), ""); err == nil {
+				t.Fatal("invalid batch accepted")
+			}
+			if w.calls != 0 || modelCalls != 1 {
+				t.Fatalf("tool calls = %d, model calls = %d", w.calls, modelCalls)
+			}
+		})
+	}
+}

@@ -137,78 +137,11 @@ func (a *Agent) Run(ctx context.Context, input string) (output string, runErr er
 		if len(r.Message.ToolCalls) == 0 {
 			return r.Message.Content, nil
 		}
-		// 整批预校验，避免后面的未知工具或重复 ID 导致前面的工具已产生副作用。
-		seen := map[string]bool{}
-		for _, call := range r.Message.ToolCalls {
-			if call.ID == "" || seen[call.ID] {
-				return "", fmt.Errorf("agent: missing or duplicate tool call ID")
-			}
-			seen[call.ID] = true
-			if _, ok := a.tools[call.Name]; !ok {
-				return "", &tool.Error{Kind: tool.NotFoundError, Message: "tool not registered"}
-			}
+		results, err := a.executeBatch(ctx, r.Message.ToolCalls, step)
+		if err != nil {
+			return "", err
 		}
-		// Authorization is a whole-batch preflight, before any side effects.
-		// A custom authorizer receives a copy of arguments, not the executable buffer.
-		if a.authorizer != nil {
-			principal, _ := tool.PrincipalFromContext(ctx)
-			for _, call := range r.Message.ToolCalls {
-				check := call
-				check.Arguments = append([]byte(nil), call.Arguments...)
-				err := a.authorizer.Authorize(ctx, check)
-				if ctx.Err() != nil {
-					err = ctx.Err()
-				}
-				kind := EventToolAuthorized
-				decisionStatus := "ok"
-				if err != nil {
-					kind = EventToolDenied
-					decisionStatus = status(err)
-					if errors.Is(err, tool.ErrForbidden) {
-						decisionStatus = "denied"
-					}
-				}
-				a.emit(ctx, Event{Type: kind, Step: step, ToolName: call.Name, ToolCallID: call.ID, PrincipalID: principal.ID, Status: decisionStatus})
-				if err != nil {
-					return "", fmt.Errorf("agent: authorization failed: %w", err)
-				}
-			}
-		}
-		for _, call := range r.Message.ToolCalls {
-			if err := ctx.Err(); err != nil {
-				return "", err
-			}
-			start := time.Now()
-			e := Event{Type: EventToolStarted, Step: step, ToolName: call.Name, ToolCallID: call.ID, Status: "ok"}
-			a.emit(ctx, e)
-			toolCtx := ctx
-			cancel := func() {}
-			if a.toolTimeout > 0 {
-				toolCtx, cancel = context.WithTimeout(ctx, a.toolTimeout)
-			}
-			result, err := a.tools[call.Name].Execute(toolCtx, call.Arguments)
-			if toolCtx.Err() != nil {
-				err = toolCtx.Err()
-			}
-			cancel()
-			e.Type = EventToolCompleted
-			e.Duration = time.Since(start)
-			e.Status = status(err)
-			a.emit(ctx, e)
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				return "", err
-			}
-			if err != nil {
-				// 仅回填受控提示，未知内部错误不暴露给模型。
-				var known *tool.Error
-				if errors.As(err, &known) {
-					result = known.Error()
-				} else {
-					result = "execution_failed: tool execution failed"
-				}
-			}
-			messages = append(messages, model.Message{Role: "tool", ToolCallID: call.ID, Content: result})
-		}
+		messages = append(messages, results...)
 	}
 	step = a.maxSteps
 	return "", ErrMaxSteps
