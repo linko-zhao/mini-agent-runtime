@@ -227,6 +227,47 @@ func TestAgentRun(t *testing.T) {
 		assert.Equal(t, model.Message{Role: "tool", Content: "tool result", ToolCallID: "call-123"}, secondRequest[2])
 	})
 
+	t.Run("同名工具双调用保留各自 ID 并回传完整历史", func(t *testing.T) {
+		var secondRequest []model.Message
+		calls := 0
+		m := modelFunc(func(_ context.Context, messages []model.Message) (*model.Response, error) {
+			calls++
+			if calls == 1 {
+				return &model.Response{Message: model.Message{
+					Role: "assistant",
+					ToolCalls: []model.ToolCall{
+						{ID: "read-1", Name: "lookup"},
+						{ID: "read-2", Name: "lookup"},
+					},
+				}}, nil
+			}
+			secondRequest = append([]model.Message(nil), messages...)
+			return &model.Response{Message: model.Message{Role: "assistant", Content: "done"}}, nil
+		})
+		results := []string{"first result", "second result"}
+		executions := 0
+		lookup := toolFunc(func(context.Context, json.RawMessage) (string, error) {
+			result := results[executions]
+			executions++
+			return result, nil
+		})
+
+		a, err := New(m, map[string]tool.Tool{"lookup": lookup}, 3)
+		require.NoError(t, err)
+		result, err := a.Run(context.Background(), "read twice")
+		require.NoError(t, err)
+		assert.Equal(t, "done", result)
+		require.Equal(t, 2, executions)
+		require.Len(t, secondRequest, 4)
+		assert.Equal(t, model.Message{Role: "user", Content: "read twice"}, secondRequest[0])
+		assert.Equal(t, "assistant", secondRequest[1].Role)
+		require.Len(t, secondRequest[1].ToolCalls, 2)
+		assert.Equal(t, "read-1", secondRequest[1].ToolCalls[0].ID)
+		assert.Equal(t, "read-2", secondRequest[1].ToolCalls[1].ID)
+		assert.Equal(t, model.Message{Role: "tool", Content: "first result", ToolCallID: "read-1"}, secondRequest[2])
+		assert.Equal(t, model.Message{Role: "tool", Content: "second result", ToolCallID: "read-2"}, secondRequest[3])
+	})
+
 	t.Run("工具不存在时将错误返回", func(t *testing.T) {
 		m := model.NewMock([]model.Response{{Message: model.Message{Role: "assistant", ToolCalls: []model.ToolCall{{ID: "missing-id", Name: "missing"}}}}})
 		a, err := New(m, nil, 5)
@@ -417,4 +458,132 @@ func TestAgentRunInvalidToolDefinition(t *testing.T) {
 	})
 
 	assert.Equal(t, 0, requestCount, "初始化失败时不应向 Provider 发出 HTTP 请求")
+}
+
+func TestAgentBatchValidationAndTimeout(t *testing.T) {
+	t.Run("missing ToolCall ID prevents the entire batch", func(t *testing.T) {
+		executions := 0
+		m := model.NewMock([]model.Response{{Message: model.Message{Role: "assistant", ToolCalls: []model.ToolCall{
+			{ID: "valid", Name: "lookup"},
+			{Name: "lookup"},
+		}}}})
+		a, err := New(m, map[string]tool.Tool{"lookup": toolFunc(func(context.Context, json.RawMessage) (string, error) {
+			executions++
+			return "ok", nil
+		})}, 2)
+		require.NoError(t, err)
+		_, err = a.Run(context.Background(), "")
+		require.Error(t, err)
+		assert.Zero(t, executions)
+	})
+
+	t.Run("unregistered tool prevents the entire batch", func(t *testing.T) {
+		executions := 0
+		m := model.NewMock([]model.Response{{Message: model.Message{Role: "assistant", ToolCalls: []model.ToolCall{
+			{ID: "valid", Name: "lookup"},
+			{ID: "unknown", Name: "missing"},
+		}}}})
+		a, err := New(m, map[string]tool.Tool{"lookup": toolFunc(func(context.Context, json.RawMessage) (string, error) {
+			executions++
+			return "ok", nil
+		})}, 2)
+		require.NoError(t, err)
+		_, err = a.Run(context.Background(), "")
+		require.Error(t, err)
+		assert.Zero(t, executions)
+	})
+
+	t.Run("timeout prevents later batch calls", func(t *testing.T) {
+		executions := 0
+		m := model.NewMock([]model.Response{{Message: model.Message{Role: "assistant", ToolCalls: []model.ToolCall{
+			{ID: "first", Name: "lookup"},
+			{ID: "second", Name: "lookup"},
+		}}}})
+		a, err := New(m, map[string]tool.Tool{"lookup": toolFunc(func(ctx context.Context, _ json.RawMessage) (string, error) {
+			executions++
+			if executions == 1 {
+				<-ctx.Done()
+				return "", ctx.Err()
+			}
+			return "unexpected", nil
+		})}, 2, WithToolTimeout(time.Millisecond))
+		require.NoError(t, err)
+		_, err = a.Run(context.Background(), "")
+		require.ErrorIs(t, err, context.DeadlineExceeded)
+		assert.Equal(t, 1, executions)
+	})
+}
+
+func TestAgentToolErrorResultPolicy(t *testing.T) {
+	for _, tc := range []struct {
+		name, want string
+		err        error
+	}{
+		{
+			name: "controlled error",
+			want: "invalid_arguments: invalid input",
+			err:  &tool.Error{Kind: tool.ValidationError, Message: "invalid input", Cause: errors.New("private detail")},
+		},
+		{
+			name: "unknown internal error",
+			want: "execution_failed: tool execution failed",
+			err:  errors.New("private detail"),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			m := modelFunc(func(_ context.Context, messages []model.Message) (*model.Response, error) {
+				calls++
+				if calls == 1 {
+					return &model.Response{Message: model.Message{Role: "assistant", ToolCalls: []model.ToolCall{{ID: "call-error", Name: "lookup"}}}}, nil
+				}
+				require.Equal(t, model.Message{Role: "tool", ToolCallID: "call-error", Content: tc.want}, messages[len(messages)-1])
+				return &model.Response{Message: model.Message{Role: "assistant", Content: "recovered"}}, nil
+			})
+			a, err := New(m, map[string]tool.Tool{"lookup": toolFunc(func(context.Context, json.RawMessage) (string, error) {
+				return "", tc.err
+			})}, 2)
+			require.NoError(t, err)
+			result, err := a.Run(context.Background(), "")
+			require.NoError(t, err)
+			assert.Equal(t, "recovered", result)
+		})
+	}
+}
+
+func TestAgentVisibleToolsDoNotRevokeRegistration(t *testing.T) {
+	bound := &capturedBindingModel{}
+	lookup := describedTool{
+		def: model.ToolDefinition{Name: "lookup", Parameters: json.RawMessage(`{"type":"object"}`)},
+		run: func(context.Context, json.RawMessage) (string, error) { return "executed", nil },
+	}
+	hidden := describedTool{
+		def: model.ToolDefinition{Name: "hidden", Parameters: json.RawMessage(`{"type":"object"}`)},
+		run: func(context.Context, json.RawMessage) (string, error) { return "hidden result", nil },
+	}
+	a, err := New(bound, map[string]tool.Tool{"lookup": lookup, "hidden": hidden}, 2, WithVisibleTools("lookup"))
+	require.NoError(t, err)
+	require.Len(t, bound.defs, 1)
+	assert.Equal(t, "lookup", bound.defs[0].Name)
+
+	a.model = model.NewMock([]model.Response{
+		{Message: model.Message{Role: "assistant", ToolCalls: []model.ToolCall{{ID: "hidden-call", Name: "hidden"}}}},
+		{Message: model.Message{Role: "assistant", Content: "done"}},
+	})
+	result, err := a.Run(context.Background(), "")
+	require.NoError(t, err)
+	assert.Equal(t, "done", result)
+}
+
+type capturedBindingModel struct {
+	defs []model.ToolDefinition
+}
+
+func (m *capturedBindingModel) WithTools(defs []model.ToolDefinition) (model.Model, error) {
+	m.defs = append([]model.ToolDefinition(nil), defs...)
+	return m, nil
+}
+
+func (*capturedBindingModel) Generate(context.Context, []model.Message) (*model.Response, error) {
+	return &model.Response{Message: model.Message{Role: "assistant", Content: "done"}}, nil
 }

@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -116,69 +115,15 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 			return r.Message.Content, nil
 		}
 
-		for _, t := range r.Message.ToolCalls {
-			if ctx.Err() != nil {
-				a.emit(ctx, Event{Type: RunFailed, At: time.Now()})
-				return "", ctx.Err()
-			}
-			tm := model.Message{
-				Role:       "tool",
-				ToolCallID: t.ID,
-			}
-			tool, ok := a.tools[t.Name]
-			if !ok {
-				a.emit(ctx, Event{Type: RunFailed, At: time.Now()})
-				return "", fmt.Errorf("tool %s not found", t.Name)
-			}
-			toolStartTime := time.Now()
+		results, err := a.executeBatch(ctx, r.Message.ToolCalls, step)
+		if err != nil {
 			a.emit(ctx, Event{
-				Type:       ToolStarted,
-				Step:       step + 1,
-				At:         toolStartTime,
-				ToolName:   t.Name,
-				ToolCallID: t.ID,
+				Type: RunFailed,
+				At: time.Now(),
 			})
-
-			toolCtx, cancel := context.WithTimeout(ctx, a.toolTimeout)
-			tr, err := tool.Execute(toolCtx, t.Arguments)
-			toolErr := toolCtx.Err()
-			cancel()
-			if toolErr != nil {
-				if errors.Is(err, context.DeadlineExceeded) {
-					a.emit(ctx, Event{
-						Type:       ToolCompleted,
-						Step:       step + 1,
-						At:         time.Now(),
-						ToolName:   t.Name,
-						ToolCallID: t.ID,
-						Duration:   time.Since(toolStartTime),
-						Status:     EventError,
-					})
-				}
-				a.emit(ctx, Event{
-					Type: RunFailed,
-					At:   time.Now(),
-				})
-				return "", fmt.Errorf("executing tool context error: %w", toolErr)
-			}
-			toolCallStatus := EventOk
-			if err != nil {
-				tm.Content = err.Error()
-				toolCallStatus = EventError
-			} else {
-				tm.Content = tr
-			}
-			a.emit(ctx, Event{
-				Type:       ToolCompleted,
-				Step:       step + 1,
-				At:         time.Now(),
-				ToolName:   t.Name,
-				ToolCallID: t.ID,
-				Duration:   time.Since(toolStartTime),
-				Status:     toolCallStatus,
-			})
-			msgs = append(msgs, tm)
+			return "", err
 		}
+		msgs = append(msgs, results...)
 
 		a.emit(ctx, Event{
 			Type:     StepFinished,
