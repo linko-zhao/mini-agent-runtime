@@ -1,0 +1,84 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>Day 13 · MCP 工具适配与 Agent 往返</title><style>
+:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#58667b;--line:#e0e6ee;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:920px;margin:auto;padding:32px 22px 70px}.hero{background:#183561;color:#fff;border-radius:18px;padding:29px 30px}.hero small{opacity:.8;letter-spacing:1px}.hero h1{margin:7px 0;font-size:30px;line-height:1.3}.hero p{margin:0;color:#e6eefa}.chips{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}.chip{border:1px solid #8ea4c8;border-radius:20px;padding:3px 10px;font-size:12px}section{background:var(--paper);border:1px solid var(--line);border-radius:14px;margin-top:18px;padding:22px 26px}h2{font-size:19px;margin:0 0 13px}h3{font-size:16px;margin:18px 0 6px}.time{font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.4px}p{margin:8px 0}a{color:var(--accent)}li{margin:6px 0}code{background:#f0f3f8;padding:2px 5px;border-radius:4px}pre{overflow:auto;background:#142136;color:#e7f3ff;padding:17px;border-radius:10px;font-size:13px;line-height:1.65}pre code{background:transparent;padding:0}.goal{background:var(--pale);border-left:3px solid var(--accent);padding:12px 15px;border-radius:4px}.note{background:#fff8e9;border:1px solid #f2deb2;border-radius:9px;padding:11px 14px;color:#644b18}.info{background:#eff6ff;border:1px solid #d5e4fc;border-radius:9px;padding:11px 14px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.grid>div{padding:12px;background:#f6f8fc;border-radius:9px}.grid strong{display:block;font-size:19px}.grid span{font-size:12px;color:var(--sub)}.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0}.check input{margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer;flex:1}.check.done label{text-decoration:line-through;color:var(--sub)}.progress{height:8px;background:#e3e9f2;border-radius:99px;overflow:hidden}.fill{height:100%;background:var(--accent);width:0%;transition:width .2s}.meta{display:flex;justify-content:space-between;font-size:13px;color:var(--sub);margin-bottom:9px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px;vertical-align:top}th{background:#f4f7fc}.tag{display:inline-block;background:#eaf0fc;color:#2459bd;border-radius:5px;font-size:12px;padding:2px 7px;margin-right:6px}.muted{color:var(--sub);font-size:13px}footer{text-align:center;color:var(--sub);font-size:12px;margin:24px}@media(max-width:600px){main{padding:14px 12px 40px}.hero{padding:22px}.hero h1{font-size:24px}section{padding:18px}.grid{grid-template-columns:1fr}table{font-size:12px}th,td{padding:8px}pre{font-size:12px}}
+</style></head><body><main>
+<header class="hero"><small>MINI AGENT RUNTIME · WEEK 02 · EINO / MCP 对照</small><h1>Day 13 / 56 · MCP 工具适配与 Agent 往返</h1><p>把昨天的协议客户端接到前序工具契约，让远端能力经过同一套注册、策略、授权和消息历史。</p><div class="chips"><span class="chip">阅读 20 分钟</span><span class="chip">编码 80 分钟</span><span class="chip">测试复盘 20 分钟</span></div></header>
+<section><h2>协议能调用了，为什么还要一层适配？</h2><div class="goal">能在不改Agent Loop和消息类型的前提下，将远端工具描述转成本地Spec，将CallTool转成Invoke，解释名称、错误、内容与权限分别在哪里转换。</div>
+<p>Day12的MCP Client已完成初始化、能力协商、发现和调用。若现在直接在Agent.Run里写tools/call分支，Loop就需要知道JSON-RPC、分页、远端名称和内容块；下一个后端又会增加分支。前序Meta/Invoke已经是业务能力的共同入口，今天让远端工具实现它。</p><p>场景仍是读取知识文档。业务逻辑继续复用GetDocument和FakeStore，不再写一套文档工具。新增的是协议到Runtime的边界。课堂按设计路线推进，不以根internal/cmd中的学习者代码状态作为课题或发布门禁。</p></section>
+<section><h2>先走通完整过程：两个名字、两个ID域</h2><pre><code>装配：
+Host → Client.Initialize → Discover("knowledge", maxPages=4)
+     → 远端Descriptor快照 → 本地Meta/Invoke对象
+     → 新Registry → Registry.Tools → Day10 WithPolicy
+     → Agent.New(WithVisibleTools, Day11 WithAuthorizer)
+
+运行：
+Model.ToolCall{ID:"model-call-42", Name:"knowledge__get_document"}
+ → Loop保存assistant，检查整批ID/名称 → 本地主体授权
+ → Execute → 旧适配器 → remote.Invoke(ctx,args)
+ → Client.CallTool("get_document", args)
+ → JSON-RPC{id:3, method:"tools/call"} → Server → GetDocument.Invoke
+ ← MCP ToolResult → 本地ResultEnvelope JSON
+ ← tool{ToolCallID:"model-call-42", Content:结果}
+ → Model.Generate(完整历史) → 最终回答</code></pre>
+<p><strong>名字不同：</strong>模型/注册表/授权表使用本地别名knowledge__get_document；远端协议仍使用原名get_document。<strong>ID不同：</strong>模型ID由Agent保留，RPC整数ID由Client分配；适配器不把模型ID或Principal塞进arguments。</p><p><strong>先预测：</strong>模型能看到别名，但reader没有该能力权限。初始化和发现可能已发生，执行授权仍会在Invoke之前拒绝；测试要求后续<strong>tools/call次数为0</strong>，不是声称整个流程没有协议消息。</p><p>脚本模型验证装配、调用关联和结果历史，不证明真实LLM会选对工具。内存Server验证真实JSON报文，但不证明生产网络认证或后端ACL已经部署。</p></section>
+<section><h2>承接前序设计与本日增量</h2><table><thead><tr><th>操作</th><th>路径</th><th>职责与兼容关系</th></tr></thead><tbody>
+<tr><td>新增</td><td>examples/internal/tool/mcptool/adapter.go</td><td>Descriptor→Spec、Meta快照、Invoke→CallTool、结果/错误转换</td></tr>
+<tr><td>新增</td><td>examples/internal/tool/mcptool/discovery.go</td><td>有界分页、游标循环/跨页重名检查；完整成功才返回候选</td></tr>
+<tr><td>新增</td><td>examples/internal/tool/mcptool/adapter_test.go、integration_test.go</td><td>边界反例和真正经过Agent/MCP Client的内存往返</td></tr>
+<tr><td>新增</td><td>examples/cmd/mcpagent/main.go</td><td>注册远端别名、装配策略和授权、观察下一轮模型输入</td></tr>
+<tr><td>复用</td><td>examples/internal/mcp、tool/contract.go、registry.go、policy.go、access.go、agent、model</td><td>维持前序公开接口、消息与错误契约，不复制Loop或业务工具</td></tr>
+<tr><td>更新</td><td>examples/README.md、CONTRACTS.md</td><td>记录名称规则、投影格式、失败策略与真实验收</td></tr>
+</tbody></table><p>共享根go.mod，包前缀仍为github.com/linko-zhao/mini-agent-runtime/examples/internal/。没有每日Module，也不依赖Eino SDK运行。外部SDK若要接入，需实现本课的Caller协议端口，不假定其类型与Day12客户端天然相同。</p>
+<p><strong>迁移说明：</strong>旧本地工具和Agent.New/Run不用改。新增远端工具按新别名注册；调用方若解析它的结果，应使用ResultEnvelope，而不是当成旧本地Document JSON。Host继续负责先初始化客户端和最终的会话清理/恢复。</p></section>
+<section><h2>为什么这样设计？</h2><table><thead><tr><th>设计</th><th>直接做法的局限</th><th>选择与代价</th></tr></thead><tbody>
+<tr><td>本地别名，远端原名</td><td>两个Server都叫get_document会冲突，授权表也无法区分来源</td><td>宿主分配prefix__name；前缀不含下划线，组合最长64字节。部分MCP名称不能直接映射，明确拒绝而非偷偷清洗</td></tr>
+<tr><td>完整发现后装配新Registry</td><td>边翻页边写活动注册表，后页失败会暴露半套目录</td><td>页数上限、游标循环和重名检查；失败返回nil。注册仍用新Registry，成功后再发布，不热改共享Agent</td></tr>
+<tr><td>Meta只读快照</td><td>每次枚举都访问Server会使绑定依赖网络和目录变化</td><td>复制Schema，Meta不发远端请求；目录更新需宿主显式重新发现和装配</td></tr>
+<tr><td>结果投影显式定义</td><td>直接连接字符串可能丢图片/结构化内容，还无法判断失败</td><td>成功返回JSON Envelope；暂只支持文本块，非文本明确失败；真正多模态需扩展消息契约</td></tr>
+</tbody></table>
+<p>本地别名不能认证Server，也不能证明远端工具是只读。服务器身份、目录来源和能力分类必须由宿主信任配置；远端annotations/readOnlyHint既不自动授予权限，也不自动配置安全重试。</p></section>
+<section><h2>结果与错误怎样进入下一轮模型？</h2><p>成功结果统一为以下JSON字符串。多个文本块按顺序放入text数组；structuredContent存在时保留对象，不把它偷偷拼进一段散文：</p><pre><code>// 数据示意，不是独立Go程序
+MCP结果：
+{"content":[{"type":"text","text":"文档正文"}],
+ "structuredContent":{"id":"doc-1"}}
+
+本地Invoke返回字符串的JSON内容：
+{"text":["文档正文"],"structuredContent":{"id":"doc-1"}}</code></pre>
+<p>原GetDocument返回的正文可能本身就是Document JSON，因此演示的text[0]是那段JSON字符串。接口仍返回string，但投影契约清楚可见；不改旧本地工具的输出。</p>
+<table><thead><tr><th>远端情况</th><th>适配结果</th><th>Agent行为</th></tr></thead><tbody>
+<tr><td>ctx取消/超时</td><td>保留errors.Is语义，不转成普通业务错误</td><td>终止Run，不继续下一轮</td></tr>
+<tr><td>有效MCP结果isError=true</td><td>受控ExecutionError：remote tool execution failed</td><td>回填安全摘要和原CallID，模型可据此结束或调整</td></tr>
+<tr><td>RPC/传输/失效会话错误</td><td>受控request failed，Cause供可信宿主诊断；不回填原始Message/Data</td><td>不自动重连重放；failed客户端仍拒绝后续发送，Loop保留原有限步数</td></tr>
+<tr><td>图片/资源等非文本块</td><td>明确返回ErrUnsupportedContent，不返回前面部分文本</td><td>不会把部分结果冒充完整成功</td></tr>
+<tr><td>畸形文本或structuredContent</td><td>受控ErrInvalidResult</td><td>不将畸形数据标为成功结果</td></tr>
+</tbody></table><p>Day10的WithPolicy作用在Invoke外侧，对最终投影JSON施加结果预算。受控tool.Error不会触发自动重试；这项保守选择避免把不确定远端执行重放。权限由Day11独立检查，远端错误和正文都不是新的授权指令。</p></section>
+<section><div class="time">20 MIN · READ</div><h2>带着映射问题读Eino与规范</h2><h3>12分钟 · Eino的MCP工具桥接</h3><p>阅读 <a href="https://github.com/cloudwego/eino-ext/blob/main/components/tool/mcp/mcp.go">eino-ext/components/tool/mcp/mcp.go</a> 的Config.Cli、GetTools、ToolNameList、toolHelper.Info、InvokableRun及ToolCallResultHandler。</p><p><strong>问题与产出：</strong>初始化在哪里完成？ListTools如何变成ToolInfo？工具执行如何调用Cli.CallTool？结果在哪层整形？画出GetTools→Info/InvokableRun与本课Discover→Meta/Invoke的对应。ToolNameList过滤不等于授权；Eino源码对结果序列化的选择与本课文本投影不同，不应盲目照搬。</p><h3>8分钟 · MCP工具结果与不可信提示</h3><p>阅读固定版本 <a href="https://modelcontextprotocol.io/specification/2025-06-18/server/tools">MCP Tools规范</a> 的工具描述、内容块、structuredContent、isError与annotations。解释为什么协议结构可保留丰富内容，但当前Runtime的string消息仍需要明确投影或拒绝策略。</p><p><strong>产出：</strong>列出协议层、适配层、执行授权层各负责的一项检查；说明为什么远端readOnlyHint不足以证明安全重试。本课继续固定2025-06-18版本，源码main可能演进，阅读时记录版本。</p></section>
+<section><div class="time">80 MIN · BUILD</div><h2>四项连续练习：先设计边界，再对照参考</h2>
+<h3>任务一 · 20分钟：发现目录与名称隔离</h3><p><strong>为什么做：</strong>让多个Server的能力进入同一Runtime，同时避免半套目录和名称覆盖。<strong>操作与观察：</strong>5分钟手画分页与本地/远端名称表；10分钟阅读discovery.go与adapter.go的构造；5分钟预测游标循环、后页重名和不兼容名字。下面是实际参考接口摘录，不是独立程序：</p><pre><code>func Discover(ctx context.Context, caller Caller,
+    prefix string, maxPages int) ([]tool.Invokable, error)
+func New(caller Caller, prefix string,
+    descriptor mcp.Descriptor) (tool.Invokable, error)
+// 调用前由Host完成client.Initialize。
+// 本地knowledge__get_document，远端仍叫get_document。</code></pre><p><strong>完成证据：</strong>超出页数预算/重复游标/跨页重名返回nil而非部分候选；Meta不调用远端业务；构造输入和返回的Schema副本被修改，也不影响内部快照。前缀限字母开头的字母/数字/连字符，远端名限字母/数字/下划线/连字符；这是本地适配限制，不是所有MCP名字的定义。</p>
+<h3>任务二 · 20分钟：把CallTool接成Invoke，选择投影</h3><p><strong>为什么做：</strong>Loop不应理解JSON-RPC，也不能直接信任所有远端结果格式。<strong>操作与观察：</strong>10分钟跟踪Invoke里的context检查、原名路由、错误分类和ResultEnvelope编码；5分钟预测文本+structuredContent和文本+image两种输入；5分钟看失败时是否有部分正文泄漏。</p><p><strong>完成证据：</strong>成功保留文本顺序和结构化对象；不支持的块明确失败；RPC私有错误信息不进入模型错误文本；context仍能终止Run。只有新远端别名使用Envelope，旧knowledge工具不变。</p>
+<h3>任务三 · 25分钟：复用装配链，观察模型第二轮</h3><p><strong>为什么做：</strong>接入新能力应扩展工具边界，而不是在Agent.Run里增加MCP分支。<strong>操作与观察：</strong>10分钟阅读examples/cmd/mcpagent/main.go，沿已初始化Client→Discover→新Registry→Registry.Tools→WithPolicy→WithAuthorizer走一遍；10分钟运行入口并检查真实回填文档；5分钟对照integration_test.go里的两个ID域。</p><pre><code># 从仓库根执行，继续共享根go.mod
+go run ./examples/cmd/mcpagent</code></pre><p><strong>完成证据：</strong>本地别名绑定给模型，远端收到get_document；第二轮历史有原assistant消息和原ToolCallID的tool结果。演示用脚本模型，最终文本不能单独证明成功，必须同时核对工具结果和调用关联。</p>
+<h3>任务四 · 15分钟：验证拒绝路径与注册冲突</h3><p><strong>为什么做：</strong>适配新协议不能绕开已有权限和错误策略。<strong>操作与观察：</strong>5分钟把reader的授权清空，观察远端调用计数；5分钟登记两个同别名工具和两个不同Server前缀；5分钟讨论真实Server身份与本地主体的区别。</p><p><strong>完成证据：</strong>描述可见也可能被拒绝，拒绝后tools/call为0、模型只调用一次；Registry拒绝重名且不替换旧工具。内存夹具在同进程传context，不意味着Principal会自动跨网络；真实服务的认证与资源授权仍是独立边界。</p></section>
+<section><div class="time">20 MIN · TEST &amp; REVIEW</div><h2>用反例验收，而不仅是输出一句成功</h2><p><strong>12分钟实作：</strong>先预测断言，再从仓库根运行：</p><pre><code>go test ./examples/...
+go test -race ./examples/...
+go run ./examples/cmd/mcpagent</code></pre>
+<table><thead><tr><th>测试</th><th>对应的搭建判断</th></tr></thead><tbody>
+<tr><td>TestMetadataSnapshotAndNameBoundary</td><td>元信息是快照；名字不兼容明确拒绝；Meta不执行工具</td></tr>
+<tr><td>TestDiscoveryPaginationAndAtomicFailure</td><td>发现必须有界、检测循环/重名、失败无部分发布</td></tr>
+<tr><td>TestResultProjectionAndCancellation</td><td>投影保持文本与结构化结果；参数副本；取消优先于迟到成功</td></tr>
+<tr><td>TestRemoteErrorsAreControlledAndNeverRetried</td><td>秘密错误内容不回填；不支持内容不截断成成功；受控远端错误不被Policy重试</td></tr>
+<tr><td>TestAgentRemoteRoundTripAndAuthorization</td><td>真的经过Agent和内存JSON-RPC；名称/ID分域、结果进入下一轮、拒绝后远端call为0</td></tr>
+<tr><td>TestRegistryConflictDoesNotReplaceExistingTool</td><td>同名冲突不覆盖；不同来源前缀可以并存</td></tr>
+</tbody></table>
+<p class="info"><strong>本次真实验证：</strong>官方Go1.22.2 linux/amd64下，累计examples普通测试与race命令均退出码0；mcpagent演示实际输出本地别名、模型原始CallID、夹具文档正文JSON及脚本模型结束结果。本次没有连接真实MCP网络服务或真实LLM，不宣称OAuth、服务器认证或生产端到端链路已验证。</p><p><strong>8分钟理解验收：</strong></p><ol><li>不看代码，讲出一条远端调用如何经过本地授权、MCP协议、投影并回到下一轮模型。</li><li>新增第二个Server且工具同名，哪个装配层需要变化？为什么不修改Agent Loop？</li><li>若要求支持图片输入/输出，当前string契约不足在哪里？为什么不能只忽略image块？</li><li>远端错误包含私有数据或声明readOnlyHint时，哪些信息可供模型、哪些只能供可信宿主判断？</li></ol>
+<h3>学习清单</h3><div class="meta"><span>浏览器自评进度，不替代测试与理解证据</span><span id="count">0 / 8</span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div><div id="checks"></div></section>
+<section><h2>Definition of Done 与 Day14衔接</h2><p>理解上：能定位协议/适配/Loop/权限的职责，解释本地名字和两个ID域、结果投影和不重放的取舍。实现上：分页与冲突有界、成功与失败映射明确、结果进入模型历史、拒绝路径零远端执行，累计examples和race通过。本次参考示例已按上述命令完成验证。</p><p>Day14进行第二周综合集成与复盘：把工具抽象、批次执行、策略、授权、MCP生命周期与适配串成完整路径，用需求变化和故障反例检验搭建判断。生产网络传输、认证、多模态与持久恢复仍需单独设计，不能由离线Mock通过推断完成。</p></section>
+<footer>Agent Runtime · Day13 / 56 · 离线学习内容 · <a href="../../index.html">返回学习首页</a></footer></main>
+<script>
+const items=["画出MCP接入既有工具契约的完整装配链","解释本地别名、远端原名和两个ID域","预测分页/重名/游标循环的失败行为","对照Eino的GetTools与Info/InvokableRun","理解结果投影、非文本拒绝和受控错误","运行MCP Agent入口并核对工具消息","验证授权拒绝后tools/call次数为0","运行累计测试与race并完成需求变化推演"];
+const key="agent-runtime-day13-v1";let saved=[];try{const v=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(v))saved=v}catch(_){}const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const p=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=p+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(p))}items.forEach((s,i)=>{const r=document.createElement("div");r.className="check";const c=document.createElement("input");c.type="checkbox";c.id="task-"+i;c.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=c.id;label.textContent=s;r.append(c,label);box.append(r);c.onchange=()=>{saved[i]=c.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+</script></body></html>

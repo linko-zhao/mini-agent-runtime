@@ -118,3 +118,35 @@ Run 保存 assistant 后先校验整批调用 ID/名称，再做整批授权；�
 ### 实际验证
 
 新增client_test覆盖初始化与notification顺序、缺失能力、版本拒绝、消息ID、畸形响应、大小限制、错误层次、分页、原始内容保留、取消与禁止重放。官方Go1.22.2下累计 go test ./examples/...、go test -race ./examples/... 均通过；cmd/mcp演示实际运行成功。旧Day10未验证说明保留为历史记录，本日累计验收继续覆盖其策略代码。
+
+## Day 13 增量：MCP到既有工具契约的适配
+
+### 新增与复用
+
+- 新增 examples/internal/tool/mcptool；Caller仅声明Day12的ListTools/CallTool方法，由已初始化的*mcp.Client实现。宿主负责会话初始化、连接清理与恢复；外部SDK客户端需实现此协议端口，不是直接假定类型兼容。
+- New(Caller,prefix,mcp.Descriptor)(tool.Invokable,error)、Discover(ctx,Caller,prefix,maxPages)([]tool.Invokable,error)。返回对象实现原Meta/Invoke；Registry.Tools沿原路径适配旧Execute。没有第二套Runtime Message/ToolCall，也不改Agent.New/Run。
+- 元信息在构造时复制InputSchema，Meta每次返回副本，不执行远端调用。原本地knowledge工具及其输出语义不变。
+
+### 名称与发现
+
+本地名为 prefix + "__" + 原远端名。前缀仅接受^[A-Za-z][A-Za-z0-9-]*$，不含下划线，以保持分隔边界唯一；远端名限定^[A-Za-z0-9_-]+$；组合最长64字节。这是面向当前模型工具名称的适配约束，不代表全部MCP名称都限于此；不兼容时明确报ErrDiscovery，不静默清洗名称。宿主可在未来以显式映射扩展，并更新契约。
+
+发现分页必须maxPages>0，原样往返不透明游标；检测重复游标、跨页工具重名、基本Schema与名称错误。任何失败返回nil。Discover不修改Registry，宿主应先收集完整候选，再新建Registry装配；Registry.Register继续拒绝重名，不覆盖原工具。不同服务器使用宿主分配的不同前缀，前缀隔离不能代替服务器认证或目录信任。
+
+### 结果与错误映射
+
+- 成功返回ResultEnvelope的JSON字符串：text为所有文本块的字符串数组（可为空），structuredContent如存在须为对象并保留。不是原Document JSON的直接副本，调用方应按新远端工具的Envelope解析；不改变旧工具输出。
+- 非文本块返回受控ExecutionError，Cause为ErrUnsupportedContent；不返回前面部分文本。畸形结果使用ErrInvalidResult。当前Model.Message.Content仍为字符串，真正多模态支持需要后续明确扩展，不能把base64图片当作已理解。
+- MCP IsError使用受控摘要和ErrRemoteExecution；RPC/传输错误使用固定remote tool request failed摘要，Cause保留可信诊断。取消/DeadlineExceeded保持errors.Is并终止Run。原始RPC Message/Data、错误结果内容不进入模型错误文本。
+- Day10 Policy位于适配Invoke外侧，应用结果预算覆盖最终投影JSON。受控tool.Error不自动重试，远端annotations即使声明readOnlyHint也不会改变此行为；会话failed时不自动重连。模型仍可收到受控失败并结束，或按既有有限步数继续；失败会话继续拒绝网络发送。
+- 原模型ToolCallID仍由Agent组装tool消息保留；JSON-RPC整数ID独立分配。适配器不把模型ID或Principal加进工具arguments。
+
+### 授权和演示边界
+
+装配路径为 Initialize → Discover → 新Registry → Registry.Tools → WithPolicy → Agent.New(WithVisibleTools,WithAuthorizer)。本地描述和授权表使用别名，执行时才路由原远端名。发现目录可能已发送initialize/list请求；授权拒绝的零执行专指后续tools/call不发出，不能说整个流程没有协议流量。权限与只读分类由可信宿主配置，不从远端annotations自动生成；真实后端仍检查资源/租户权限。
+
+内存Server在同进程接收context，不能据此推断真实网络会自动传递Principal。主机身份、网络认证和服务器资源授权是不同边界。本日不实现生产HTTP/stdio、OAuth或动态目录刷新。
+
+### 实际验证
+
+新增测试覆盖元信息快照、名称边界、分页预算/循环/重名、原子发现失败、结果投影与拒绝非文本、受控错误及不重试、取消、Registry不覆盖冲突。真实内存JSON-RPC端到端测试验证：描述绑定本地别名、远端请求原名、模型ID与RPC ID分离、结果回到模型历史、拒绝后tools/call计数为0。官方Go1.22.2下累计examples普通/race测试通过，mcpagent演示实际成功。Mock验证协议和搭建路径，不证明真实模型会正确选择工具或生产认证已验证。

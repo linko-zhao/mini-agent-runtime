@@ -1,6 +1,6 @@
 # Agent Runtime 累计示例
 
-这是依据 Day 01–12 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
+这是依据 Day 01–13 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
 
 共享仓库根目录的 `go.mod`（Go 1.22.2），无需新建 Module，也不导入根目录 `internal` 中的练习实现。所有命令在仓库根目录运行：
 
@@ -9,6 +9,7 @@ go run ./examples/cmd/demo
 go run ./examples/cmd/knowledge
 go run ./examples/cmd/access
 go run ./examples/cmd/mcp
+go run ./examples/cmd/mcpagent
 go test ./examples/...
 go test -race ./examples/...
 ```
@@ -40,6 +41,7 @@ examples/
 | Day 10 | tool/policy.go、cmd/knowledge | 整次超时、显式只读重试、结果预算 |
 | Day 11 | tool/access.go、agent、cmd/access | 可信主体、批次执行授权、授权审计信号 |
 | Day 12 | internal/mcp、cmd/mcp | MCP 初始化、能力协商、JSON-RPC 工具发现与调用 |
+| Day 13 | tool/mcptool、cmd/mcpagent | MCP到Meta/Invoke适配、名称隔离、授权后的Agent往返 |
 
 Day 08 工具契约现已按线上修订版补齐。后续能力仍按路线推进：独立 ToolsNode 执行器、中间件、重试/幂等、权限与 MCP 留给 Day 10–14 按路线增量设计。Eino 是阅读对照，不作为运行依赖。
 
@@ -87,3 +89,17 @@ Day 08 的接口映射、旧接口兼容及边界见 [工具设计说明](intern
 - 传输/协议失败后会话失效，避免自动重放可能已发生的远端操作。排队中取消不发请求；传输本身仍须合作取消。真实连接的重连和清理由成熟 SDK/宿主另行实现。
 
 本日验收：官方Go1.22.2下 go test ./examples/... 与 go test -race ./examples/... 通过；go run ./examples/cmd/mcp 实际输出协议版本2025-06-18、工具数量1与 doc-1 的文档JSON。验证覆盖内存JSON消息，不代表真实MCP网络连接或真实模型集成通过。
+
+## Day 13：MCP能力接回Agent
+
+新增 examples/internal/tool/mcptool/{adapter,discovery,adapter_test,integration_test}.go 与 examples/cmd/mcpagent/main.go。仍共享根go.mod；原Tool/Meta/Invoke、Registry、Agent、MCP Client均不修改。
+
+- 初始化后调用 mcptool.Discover(ctx,client,"knowledge",4)，完整发现后在新Registry中注册；Meta只读描述快照，不发网络请求或执行工具。
+- 本地名 knowledge__get_document 路由到远端原名 get_document。前缀只能用字母开头的字母/数字/连字符，远端名限字母/数字/下划线/连字符，组合最长64字节；不兼容名称明确拒绝，不暗中重命名。
+- 发现有页数上限、游标循环检测和跨页重名检测，失败返回nil而非半套能力；Discover不改变运行中的注册表。主机应装配新Registry成功后再发布，不能把注册逐项写入活动Agent。
+- 成功结果统一为JSON字符串 ResultEnvelope{text:[],structuredContent?:object}；仅支持文本块，图片/资源等类型明确拒绝，不丢掉非文本块后伪装成功。旧本地knowledge工具输出保持原样。
+- 非取消的远端错误、isError和不支持的内容变为受控tool.Error，原因链留给可信宿主；取消/超时继续终止Run。默认不重放不确定请求，受控错误也不会触发Day10 Policy自动重试。
+- RPC请求ID由Client管理，模型ToolCallID由Agent保留，适配器不把调用ID或Principal塞进工具参数；本地可见集合与执行授权使用别名。远端annotations不授予权限或配置安全重试。
+- 内存DemoServer与Caller在同进程传context，仅作协议夹具；这不等于身份会跨真实网络传递。真实服务仍需认证/资源权限，主机也必须信任绑定的服务器和能力分类。
+
+本日验证（官方Go1.22.2）：go test ./examples/...、go test -race ./examples/... 均通过；go run ./examples/cmd/mcpagent 输出本地别名、原模型CallID、真实夹具文档JSON和脚本模型结束结果。端到端测试验证允许路径的历史关联和拒绝路径远端tools/call计数为0。未连接真实MCP网络服务或真实LLM。
