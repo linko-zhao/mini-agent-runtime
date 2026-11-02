@@ -20,6 +20,17 @@ func (a *Agent) executeBatch(ctx context.Context, calls []model.ToolCall, step i
 		return nil, fmt.Errorf("agent: tool call list empty")
 	}
 
+	seen := make(map[string]bool, 0)
+	for _, call := range calls {
+		if call.ID == "" || seen[call.ID] {
+			return nil, fmt.Errorf("agent: missing or duplicate tool call ID")
+		}
+		seen[call.ID] = true
+		if _, ok := a.tools[call.Name]; !ok {
+			return nil, &tool.Error{Kind: tool.NotFoundError, Message: "tool not registered"}
+		}
+	}
+
 	msgs := make([]model.Message, len(calls))
 	for i, call := range calls {
 		var t tool.Tool
@@ -56,8 +67,13 @@ func (a *Agent) executeBatch(ctx context.Context, calls []model.ToolCall, step i
 		}
 		toolCallStatus := EventOk
 		if err != nil {
-			tr = err.Error()
 			toolCallStatus = EventError
+			var known *tool.Error
+			if errors.As(err, &known) {
+				tr = known.Error()
+			} else {
+				tr = "execution_failed: tool execution failed"
+			}
 		}
 		a.emit(ctx, Event{
 			Type:       ToolCompleted,
