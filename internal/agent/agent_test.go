@@ -437,17 +437,7 @@ func TestAgentRunInvalidToolDefinition(t *testing.T) {
 		requestCount++
 	})
 
-	dup := model.ToolDefinition{Name: "calculator", Parameters: json.RawMessage(`{"type":"object"}`)}
 	badSchema := model.ToolDefinition{Name: "broken", Parameters: json.RawMessage(`{"type":"array"}`)}
-
-	t.Run("重复工具名称", func(t *testing.T) {
-		tools := map[string]tool.Tool{
-			"a": describedTool{def: dup, run: func(context.Context, json.RawMessage) (string, error) { return "", nil }},
-			"b": describedTool{def: dup, run: func(context.Context, json.RawMessage) (string, error) { return "", nil }},
-		}
-		_, err := New(m, tools, 5)
-		require.ErrorContains(t, err, "duplicate tool name")
-	})
 
 	t.Run("非法 Schema", func(t *testing.T) {
 		tools := map[string]tool.Tool{

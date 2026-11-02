@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/linko-zhao/mini-agent-runtime/internal/model"
@@ -25,7 +26,7 @@ func New(m model.Model, tools map[string]tool.Tool, maxSteps int, opts ...Option
 	if maxSteps <= 0 {
 		return nil, fmt.Errorf("maxSteps must greater than 0")
 	}
-	a := Agent{model: m, tools: tools, maxSteps: maxSteps, toolTimeout: DefaultToolTimeout}
+	a := Agent{model: m, tools: make(map[string]tool.Tool), maxSteps: maxSteps, toolTimeout: DefaultToolTimeout}
 
 	for _, opt := range opts {
 		if opt != nil {
@@ -33,16 +34,53 @@ func New(m model.Model, tools map[string]tool.Tool, maxSteps int, opts ...Option
 		}
 	}
 
-	if tb, ok := a.model.(model.ToolBinder); ok {
-		var ts []model.ToolDefinition
-		for _, t := range a.tools {
-			if td, ok := t.(tool.DescribedTool); ok {
-				ts = append(ts, td.Definition())
+	names := make([]string, 0, len(tools))
+	for name, t := range tools {
+		if t == nil || name == "" || name != t.Name() {
+			return nil, fmt.Errorf("agent: invalid tool registration %q", name)
+		}
+		a.tools[name] = t
+		names = append(names, name)
+	}
+
+	sort.Strings(names)
+	var defs [] model.ToolDefinition
+	if a.visibilitySet {
+		visible := map[string]bool{}
+		for _, name := range a.visibleTools {
+			if _, ok := a.tools[name]; !ok {
+				return nil, fmt.Errorf("agent: visible tool %q not registered", name)
+			}
+			visible[name] = true
+		}
+		for _, name := range names {
+			if visible[name] {
+				t, ok := a.tools[name].(tool.DescribedTool)
+				if !ok {
+					return nil, fmt.Errorf("agent: visible tool %q has no definition", name)
+				}
+				defs = append(defs, t.Definition())
 			}
 		}
-		bound, err := tb.WithTools(ts)
+	} else {
+		for _, name := range names {
+			if dt, ok := a.tools[name].(tool.DescribedTool); ok {
+				d := dt.Definition()
+				if d.Name != name {
+					return nil, fmt.Errorf("agent: definition name mismatch")
+				}
+				defs = append(defs, d)
+			}
+		}
+	}
+
+	if tb, ok := a.model.(model.ToolBinder); ok {
+		bound, err := tb.WithTools(defs)
 		if err != nil {
 			return nil, err
+		}
+		if bound == nil {
+			return nil, fmt.Errorf("agent: nil bound model")
 		}
 		a.model = bound
 	}
