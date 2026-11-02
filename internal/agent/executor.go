@@ -27,7 +27,7 @@ func (a *Agent) executeBatch(ctx context.Context, calls []model.ToolCall, step i
 		}
 		seen[call.ID] = true
 		if _, ok := a.tools[call.Name]; !ok {
-			return nil, &tool.Error{Kind: tool.NotFoundError, Message: "tool not registered"}
+			return nil, &tool.Error{Kind: tool.NotFoundError, Message: fmt.Sprintf("tool %q not registered", call.Name)}
 		}
 	}
 

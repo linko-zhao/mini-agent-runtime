@@ -157,7 +157,7 @@ func TestToolCallExecuteError(t *testing.T) {
 		t.Fatalf("output = %q", out)
 	}
 	last := script.calls[1][len(script.calls[1])-1]
-	if last.Role != "tool" || last.Content != "boom" || last.ToolCallID != "call_e" {
+	if last.Role != "tool" || last.Content != "execution_failed: tool execution failed" || last.ToolCallID != "call_e" {
 		t.Fatalf("tool message = %+v", last)
 	}
 }
