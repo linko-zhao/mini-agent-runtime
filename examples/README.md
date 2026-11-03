@@ -1,6 +1,6 @@
 # Agent Runtime 累计示例
 
-这是依据 Day 01–13 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
+这是依据 Day 01–14 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
 
 共享仓库根目录的 `go.mod`（Go 1.22.2），无需新建 Module，也不导入根目录 `internal` 中的练习实现。所有命令在仓库根目录运行：
 
@@ -42,6 +42,7 @@ examples/
 | Day 11 | tool/access.go、agent、cmd/access | 可信主体、批次执行授权、授权审计信号 |
 | Day 12 | internal/mcp、cmd/mcp | MCP 初始化、能力协商、JSON-RPC 工具发现与调用 |
 | Day 13 | tool/mcptool、cmd/mcpagent | MCP到Meta/Invoke适配、名称隔离、授权后的Agent往返 |
+| Day 14 | integration/week02_test.go | 本地/远端混合批次、故障矩阵、历史/事件/计数联合验收 |
 
 Day 08 工具契约现已按线上修订版补齐。后续能力仍按路线推进：独立 ToolsNode 执行器、中间件、重试/幂等、权限与 MCP 留给 Day 10–14 按路线增量设计。Eino 是阅读对照，不作为运行依赖。
 
@@ -103,3 +104,11 @@ Day 08 的接口映射、旧接口兼容及边界见 [工具设计说明](intern
 - 内存DemoServer与Caller在同进程传context，仅作协议夹具；这不等于身份会跨真实网络传递。真实服务仍需认证/资源权限，主机也必须信任绑定的服务器和能力分类。
 
 本日验证（官方Go1.22.2）：go test ./examples/...、go test -race ./examples/... 均通过；go run ./examples/cmd/mcpagent 输出本地别名、原模型CallID、真实夹具文档JSON和脚本模型结束结果。端到端测试验证允许路径的历史关联和拒绝路径远端tools/call计数为0。未连接真实MCP网络服务或真实LLM。
+
+## Day14：第二周综合集成与复盘
+
+新增 [跨组件集成验收说明](integration/README.md) 与 integration/week02_test.go。没有新Runtime公共接口、业务算法或Module；复用Day08–13的装配链和既有类型。
+
+从仓库根运行 `go test ./examples/integration -run TestWeek02EndToEndMatrix -v`，先预测计数，再观察正常、授权拒绝、模型ID冲突、结果预算、远端业务失败、执行后响应损坏和超时7个场景。分别检查实际工具调用、模型第二轮历史、错误摘要和唯一Run终态；脚本模型最后返回文本不等于用户任务已正确完成。
+
+官方Go1.22.2下目标矩阵7个子场景、累计examples普通测试和race均通过。所有协议交互使用内存传输与FakeStore，不宣称真实网络/模型或恢复能力通过。下一周才开始Run状态与Checkpoint设计。

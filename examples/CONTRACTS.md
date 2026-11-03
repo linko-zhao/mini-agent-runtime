@@ -150,3 +150,17 @@ Run 保存 assistant 后先校验整批调用 ID/名称，再做整批授权；�
 ### 实际验证
 
 新增测试覆盖元信息快照、名称边界、分页预算/循环/重名、原子发现失败、结果投影与拒绝非文本、受控错误及不重试、取消、Registry不覆盖冲突。真实内存JSON-RPC端到端测试验证：描述绑定本地别名、远端请求原名、模型ID与RPC ID分离、结果回到模型历史、拒绝后tools/call计数为0。官方Go1.22.2下累计examples普通/race测试通过，mcpagent演示实际成功。Mock验证协议和搭建路径，不证明真实模型会正确选择工具或生产认证已验证。
+
+## Day14 增量：跨组件集成基线
+
+新增 examples/integration/week02_test.go 和 integration/README.md，只增加测试夹具、断言和设计记录；不新增Runtime公共接口，不更换任何消息、工具、Policy、Authorizer或MCP类型。共享根go.mod，根internal/cmd保持不动。
+
+集成场景使用同批两个已知ID的独立读取：本地get_document与远端knowledge__get_document。保留本地Document JSON、远端ResultEnvelope两种既有输出，通过各自契约验收，不为测试统一格式而静默改旧工具。脚本模型只验证流程和历史，不保证真实回答质量。
+
+7个矩阵场景覆盖正常、未批准远端能力、重复模型CallID、远端结果预算、远端业务失败、远端已执行后协议响应损坏、传输等待超时。计数分别为本地Invoke、tools/call传输尝试、远端Invoke、模型轮次；事件和下一轮消息另行断言，不能只看最终字符串。
+
+失败层次保持原约定：模型调用ID协议错误/授权拒绝/取消超时终止Run；MCP响应损坏会令Client.failed，适配器仍可回填受控ExecutionError，因此Run可能以脚本文本结束。两种协议错误属于不同边界，不用一个“失败”标志抹平。failed客户端的后续探针不得发送请求，现有有限步数与禁止自动重放保持。
+
+授权拒绝矩阵缺少远端能力的宿主规则，而两个描述仍对模型可见，验证默认拒绝。初始化/list属于装配流量，零执行断言只针对业务tools/call。审计允许决策不代表执行承诺。超时夹具在转发前等待，远端Invoke=0仅是该注入点的观测；损坏响应夹具先调用Server，表明协议失败无法回滚调用。本课没有外部写入事务。
+
+官方Go1.22.2下目标矩阵7个子场景与累计 go test ./examples/...、go test -race ./examples/... 均通过。后续Day15起按既定状态机/Checkpoint路线增量设计，复用此矩阵；当前Run局部消息不能提供跨进程恢复，保存状态也不自动解决不确定外部调用或exactly-once。
