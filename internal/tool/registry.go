@@ -38,7 +38,7 @@ func validateSpec(s Spec) error {
 	return nil
 }
 
-func (r *Registry) Registry(ctx context.Context, t Invokable) error {
+func (r *Registry) Register(ctx context.Context, t Invokable) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}

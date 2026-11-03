@@ -43,8 +43,11 @@ func (t *policyTool) Execute(ctx context.Context, args json.RawMessage) (string,
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	ctx, cancel := context.WithTimeout(ctx, t.policy.Timeout)
-	defer cancel()
+	if t.policy.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, t.policy.Timeout)
+		defer cancel()
+	}
 
 	for attempt := 1; attempt <= t.policy.MaxAttempts; attempt++ {
 		if err := ctx.Err(); err != nil {

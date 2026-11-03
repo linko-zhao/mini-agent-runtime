@@ -28,20 +28,20 @@ func TestRegistryContract(t *testing.T) {
 	r := NewRegistry()
 	b, a := registryTestFake("b"), registryTestFake("a")
 	for _, target := range []*registryTestTool{b, a} {
-		if err := r.Registry(ctx, target); err != nil {
+		if err := r.Register(ctx, target); err != nil {
 			t.Fatal(err)
 		}
 	}
 	for _, name := range []string{"", " \t\n"} {
-		if err := r.Registry(ctx, registryTestFake(name)); err == nil {
+		if err := r.Register(ctx, registryTestFake(name)); err == nil {
 			t.Fatalf("accepted empty name %q", name)
 		}
 	}
 	duplicate := registryTestFake("a")
-	if err := r.Registry(ctx, duplicate); err == nil {
+	if err := r.Register(ctx, duplicate); err == nil {
 		t.Fatal("accepted duplicate name")
 	}
-	if err := r.Registry(ctx, &registryTestTool{metaErr: errors.New("metadata failure")}); err == nil {
+	if err := r.Register(ctx, &registryTestTool{metaErr: errors.New("metadata failure")}); err == nil {
 		t.Fatal("discarded metadata error")
 	}
 
