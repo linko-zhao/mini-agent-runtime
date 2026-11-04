@@ -13,13 +13,15 @@ import (
 const DefaultToolTimeout = 300 * time.Second
 
 type Agent struct {
-	model         model.Model
-	tools         map[string]tool.Tool
-	maxSteps      int
-	eventSink     EventSink
-	visibleTools  []string
-	visibilitySet bool
-	toolTimeout   time.Duration
+	model            model.Model
+	tools            map[string]tool.Tool
+	maxSteps         int
+	eventSink        EventSink
+	visibleTools     []string
+	visibilitySet    bool
+	toolTimeout      time.Duration
+	authorizer       tool.Authorizer
+	authorizationSet bool
 }
 
 func New(m model.Model, tools map[string]tool.Tool, maxSteps int, opts ...Option) (*Agent, error) {
@@ -33,6 +35,9 @@ func New(m model.Model, tools map[string]tool.Tool, maxSteps int, opts ...Option
 			opt(&a)
 		}
 	}
+	if a.authorizationSet && a.authorizer == nil {
+		return nil, fmt.Errorf("agent: nil authorizer")
+	}
 
 	names := make([]string, 0, len(tools))
 	for name, t := range tools {
@@ -44,7 +49,7 @@ func New(m model.Model, tools map[string]tool.Tool, maxSteps int, opts ...Option
 	}
 
 	sort.Strings(names)
-	var defs [] model.ToolDefinition
+	var defs []model.ToolDefinition
 	if a.visibilitySet {
 		visible := map[string]bool{}
 		for _, name := range a.visibleTools {
@@ -157,7 +162,7 @@ func (a *Agent) Run(ctx context.Context, input string) (string, error) {
 		if err != nil {
 			a.emit(ctx, Event{
 				Type: RunFailed,
-				At: time.Now(),
+				At:   time.Now(),
 			})
 			return "", err
 		}

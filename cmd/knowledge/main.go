@@ -20,7 +20,7 @@ func main() {
 }
 
 func run() error {
-	ctx := context.Background()
+	ctx := tool.WithPrincipal(context.Background(), tool.Principal{ID: "knowledge-reader"})
 	store := knowledge.NewFakeStore([]knowledge.Document{{ID: "doc-1", Summary: "Runtime 工具契约", Content: "工具描述供模型选择，调用由 Runtime 执行。"}})
 	registry := tool.NewRegistry()
 	for _, t := range []tool.Invokable{&knowledge.SearchKnowledge{Store: store}, &knowledge.GetDocument{Store: store}} {
@@ -50,7 +50,14 @@ func run() error {
 		}
 		tools[name] = wrapped
 	}
-	a, err := agent.New(m, tools, 4, agent.WithVisibleTools("search_knowledge", "get_document"))
+	authorizer, err := tool.NewCapabilityAuthorizer(
+		map[string]tool.Capability{"search_knowledge": tool.ReadCapability, "get_document": tool.ReadCapability},
+		map[string][]tool.Capability{"knowledge-reader": {tool.ReadCapability}},
+	)
+	if err != nil {
+		return err
+	}
+	a, err := agent.New(m, tools, 4, agent.WithVisibleTools("search_knowledge", "get_document"), agent.WithAuthorizer(authorizer))
 	if err != nil {
 		return err
 	}

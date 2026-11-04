@@ -1,6 +1,10 @@
 package agent
 
-import "time"
+import (
+	"time"
+
+	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
+)
 
 type Option func(*Agent)
 
@@ -21,5 +25,12 @@ func WithVisibleTools(names ...string) Option {
 	return func(a *Agent) {
 		a.visibilitySet = true
 		a.visibleTools = append([]string(nil), snapshot...)
+	}
+}
+
+func WithAuthorizer(auth tool.Authorizer) Option {
+	return func(a *Agent) {
+		a.authorizationSet = true
+		a.authorizer = auth
 	}
 }

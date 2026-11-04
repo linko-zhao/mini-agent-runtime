@@ -14,6 +14,8 @@ const (
 	RunFinished    EventType = "run_finished"
 	ToolStarted    EventType = "tool_started"
 	ToolCompleted  EventType = "tool_completed"
+	ToolAuthorized EventType = "tool_authorized"
+	ToolDenied     EventType = "tool_denied"
 	StepStarted    EventType = "step_started"
 	StepFinished   EventType = "step_finished"
 	ModelCompleted EventType = "model_completed"
@@ -25,16 +27,19 @@ const (
 	EventOk        EventStatus = "ok"
 	EventError     EventStatus = "error"
 	EventCancelled EventStatus = "cancelled"
+	EventAllowed   EventStatus = "allowed"
+	EventDenied    EventStatus = "denied"
 )
 
 type Event struct {
-	Type       EventType
-	Step       int
-	At         time.Time
-	ToolName   string
-	ToolCallID string
-	Duration   time.Duration
-	Status     EventStatus
+	Type        EventType
+	Step        int
+	At          time.Time
+	ToolName    string
+	ToolCallID  string
+	PrincipalID string
+	Duration    time.Duration
+	Status      EventStatus
 }
 
 type EventSink interface {

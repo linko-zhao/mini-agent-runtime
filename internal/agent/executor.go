@@ -10,7 +10,6 @@ import (
 	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
 )
 
-
 func (a *Agent) executeBatch(ctx context.Context, calls []model.ToolCall, step int) ([]model.Message, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
@@ -28,6 +27,37 @@ func (a *Agent) executeBatch(ctx context.Context, calls []model.ToolCall, step i
 		seen[call.ID] = true
 		if _, ok := a.tools[call.Name]; !ok {
 			return nil, &tool.Error{Kind: tool.NotFoundError, Message: fmt.Sprintf("tool %q not registered", call.Name)}
+		}
+	}
+
+	if a.authorizationSet {
+		principal, _ := tool.PrincipalFromContext(ctx)
+		for _, call := range calls {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			authCall := call
+			authCall.Arguments = append([]byte(nil), call.Arguments...)
+			err := a.authorizer.Authorize(ctx, authCall)
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return nil, ctxErr
+			}
+			event := Event{
+				Type:        ToolAuthorized,
+				Step:        step + 1,
+				At:          time.Now(),
+				ToolName:    call.Name,
+				ToolCallID:  call.ID,
+				PrincipalID: principal.ID,
+				Status:      EventAllowed,
+			}
+			if err != nil {
+				event.Type = ToolDenied
+				event.Status = EventDenied
+				a.emit(ctx, event)
+				return nil, fmt.Errorf("agent: authorization denied for tool %q: %w", call.Name, err)
+			}
+			a.emit(ctx, event)
 		}
 	}
 
@@ -85,9 +115,9 @@ func (a *Agent) executeBatch(ctx context.Context, calls []model.ToolCall, step i
 			Status:     toolCallStatus,
 		})
 		msgs[i] = model.Message{
-			Role: "tool",
+			Role:       "tool",
 			ToolCallID: call.ID,
-			Content: tr,
+			Content:    tr,
 		}
 	}
 	return msgs, nil
