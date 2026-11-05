@@ -135,3 +135,20 @@ func (c *Client) Initialize(ctx context.Context) (InitializeResult, error) {
 	c.state = "ready"
 	return result, nil
 }
+
+func (c *Client) ListTools(ctx context.Context, cursor string) (ToolsPage, error) {
+	var page ToolsPage
+	if err := c.enter(ctx); err != nil {
+		return page, err
+	}
+	defer c.leave()
+	if c.state != "ready" {
+		return page, ErrSessionState
+	}
+	if !c.toolsAvailable {
+		return page, ErrToolsUnavailable
+	}
+	raw, err := c.rpc(ctx, "tools/list", struct {
+		Cursor string `json:"cursor,omitempty"`
+	}{cursor})
+}
