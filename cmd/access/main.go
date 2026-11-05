@@ -37,7 +37,7 @@ func run() error {
 	}
 	writer := &simulatedWrite{}
 	m := model.NewMock([]model.Response{{Message: model.Message{
-		Role: "assistant", 
+		Role:      "assistant",
 		ToolCalls: []model.ToolCall{{ID: "publish-1", Name: "publish_document", Arguments: json.RawMessage("{}")}},
 	}}})
 	a, err := agent.New(m, map[string]tool.Tool{"publish_document": writer}, 2, agent.WithVisibleTools(), agent.WithAuthorizer(policy))

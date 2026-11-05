@@ -11,11 +11,11 @@ import (
 )
 
 type Policy struct {
-	Timeout time.Duration
-	MaxAttempts int
-	ReadOnly bool
-	Retryable func(error) bool
-	RetryDelay time.Duration
+	Timeout        time.Duration
+	MaxAttempts    int
+	ReadOnly       bool
+	Retryable      func(error) bool
+	RetryDelay     time.Duration
 	MaxResultBytes int
 }
 
