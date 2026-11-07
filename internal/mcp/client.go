@@ -111,10 +111,10 @@ func (c *Client) Initialize(ctx context.Context) (InitializeResult, error) {
 	}
 	c.state = "failed"
 	raw, err := c.rpc(ctx, "initialize", struct {
-		ProtocalVersion string         `json:"protocalVersion"`
+		ProtocolVersion string         `json:"protocolVersion"`
 		Capabilities    struct{}       `json:"capabilities"`
 		ClientInfo      Implementation `json:"clientInfo"`
-	}{ProtocalVersion: ProtocolVersion, ClientInfo: Implementation{Name: "agent-runtime-examples", Version: "0.1.0"}})
+	}{ProtocolVersion: ProtocolVersion, ClientInfo: Implementation{Name: "agent-runtime-examples", Version: "0.1.0"}})
 	if err != nil {
 		return result, err
 	}

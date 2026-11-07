@@ -42,7 +42,7 @@ func run() error {
 		return err
 	}
 	fmt.Println("Tools Num:", len(page.Tools))
-	result, err := client.CallTool(ctx, "get_docment", json.RawMessage(`{"id":"doc-1"}`))
+	result, err := client.CallTool(ctx, "get_document", json.RawMessage(`{"id":"doc-1"}`))
 	if err != nil {
 		return err
 	}
