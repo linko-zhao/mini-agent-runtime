@@ -1,0 +1,94 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>Day 15 · Run 状态机与观测快照</title><style>
+:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#58667b;--line:#e0e6ee;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:920px;margin:auto;padding:32px 22px 70px}.hero{background:#183561;color:#fff;border-radius:18px;padding:29px 30px}.hero small{opacity:.8;letter-spacing:1px}.hero h1{margin:7px 0;font-size:30px;line-height:1.3}.hero p{margin:0;color:#e6eefa}.chips{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}.chip{border:1px solid #8ea4c8;border-radius:20px;padding:3px 10px;font-size:12px}section{background:var(--paper);border:1px solid var(--line);border-radius:14px;margin-top:18px;padding:22px 26px}h2{font-size:19px;margin:0 0 13px}h3{font-size:16px;margin:18px 0 6px}.time{font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.4px}p{margin:8px 0}a{color:var(--accent)}li{margin:6px 0}code{background:#f0f3f8;padding:2px 5px;border-radius:4px}pre{overflow:auto;background:#142136;color:#e7f3ff;padding:17px;border-radius:10px;font-size:13px;line-height:1.65}pre code{background:transparent;padding:0}.goal{background:var(--pale);border-left:3px solid var(--accent);padding:12px 15px;border-radius:4px}.note{background:#fff8e9;border:1px solid #f2deb2;border-radius:9px;padding:11px 14px;color:#644b18}.info{background:#eff6ff;border:1px solid #d5e4fc;border-radius:9px;padding:11px 14px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.grid>div{padding:12px;background:#f6f8fc;border-radius:9px}.grid strong{display:block;font-size:19px}.grid span{font-size:12px;color:var(--sub)}.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0}.check input{margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer;flex:1}.check.done label{text-decoration:line-through;color:var(--sub)}.progress{height:8px;background:#e3e9f2;border-radius:99px;overflow:hidden}.fill{height:100%;background:var(--accent);width:0%;transition:width .2s}.meta{display:flex;justify-content:space-between;font-size:13px;color:var(--sub);margin-bottom:9px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px;vertical-align:top}th{background:#f4f7fc}.tag{display:inline-block;background:#eaf0fc;color:#2459bd;border-radius:5px;font-size:12px;padding:2px 7px;margin-right:6px}.muted{color:var(--sub);font-size:13px}footer{text-align:center;color:var(--sub);font-size:12px;margin:24px}@media(max-width:600px){main{padding:14px 12px 40px}.hero{padding:22px}.hero h1{font-size:24px}section{padding:18px}.grid{grid-template-columns:1fr}table{font-size:12px}th,td{padding:8px}pre{font-size:12px}}
+.matrix-scroll{overflow-x:auto}.matrix-scroll table{min-width:660px}td code{overflow-wrap:anywhere}details{margin:12px 0}summary{cursor:pointer;color:var(--accent);font-weight:600}</style></head><body><main>
+<header class="hero"><small>MINI AGENT RUNTIME · WEEK 03 · EINO 状态对照</small><h1>Day 15 / 56 · Run 状态机与观测快照</h1><p>把第二周观察到的“Run结束、工具报错、部分调用已发生”转成明确状态，为后续Checkpoint设计建立语义基础。</p><div class="chips"><span class="chip">阅读 20 分钟</span><span class="chip">Go连续练习 80 分钟</span><span class="chip">测试复盘 20 分钟</span></div></header>
+<section><h2>为什么Run只返回文本和error还不够？</h2><div class="goal">能区分Run控制状态、调用观测状态和外部业务结果，解释状态转换约束，并在保留旧接口的基础上取得一份独立的最终快照。</div>
+<p>Day14已经看到：工具结果超预算时，模型仍可收到受控失败并返回文本；批次第二项超时时，第一项可能已经执行。若只看Run的两个返回值，宿主难以说明哪些调用已返回、哪些未开始、哪些结果尚未进入模型历史。</p>
+<p>今天新增RunWithState，原Run继续委托同一执行路径。每次执行有私有record，集中持有Step、Messages和Calls。它描述Runtime观察到什么，不是新的业务成功判定器。</p><p class="note">本日只提供正常/错误返回时的最终内存快照，没有运行中查询、写盘、恢复或重放入口。进程在返回前退出，内存记录仍会丢失；Checkpoint、版本化存储和恢复位置随后按课程推进。</p></section>
+<section><h2>先走通完整过程：状态在原闭环中更新</h2><pre><code>Host → RunWithState(ctx,input)
+ → 创建本次RunID与私有record：created → running
+ → Generate(record.Messages) → 保存assistant
+ → 记录整批Calls为planned → ID/名称检查 → 授权
+ → 执行器：
+     planned → running → returned / errored
+                         └ 取消后无已接受结果：unconfirmed
+     未开始就终止：blocked
+ → 完整批次结果进入Messages → 下一轮Generate
+ → 正常文本：Run completed；控制错误：failed/cancelled
+ → Clone最终RunSnapshot → 返回Output、Snapshot、Go error
+
+原Run(ctx,input) → 同一路径 → 只返回Output与Go error</code></pre>
+<p>Model/Message/ToolCall、Meta/Invoke、Registry、Policy、Authorizer和MCP适配保持不变。RunID标识这次观测；模型调用ID继续原样保存，不用RunID替换它，也不拿RunID当业务幂等键。</p>
+<p>Step表示Loop当前进入的轮次，不是成功请求次数。例如预取消可能进入第1轮就停止，实际Model调用仍为0；调用次数要结合事件或测试探针判断。</p></section>
+<section><h2>先把状态语义说清楚</h2><h3>Run：控制流程有没有结束？</h3><pre><code>created → running → completed
+                  → failed
+                  → cancelled
+终态不允许重新进入running，也不允许重复完成。</code></pre>
+<table><thead><tr><th>状态</th><th>本课含义</th></tr></thead><tbody>
+<tr><td>completed</td><td>Run以文本正常返回；工具受控错误可以同时存在，业务目标仍需另行验收</td></tr>
+<tr><td>failed</td><td>模型/协议/授权/步数等控制错误停止Run，保留Go错误链</td></tr>
+<tr><td>cancelled</td><td>context取消或超时；FailureClass区分cancelled与deadline_exceeded</td></tr>
+</tbody></table><p>CanTransition显式限制迁移。成功结束时若还有未完成调用，守卫会产生ErrInvalidTransition并失败结束，不把内部状态缺口标为成功。</p>
+<h3>Call：Runtime对一次调用观察到了什么？</h3><table><thead><tr><th>状态</th><th>含义与边界</th></tr></thead><tbody>
+<tr><td>planned</td><td>模型提出，已记录，尚未通过全部检查和开始执行</td></tr>
+<tr><td>running</td><td>Runtime已进入工具执行路径</td></tr>
+<tr><td>returned</td><td>接受了无error的工具返回；不单独证明外部事务状态</td></tr>
+<tr><td>errored</td><td>接受了错误返回，并保存受控tool消息；不表示操作从未发生</td></tr>
+<tr><td>unconfirmed</td><td>调用已开始，但取消/超时后没有已接受结果；不能自动重放</td></tr>
+<tr><td>blocked</td><td>本次Run没有开始执行它，例如整批预检查失败或前项取消后的后续项</td></tr>
+</tbody></table><p>这些状态不能直接推出远端写入提交或回滚。unconfirmed特别标出取消后的结果不确定；其他错误也可能伴随已发生的外部效果。Caller的业务契约、幂等和恢复确认仍独立存在。</p></section>
+<section><h2>承接前序设计与本日增量</h2><table><thead><tr><th>操作</th><th>路径</th><th>职责/兼容关系</th></tr></thead><tbody>
+<tr><td>新增</td><td>examples/internal/agent/state.go</td><td>Run/Call状态、迁移守卫、记录与深拷贝快照</td></tr>
+<tr><td>修改</td><td>examples/internal/agent/agent.go</td><td>Run委托新RunWithState，Step/Messages属于每次Run私有record</td></tr>
+<tr><td>修改</td><td>examples/internal/agent/executor.go</td><td>沿已有批次执行边界记录计划、开始与结果；旧私有入口仍委托同一实现</td></tr>
+<tr><td>新增</td><td>examples/internal/agent/state_test.go、examples/cmd/state/main.go</td><td>状态/所有权/并发隔离测试与既有知识工具演示</td></tr>
+<tr><td>更新</td><td>examples/README.md、CONTRACTS.md</td><td>增量API、快照范围、迁移和验收说明</td></tr>
+<tr><td>复用</td><td>examples/internal/model、tool、mcp及Day14集成矩阵</td><td>旧消息、错误、权限和工具协议不替换，共享根go.mod</td></tr>
+</tbody></table>
+<p><strong>调用方迁移：</strong>继续使用Run的入口不需修改；需要状态的宿主改为RunWithState，读取RunResult.Output与Snapshot。新API不接收旧Snapshot，所以修改快照Status也不能恢复或重新启动Run。当前Event形状未扩展，不宣称已经提供RunID级的完整审计关联。</p>
+<pre><code>// 接口摘录，完整装配见examples/cmd/state/main.go
+type RunResult struct {
+    Output string
+    Snapshot RunSnapshot
+}
+type RunSnapshot struct {
+    RunID string
+    Status RunStatus
+    Step int
+    Messages []model.Message
+    Calls []CallRecord
+    FailureClass string
+}
+func (a *Agent) RunWithState(ctx context.Context,
+    input string) (RunResult, error)</code></pre><p>成功创建并启动Run后，执行错误也会带回终态快照。随机ID构造失败时尚未启动Run，返回错误和零值Result，不能把空RunID当成已有运行记录。</p></section>
+<section><h2>最重要的边界：结果已返回，不一定已进入模型历史</h2><p>假设同批是[first, wait, third]：first返回，wait超时，third未开始。原批次语义是出现取消就停止，不把部分结果回填给下一轮；今天保留这一行为，而不是为了状态记录改掉执行策略。</p>
+<div class="matrix-scroll"><table><thead><tr><th>位置</th><th>Call状态</th><th>Calls.Result</th><th>Snapshot.Messages</th></tr></thead><tbody>
+<tr><td>first</td><td>returned</td><td>保存已接受的tool消息</td><td rowspan="3">保留user+assistant调用请求；本批部分tool消息未进入Loop历史，没有下一轮模型</td></tr>
+<tr><td>wait</td><td>unconfirmed</td><td>无迟到结果</td></tr>
+<tr><td>third</td><td>blocked</td><td>无结果</td></tr>
+</tbody></table></div><p>因此，不能根据历史里没有某条tool消息推断该工具从未执行。Snapshot.Calls保留这类观测，但当前还没有重放或恢复决策。Call记录用Step+Index定位，Index在批内从0开始；即使模型给出重复ID，也保留各位置，不用ID做会覆盖记录的map键。</p></section>
+<section><h2>为什么返回副本，为什么不把状态放进Agent字段？</h2><p>Agent可被并发Run复用，若把Messages或当前状态写在共享Agent上，会串请求。今天每次Run单独创建record，模型/工具仍需遵守前序的并发契约。测试中的并发模型是无状态函数，不是共享带游标的Mock。</p><p>Snapshot.Clone复制消息切片、嵌套ToolCalls参数和Calls.Result指针。调用方能修改自己的副本，原响应或另一个Run不会被牵连。字符串沿Go不可变值语义共享；记录与复制有分配成本，不是零成本或并发事务机制。</p><p class="note">快照含输入、参数和正文，是宿主的运行数据，不是公开审计事件。FailureClass只存受控类别，不复制原始Go错误文本；真正错误仍在第二返回值保留errors.Is/As语义。将来存储快照时需要另外定义数据访问、序列化与保留策略。</p></section>
+<section><div class="time">20 MIN · READ</div><h2>带着状态问题读Eino与Go</h2><h3>12分钟 · Eino的局部状态和受控访问</h3><p>阅读 <a href="https://github.com/cloudwego/eino/blob/main/flow/agent/react/react.go">flow/agent/react/react.go</a> 的state.Messages、WithGenLocalState、modelPreHandle、toolsNodePreHandle；再看 <a href="https://github.com/cloudwego/eino/blob/main/compose/state.go">compose/state.go</a> 的GenLocalState和ProcessState。</p><p><strong>问题与产出：</strong>状态由谁创建，谁更新历史？ProcessState为何在handler周围加锁？对照本课每Run私有record和最终副本，说明“同一活动状态的访问控制”与“返回值副本”解决不同问题。看到类型注册或state对象，还不足以证明持久Checkpoint和恢复协议已配置。</p><h3>8分钟 · 切片所有权与错误分类</h3><p>阅读 <a href="https://go.dev/blog/slices-intro">Go Slices: usage and internals</a> 与 <a href="https://pkg.go.dev/errors#Is">errors.Is</a>。问题：复制[]Message为何还可能共享ToolCalls/Arguments？为什么保存FailureClass不能代替Go错误链？</p><p><strong>产出：</strong>画出三层引用：Messages切片→ToolCalls切片→Arguments字节；再标出CallRecord.Result指针。Eino路径与符号已核对，main会变化，阅读时记录版本，不把其接口直接替换本课契约。</p></section>
+<section><div class="time">80 MIN · BUILD</div><h2>四项连续练习：先定义语义，再对照代码</h2>
+<h3>任务一 · 20分钟：画出迁移表并检查守卫</h3><p><strong>为什么做：</strong>多个布尔值很难表达非法组合，终态也容易被无意重启。<strong>操作与观察：</strong>5分钟不看实现画Run/Call图；10分钟阅读state.go的CanTransition、startCall、completeCall与finish；5分钟预测“未开始就完成”“重复完成”“终态重启”“还有planned却成功结束”。</p><p><strong>完成证据：</strong>TestStateTransitionGuards拒绝这些路径；unfinished不能标completed；重复模型ID仍能按位置保留诊断记录。不要给普通事件回调加入修改状态的隐藏通道。</p>
+<h3>任务二 · 20分钟：沿原批次边界记录状态</h3><p><strong>为什么做：</strong>状态记录应贴着真实控制流，不重写一套执行器。<strong>操作与观察：</strong>10分钟跟踪agent.go与executor.go：计划发生在预检查前，running发生在Execute前，普通返回记录受控结果，取消后标unconfirmed；5分钟追踪[first,wait,third]；5分钟比较Messages与Calls.Result。</p><p><strong>完成证据：</strong>第一项结果保留、第二项无已接受结果、第三项blocked；历史不出现本批部分回填。旧executeBatch/Run行为和Day14计数矩阵继续通过。</p>
+<h3>任务三 · 25分钟：验证快照所有权与可选API</h3><p><strong>为什么做：</strong>宿主读取状态不应获得能污染另一次执行的共享引用。<strong>操作与观察：</strong>10分钟阅读Clone并画切片/指针关系；10分钟先预测再对照TestSnapshotOwnershipAndConcurrentRuns，观察修改模型原响应、克隆快照和8个并发Run；5分钟运行state入口，核对同一Run状态与不同调用状态。</p><pre><code># 从仓库根执行，不新建Module
+go run ./examples/cmd/state</code></pre><p><strong>完成证据：</strong>返回快照不被原模型响应或另一个副本修改；并发输入不串请求，RunID各自生成。演示中doc-1是completed/returned，missing是completed/errored，均有4条已接纳消息；这不评价真实模型回答质量。</p>
+<h3>任务四 · 15分钟：用控制错误检验状态含义</h3><p><strong>为什么做：</strong>状态字段只有与真实错误分支对应，后续存储/恢复才有语义。<strong>操作与观察：</strong>10分钟预测授权拒绝、重复ID、模型失败、预取消、步数耗尽和批次超时，再看state_test.go；5分钟写一段“如果进程在两次状态更新间终止，还丢了什么”的设计记录。</p><p><strong>完成证据：</strong>errors.Is仍识别ErrForbidden/Context/ErrMaxSteps；FailureClass无原始错误；工具错误可与RunCompleted并存；快照缺少持久性、配置版本、连接恢复和副作用确认，不能直接用它重跑未确认调用。</p></section>
+<section><div class="time">20 MIN · TEST &amp; REVIEW</div><h2>分别验收实现与理解</h2><p><strong>12分钟实作：</strong>从仓库根执行，先预测状态再运行：</p><pre><code>go test ./examples/internal/agent -run 'TestState|TestRunState|TestSnapshot' -v
+go test ./examples/...
+go test -race ./examples/...
+go run ./examples/cmd/state</code></pre><table><thead><tr><th>测试</th><th>设计不变量</th></tr></thead><tbody>
+<tr><td>TestStateTransitionGuards</td><td>非法迁移、错误结果ID、重复开始/完成与unfinished成功被拒绝</td></tr>
+<tr><td>TestRunStateCompletedWithToolError</td><td>Run控制完成与业务调用错误分离，受控tool结果保留</td></tr>
+<tr><td>TestRunStatePreflightAndControlErrors</td><td>阻止的调用不执行；取消/步数/模型错误保持原语义</td></tr>
+<tr><td>TestRunStatePartialBatchPreservesAcceptedResult</td><td>批次中断时保留前项结果，不改变模型历史回填策略</td></tr>
+<tr><td>TestSnapshotOwnershipAndConcurrentRuns</td><td>嵌套数据副本不串改；安全依赖下并发Run隔离</td></tr>
+</tbody></table><p class="info"><strong>本次真实验证：</strong>官方Go1.22.2 linux/amd64下，状态目标测试、累计examples普通测试及race均退出码0；state入口实际输出doc-1为completed/returned、missing为completed/errored。旧Day14七场景集成矩阵继续通过。没有验证持久化Checkpoint、真实模型或跨进程恢复。</p><p><strong>8分钟理解验收：</strong></p><ol><li>不看代码解释Run、Call和MCP会话三层状态，为什么不能用一个完成标志替代？</li><li>第一项已返回但没进入Messages，下一次运行能否直接重跑它？需要哪些额外证据？</li><li>为什么同一Agent上并发Run不共享record，为什么这仍要求模型/工具本身线程安全？</li><li>若产品要求运行中查询状态，当前最终快照API还缺什么同步与版本契约？</li></ol>
+<h3>学习清单</h3><div class="meta"><span>浏览器自评进度，理解验收仍需自行完成</span><span id="count">0 / 8</span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div><div id="checks"></div></section>
+<section><h2>Definition of Done 与 Day16衔接</h2><p>理解上：能画状态图、解释结果与历史的差别、指出副本与持久性的边界。实现上：新API保持旧Run兼容，控制错误和部分批次状态可解释，所有权与并发隔离有测试，累计验收保持通过。本次参考代码已完成实作验证。</p><p>Day16继续运行上下文与状态更新，明确消息、调用结果和更新边界，为后续Checkpoint快照、存储版本与恢复位置做准备。今天的终态快照不能序列化一个活连接来恢复，也不会重新确认外部事务或自动授予执行权限。</p></section>
+<footer>Agent Runtime · Day15 / 56 · 第三周：运行状态与Checkpoint · <a href="../../index.html">返回学习首页</a></footer></main>
+<script>
+const items=["区分Run、调用与外部业务状态","手画合法和非法状态迁移","对照Eino局部状态和ProcessState","跟踪批次中断后的Messages与Calls.Result","理解RunWithState的兼容与副本边界","运行状态演示并核对两类调用结果","运行目标、累计普通和race测试","写出Checkpoint前仍缺少的恢复契约"];
+const key="agent-runtime-day15-v1";let saved=[];try{const v=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(v))saved=v}catch(_){}const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const p=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=p+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(p))}items.forEach((s,i)=>{const r=document.createElement("div");r.className="check";const c=document.createElement("input");c.type="checkbox";c.id="task-"+i;c.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=c.id;label.textContent=s;r.append(c,label);box.append(r);c.onchange=()=>{saved[i]=c.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+</script></body></html>

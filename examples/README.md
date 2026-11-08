@@ -1,6 +1,6 @@
 # Agent Runtime 累计示例
 
-这是依据 Day 01–14 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
+这是依据 Day 01–15 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
 
 共享仓库根目录的 `go.mod`（Go 1.22.2），无需新建 Module，也不导入根目录 `internal` 中的练习实现。所有命令在仓库根目录运行：
 
@@ -10,6 +10,7 @@ go run ./examples/cmd/knowledge
 go run ./examples/cmd/access
 go run ./examples/cmd/mcp
 go run ./examples/cmd/mcpagent
+go run ./examples/cmd/state
 go test ./examples/...
 go test -race ./examples/...
 ```
@@ -43,6 +44,7 @@ examples/
 | Day 12 | internal/mcp、cmd/mcp | MCP 初始化、能力协商、JSON-RPC 工具发现与调用 |
 | Day 13 | tool/mcptool、cmd/mcpagent | MCP到Meta/Invoke适配、名称隔离、授权后的Agent往返 |
 | Day 14 | integration/week02_test.go | 本地/远端混合批次、故障矩阵、历史/事件/计数联合验收 |
+| Day 15 | agent/state.go、RunWithState、cmd/state | Run/调用状态、终态快照、部分结果与深拷贝 |
 
 Day 08 工具契约现已按线上修订版补齐。后续能力仍按路线推进：独立 ToolsNode 执行器、中间件、重试/幂等、权限与 MCP 留给 Day 10–14 按路线增量设计。Eino 是阅读对照，不作为运行依赖。
 
@@ -112,3 +114,19 @@ Day 08 的接口映射、旧接口兼容及边界见 [工具设计说明](intern
 从仓库根运行 `go test ./examples/integration -run TestWeek02EndToEndMatrix -v`，先预测计数，再观察正常、授权拒绝、模型ID冲突、结果预算、远端业务失败、执行后响应损坏和超时7个场景。分别检查实际工具调用、模型第二轮历史、错误摘要和唯一Run终态；脚本模型最后返回文本不等于用户任务已正确完成。
 
 官方Go1.22.2下目标矩阵7个子场景、累计examples普通测试和race均通过。所有协议交互使用内存传输与FakeStore，不宣称真实网络/模型或恢复能力通过。下一周才开始Run状态与Checkpoint设计。
+
+## Day15：Run状态与观测快照
+
+新增 agent/state.go、state_test.go 与 cmd/state；修改agent.go和executor.go，将Step、Messages和调用记录集中在每次Run私有record中。原Run(ctx,input)(string,error)、New、工具/消息/事件形状保持，旧executeBatch私有入口仍委托同一实现；新增RunWithState(ctx,input)(RunResult,error)。
+
+Run状态为created→running→completed/failed/cancelled；终态不可重启。调用状态planned→running→returned/errored/unconfirmed，预检查或未开始的后续调用为blocked。这些是Runtime观测，不代表远端事务提交/回滚。
+
+RunResult包含Output与独立RunSnapshot；Snapshot.Clone复制消息、ToolCalls参数及CallRecord.Result指针。Messages只描述Loop已接纳的历史；部分批次失败时，已返回工具结果保留在Calls.Result中，即使它们未进入下一轮模型。取消后的已开始调用为unconfirmed，尚未开始为blocked，不能据此自动重放。
+
+本日没有运行中状态查询、存储/Checkpoint或恢复入口。每次执行新建随机RunID；重跑同一输入是新的执行，不是恢复。快照包含用户输入、参数和结果，不作为公开审计事件；RunID也不作为业务幂等键。
+
+官方Go1.22.2下，状态目标测试、go test ./examples/...、go test -race ./examples/... 均通过；go run ./examples/cmd/state实际输出：
+- doc-1: run=completed call=returned messages=4
+- missing: run=completed call=errored messages=4
+
+参考基线继续覆盖Day14的7场景矩阵。并发状态测试使用无状态模型和工具，不表示可并发共享带游标的Mock或不安全后端。
