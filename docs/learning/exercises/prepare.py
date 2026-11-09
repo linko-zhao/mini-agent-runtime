@@ -25,13 +25,16 @@ def prepare(day, destination=None, reference=False):
     shutil.copytree(REPO, out, dirs_exist_ok=True,
                     ignore=shutil.ignore_patterns(".git", "__pycache__", ".pytest_cache"))
     # Only this newly-created copy receives reference prerequisites.
+    # One shared, versioned teaching baseline keeps earlier lessons stable as
+    # main adds newer observation APIs. No module or protocol is redefined.
     for directory in ("internal", "cmd"):
         if (out / directory).exists():
             shutil.rmtree(out / directory)
-        shutil.copytree(REPO / "examples" / directory, out / directory)
-        for path in (out / directory).rglob("*.go"):
-            path.write_text(path.read_text(encoding="utf-8").replace(
-                "/examples/internal/", "/internal/"), encoding="utf-8")
+        (out / directory).mkdir()
+    for source in (BASE / "baseline").rglob("*.go.txt"):
+        target = out / str(source.relative_to(BASE / "baseline"))[:-4]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(source.read_bytes())
     for group in (lesson["support"], lesson["targets"], lesson["tests"]):
         for item in group:
             key = ("reference" if reference else "skeleton") if "skeleton" in item else "file"

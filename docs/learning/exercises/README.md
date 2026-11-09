@@ -22,7 +22,7 @@ python3 docs/learning/exercises/prepare.py 09
 
 脚本会打印新练习副本的绝对路径。进入该目录后，使用页面给出的路径编辑、运行目标测试。要求 Python 3.9+、Go ≥ 1.22.2；不需要 API Key。
 
-脚本不读学习者实现来判断进度，也不修改原仓库 internal/cmd。它在仓库外创建完整副本，用配套 examples/internal 和 examples/cmd 提供同一累计模块的前置依赖及命令入口，再把当天目标替换成 TODO 骨架；测试 import 指向副本 internal。仍使用原 go.mod，没有新的每日 Module。
+脚本不读学习者实现来判断进度，也不修改原仓库 internal/cmd。它在仓库外创建完整副本，用 baseline/ 中固定版本的同一累计模块提供前置依赖及配套命令入口，再把当天目标替换成 TODO 骨架；测试 import 指向副本 internal。仍使用原 go.mod，没有新的每日 Module。
 
 可用 `--output /一个尚不存在的新目录` 指定副本位置。脚本拒绝原仓库、仓库内部、父目录和任何已存在目录，不自动清理或覆盖旧副本。
 
@@ -61,3 +61,9 @@ python3 docs/learning/exercises/verify.py --go /你的Go工具链/bin/go --repor
 `--go` 可省略，默认使用 PATH 中的 `go`。脚本只在临时副本编译测试；`--report` 写入指定报告，不写入原实现。报告原样保留每次编译、红灯和绿灯输出。
 
 这些证据说明材料相互兼容，不证明学习者已完成练习、真实模型会选对工具、生产网络协议/认证已验证或跨进程恢复可靠。清单只保存自评进度，不能替代设计讲解与实际测试结果。
+
+## 与最新 main 的衔接
+
+main 在本批讲义准备期间新增了 agent.RunWithState、RunSnapshot 与调用状态记录，相关实现及测试全部保留。旧版 Day 15 的运行快照说明另存为 [观测快照参考](../agent-runtime-day-15-snapshot-reference.html)。新版 Day 15 先练习纯转换；该转换模型与实际运行观测属于不同层次，不互相替换，也不代表恢复协议。
+
+`baseline/` 是全课程共用的教学依赖快照，基于 01c9ca6 及本批授权插槽、装配与纯状态模块增量；包路径均已映射为 internal。它固定早期练习的 New/Run/executeBatch 契约，防止后续 main 的可选观测接口让旧骨架无法编译。所有日期复用同一份基线、同一根 go.mod，没有每日独立 Module。升级教学基线时必须同时迁移骨架、调用点与完整测试，再重新执行红绿验证；不得用它覆盖真实项目。

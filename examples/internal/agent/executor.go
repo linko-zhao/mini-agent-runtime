@@ -14,6 +14,17 @@ import (
 // Business arguments remain the tool's responsibility. Results preserve input
 // order and call IDs; cancellation or timeout terminates the batch with an error.
 func (a *Agent) executeBatch(ctx context.Context, calls []model.ToolCall, step int) ([]model.Message, error) {
+	return a.executeBatchWithState(ctx, calls, step, nil)
+}
+func (a *Agent) executeBatchWithState(ctx context.Context, calls []model.ToolCall, step int, record *runRecord) ([]model.Message, error) {
+	base := 0
+	if record != nil {
+		var err error
+		base, err = record.plan(calls, step)
+		if err != nil {
+			return nil, err
+		}
+	}
 	var results []model.Message
 	// 整批预校验，避免后面的未知工具或重复 ID 导致前面的工具已产生副作用。
 	seen := map[string]bool{}
@@ -29,9 +40,14 @@ func (a *Agent) executeBatch(ctx context.Context, calls []model.ToolCall, step i
 	if err := a.authorizeBatch(ctx, calls, step); err != nil {
 		return nil, err
 	}
-	for _, call := range calls {
+	for index, call := range calls {
 		if err := ctx.Err(); err != nil {
 			return nil, err
+		}
+		if record != nil {
+			if err := record.startCall(base + index); err != nil {
+				return nil, err
+			}
 		}
 		start := time.Now()
 		e := Event{Type: EventToolStarted, Step: step, ToolName: call.Name, ToolCallID: call.ID, Status: "ok"}
@@ -51,6 +67,11 @@ func (a *Agent) executeBatch(ctx context.Context, calls []model.ToolCall, step i
 		e.Status = status(err)
 		a.emit(ctx, e)
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			if record != nil {
+				if stateErr := record.completeCall(base+index, nil, err); stateErr != nil {
+					return nil, errors.Join(err, stateErr)
+				}
+			}
 			return nil, err
 		}
 		if err != nil {
@@ -62,7 +83,13 @@ func (a *Agent) executeBatch(ctx context.Context, calls []model.ToolCall, step i
 				result = "execution_failed: tool execution failed"
 			}
 		}
-		results = append(results, model.Message{Role: "tool", ToolCallID: call.ID, Content: result})
+		message := model.Message{Role: "tool", ToolCallID: call.ID, Content: result}
+		if record != nil {
+			if stateErr := record.completeCall(base+index, &message, err); stateErr != nil {
+				return nil, stateErr
+			}
+		}
+		results = append(results, message)
 	}
 	return results, nil
 }

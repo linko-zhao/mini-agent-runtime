@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 type Client struct {
@@ -20,7 +21,7 @@ func NewClient(t Transport) (*Client, error) {
 	if t == nil {
 		return nil, fmt.Errorf("mcp: nil transport")
 	}
-	return &Client{transport: t}, nil
+	return &Client{transport: t, gate: make(chan struct{}, 1), state: "new"}, nil
 }
 
 func (c *Client) enter(ctx context.Context) error {
@@ -110,10 +111,10 @@ func (c *Client) Initialize(ctx context.Context) (InitializeResult, error) {
 	}
 	c.state = "failed"
 	raw, err := c.rpc(ctx, "initialize", struct {
-		ProtocalVersion string         `json:"protocalVersion"`
+		ProtocolVersion string         `json:"protocolVersion"`
 		Capabilities    struct{}       `json:"capabilities"`
 		ClientInfo      Implementation `json:"clientInfo"`
-	}{ProtocalVersion: ProtocolVersion, ClientInfo: Implementation{Name: "agent-runtime-examples", Version: "0.1.0"}})
+	}{ProtocolVersion: ProtocolVersion, ClientInfo: Implementation{Name: "agent-runtime-examples", Version: "0.1.0"}})
 	if err != nil {
 		return result, err
 	}
@@ -133,5 +134,77 @@ func (c *Client) Initialize(ctx context.Context) (InitializeResult, error) {
 	}
 	c.toolsAvailable = result.Capabilities.Tools != nil
 	c.state = "ready"
+	return result, nil
+}
+
+func (c *Client) ListTools(ctx context.Context, cursor string) (ToolsPage, error) {
+	var page ToolsPage
+	if err := c.enter(ctx); err != nil {
+		return page, err
+	}
+	defer c.leave()
+	if c.state != "ready" {
+		return page, ErrSessionState
+	}
+	if !c.toolsAvailable {
+		return page, ErrToolsUnavailable
+	}
+	raw, err := c.rpc(ctx, "tools/list", struct {
+		Cursor string `json:"cursor,omitempty"`
+	}{cursor})
+	if err != nil {
+		return page, err
+	}
+	if json.Unmarshal(raw, &page) != nil || page.Tools == nil {
+		return page, c.protocol("tools must be an array")
+	}
+	seen := map[string]bool{}
+	for _, d := range page.Tools {
+		var schema map[string]any
+		if strings.TrimSpace(d.Name) == "" || seen[d.Name] || json.Unmarshal(d.InputSchema, &schema) != nil || schema["type"] != "object" {
+			return page, c.protocol("invalid/duplicate tool descriptor")
+		}
+		seen[d.Name] = true
+	}
+	return page, nil
+}
+
+func (c *Client) CallTool(ctx context.Context, name string, args json.RawMessage) (ToolResult, error) {
+	var result ToolResult
+	if err := c.enter(ctx); err != nil {
+		return result, err
+	}
+	defer c.leave()
+	if c.state != "ready" {
+		return result, ErrSessionState
+	}
+	if !c.toolsAvailable {
+		return result, ErrToolsUnavailable
+	}
+	if len(args) == 0 {
+		args = json.RawMessage("{}")
+	}
+	var object map[string]json.RawMessage
+	if strings.TrimSpace(name) == "" || json.Unmarshal(args, &object) != nil || object == nil {
+		return result, fmt.Errorf("mcp: nonempty tool name and object arguments required")
+	}
+	raw, err := c.rpc(ctx, "tools/call", struct{
+		Name string `json:"name"`
+		Arguments json.RawMessage `json:"arguments"`
+	}{name, args})
+	if err != nil {
+		return result, err
+	}
+	if json.Unmarshal(raw, &result) != nil || result.Content == nil {
+		return result, c.protocol("content must be an array")
+	}
+	for _, block := range result.Content {
+		var header struct {
+			Type string `json:"type"`
+		}
+		if json.Unmarshal(block, &header) != nil || header.Type == "" {
+			return result, c.protocol("invalid content block")
+		}
+	}
 	return result, nil
 }

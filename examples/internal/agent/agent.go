@@ -101,48 +101,65 @@ func status(err error) string {
 	}
 	return "ok"
 }
-func (a *Agent) Run(ctx context.Context, input string) (output string, runErr error) {
+func (a *Agent) Run(ctx context.Context, input string) (string, error) {
+	result, err := a.RunWithState(ctx, input)
+	return result.Output, err
+}
+
+// RunWithState returns a final, independent observation snapshot, even on a Run error.
+// It does not persist, resume, or authorize replay from a snapshot.
+func (a *Agent) RunWithState(ctx context.Context, input string) (result RunResult, runErr error) {
+	record, err := newRunRecord(input)
+	if err != nil {
+		return RunResult{}, err
+	}
+	if err = record.transition(RunRunning); err != nil {
+		return RunResult{Snapshot: record.snapshot()}, err
+	}
 	started := time.Now()
-	step := 0
 	a.emit(ctx, Event{Type: EventRunStarted, Status: "ok"})
 	defer func() {
+		runErr = record.finish(runErr)
+		if runErr != nil {
+			result.Output = ""
+		}
+		result.Snapshot = record.snapshot()
 		kind := EventRunFinished
 		if runErr != nil {
 			kind = EventRunFailed
 		}
-		a.emit(ctx, Event{Type: kind, Step: step, Duration: time.Since(started), Status: status(runErr)})
+		a.emit(ctx, Event{Type: kind, Step: record.data.Step, Duration: time.Since(started), Status: status(runErr)})
 	}()
-	messages := []model.Message{{Role: "user", Content: input}}
-	for step = 1; step <= a.maxSteps; step++ {
+	for record.data.Step = 1; record.data.Step <= a.maxSteps; record.data.Step++ {
 		if err := ctx.Err(); err != nil {
-			return "", err
+			return RunResult{}, err
 		}
-		a.emit(ctx, Event{Type: EventStepStarted, Step: step, Status: "ok"})
+		a.emit(ctx, Event{Type: EventStepStarted, Step: record.data.Step, Status: "ok"})
 		start := time.Now()
-		r, err := a.model.Generate(ctx, messages)
+		r, err := a.model.Generate(ctx, record.data.Messages)
 		if ctx.Err() != nil {
 			err = ctx.Err()
 		}
 		if err == nil && r == nil {
 			err = fmt.Errorf("agent: nil model response")
 		}
-		a.emit(ctx, Event{Type: EventModelCompleted, Step: step, Duration: time.Since(start), Status: status(err)})
+		a.emit(ctx, Event{Type: EventModelCompleted, Step: record.data.Step, Duration: time.Since(start), Status: status(err)})
 		if err != nil {
-			return "", err
+			return RunResult{}, err
 		}
 		if r.Message.Role != "assistant" {
-			return "", fmt.Errorf("agent: expected assistant message")
+			return RunResult{}, fmt.Errorf("agent: expected assistant message")
 		}
-		messages = append(messages, r.Message)
+		record.data.Messages = append(record.data.Messages, r.Message)
 		if len(r.Message.ToolCalls) == 0 {
-			return r.Message.Content, nil
+			return RunResult{Output: r.Message.Content}, nil
 		}
-		results, err := a.executeBatch(ctx, r.Message.ToolCalls, step)
+		results, err := a.executeBatchWithState(ctx, r.Message.ToolCalls, record.data.Step, record)
 		if err != nil {
-			return "", err
+			return RunResult{}, err
 		}
-		messages = append(messages, results...)
+		record.data.Messages = append(record.data.Messages, results...)
 	}
-	step = a.maxSteps
-	return "", ErrMaxSteps
+	record.data.Step = a.maxSteps
+	return RunResult{}, ErrMaxSteps
 }

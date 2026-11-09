@@ -165,6 +165,35 @@ Run 保存 assistant 后先校验整批调用 ID/名称，再做整批授权；�
 
 官方Go1.22.2下目标矩阵7个子场景与累计 go test ./examples/...、go test -race ./examples/... 均通过。后续Day15起按既定状态机/Checkpoint路线增量设计，复用此矩阵；当前Run局部消息不能提供跨进程恢复，保存状态也不自动解决不确定外部调用或exactly-once。
 
+## Day15 增量：Run状态机与最终内存快照
+
+### 兼容接口与状态所有权
+
+- 新增agent.RunStatus、CallStatus、CallRecord、RunSnapshot、RunResult、CanTransition以及Agent.RunWithState(ctx,input)(RunResult,error)。
+- 原Run(ctx,input)(string,error)委托同一执行路径；New、Model、Message、ToolCall、Tool/Meta/Invoke和Event保持不变。只需状态的调用方选择新API，不要替换旧消息类型。
+- agent.go中的Step/Messages移入每次调用私有runRecord；executor.go保留executeBatch旧私有签名，委托executeBatchWithState。记录不放进共享Agent字段，不增加另一套执行逻辑。
+- 新Run由crypto/rand生成不透明RunID。构造失败时尚未发出RunStarted，返回零值Result和错误；成功启动后正常/错误返回均提供终态快照。ID不代表跨系统幂等承诺，事件接口本日未增加RunID关联。
+
+### 迁移与状态不变量
+
+- created只允许到running；running允许到completed/failed/cancelled；终态不可自循环或重启。unfinished调用不能被当作成功完成，内部非法迁移产生ErrInvalidTransition。
+- completed表示Run以文本正常返回，不表示业务目标已达成；工具受控错误可与RunCompleted并存。context取消/超时归为RunCancelled，FailureClass分别为cancelled/deadline_exceeded；步数耗尽保持errors.Is(ErrMaxSteps)，FailureClass=max_steps；其他Run错误只存受控run_error类别。
+- Snapshot.Step为当前进入的Loop轮次，不是成功模型调用计数；例如预取消可能进入第1轮后停止。实际调用次数仍通过事件/测试探针验证。
+- CallRecord用Step+Index定位，Index在同批从0开始，保留原CallID/ToolName；不能用CallID作唯一map键，否则会丢失非法重复ID的诊断记录。
+- planned可到running，之后为returned/errored/unconfirmed；批次检查失败或终止后的未开始项为blocked。returned/errored只描述接口返回，均不证明外部事务状态；unconfirmed突出已开始调用在取消后无已接受结果，不授权自动重试。
+- Calls.Result是已接受的tool消息（含受控错误摘要）；Context取消后不保存迟到结果。批次中前项已返回、后项取消时，原executeBatch仍不回填部分历史，Snapshot.Messages只保留已接纳的历史，而Calls.Result保留前项已知结果。不能把“未进入下一轮模型”当“没执行”。
+- Go错误仍从第二返回值保留原errors.Is/As契约，不把原始错误文本塞入FailureClass。快照包含Prompt/参数/工具正文，不同于脱敏事件，消费/持久化需由宿主自行施加访问和数据策略。
+
+### 副本与范围
+
+Snapshot.Clone复制Messages、嵌套ToolCalls参数与Calls.Result指针；调用方可修改自己的副本，不影响另一个Run或模型原响应。字符串沿Go不可变值语义。旧Run共用状态记录路径，有记录/复制分配开销，不宣称零成本。
+
+新API只返回最终内存副本，无运行中读接口、写盘、版本化存储、恢复或重放入口。不能通过修改Snapshot.Status重新启动Run，也不能把Go对象可序列化理解成可安全恢复。MCP会话/连接状态不包含在快照中，权限和后端副作用仍是独立边界。
+
+### 真实验收
+
+state_test.go覆盖迁移守卫、受控工具错误与Run完成并存、协议/授权/模型/取消/步数终止、部分批次结果保留、快照深拷贝和同一Agent的8个并发Run隔离。官方Go1.22.2下目标测试与累计普通/race测试通过；cmd/state实际运行成功。所有旧7场景集成测试保持通过。真实模型、持久Checkpoint、跨进程恢复及exactly-once不在本日验证范围。
+
 ## 易读与 TDD 教学交付
 
 后续页面同时遵守 [每日教学交付规范](../docs/learning/daily-lesson-standard.md) 和课程计划的“易读讲解与测试先行交付”。参考基线继续累计演进；练习面向学习者根 internal/cmd，测试必须指向实际练习目标。页面先给可编译 TODO 骨架、完整测试及分步命令，参考实现最后默认折叠。自动生成不得覆盖学习者代码。新契约需同步说明两套路径与类型的映射，不混用 model.Message；测试、夹具和前置依赖须一并交付并验证红/绿行为。
@@ -178,6 +207,8 @@ Day 08 已提供 [图解与 TDD 样板](../docs/learning/agent-runtime-day-08.ht
 - **Day 09/11**：原 executeBatch 中授权段提取为私有 `authorizeBatch(ctx,calls,step) error`，仍在整批 ID/名称检查之后、首个 Execute 之前调用；公开 Agent API、事件、错误语义不变。Day 09 提供兼容插槽，Day 11 单独练习 access.go 与该插槽；旧版本迁移时移动授权段，不能同时保留两份授权循环。
 - **Day 10/12/13**：稳定接口与错误策略不变；教学附件补充边界断言，重试等待取消改用可控 context 同步，不依赖 sleep。页面包含完整原样文件和分步命令。
 - **Day 14**：新增 `examples/internal/assembly` 的宿主装配入口，不新增 Runtime 协议。`Build(ctx,Config)(*Runtime,error)` 顺序完成 Client 初始化、完整发现、新 Registry、逐项 Policy、可信 Authorizer 与 Agent.New。Config.Visible 保持 nil=全部、非 nil 空集合=零描述；失败不返回部分 Runtime，但不回滚初始化流量。调用者提供尚未初始化的 Transport 并负责真实资源关闭。原 integration/week02_test.go 的七场景继续保留，新增 Build 的完整集成测试。
-- **Day 15**：新增 `examples/internal/runstate` 的纯内存状态机。`New(runID,input,maxSteps)(State,error)` 与 `Advance(State,Event)(State,error)` 复用 model.Message/ToolCall/Response；阶段为 Ready、ModelRunning、ToolsPending、ToolsRunning、Completed、Failed、Cancelled。只有 StartModel 增加模型轮次；工具结果严格按 Pending ID/顺序配对；所有切片深拷贝，错误返回零 State 且原输入不变。Event 是转换输入，与 agent.Event 观测信号区分。旧 Run 尚未接入此状态机；没有持久化、Checkpoint、重放或恢复承诺。
+- **Day 15**：新增 `examples/internal/runstate` 的纯内存状态机。`New(runID,input,maxSteps)(State,error)` 与 `Advance(State,Event)(State,error)` 复用 model.Message/ToolCall/Response；阶段为 Ready、ModelRunning、ToolsPending、ToolsRunning、Completed、Failed、Cancelled。只有 StartModel 增加模型轮次；工具结果严格按 Pending ID/顺序配对；所有切片深拷贝，错误返回零 State 且原输入不变。Event 是转换输入，与 agent.Event 观测信号区分。既有 RunWithState 观测快照继续保留；纯 runstate 尚未接入该执行路径；没有持久化、Checkpoint、重放或恢复承诺。
 
 后续章节继续复用上述状态语义，先明确状态驱动/保存/恢复的边界，不把内存快照当成可靠恢复协议。实际验证范围见 `docs/learning/exercises/README.md` 与 verification.json。
+
+教学依赖固定在 `docs/learning/exercises/baseline`，不覆盖本节保留的 RunWithState 观测实现。纯 runstate 是设计练习模型；与已运行的 RunSnapshot 映射需在后续课程显式设计，不混用状态枚举或声称已经恢复。
