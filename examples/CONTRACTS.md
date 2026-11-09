@@ -198,7 +198,7 @@ state_test.go覆盖迁移守卫、受控工具错误与Run完成并存、协议/
 
 后续页面同时遵守 [每日教学交付规范](../docs/learning/daily-lesson-standard.md) 和课程计划的“易读讲解与测试先行交付”。参考基线继续累计演进；练习面向学习者根 internal/cmd，测试必须指向实际练习目标。页面先给可编译 TODO 骨架、完整测试及分步命令，参考实现最后默认折叠。自动生成不得覆盖学习者代码。新契约需同步说明两套路径与类型的映射，不混用 model.Message；测试、夹具和前置依赖须一并交付并验证红/绿行为。
 
-Day 08 已提供 [图解与 TDD 样板](../docs/learning/agent-runtime-day-08.html) 和 [完整附件及验证记录](../docs/learning/exercises/day08/README.md)。本次只改教学交付，不更换稳定接口或修改学习者实现；后续页面按这一结构增量演进。
+Day 08 已提供 [图解与 TDD 正式课程](../docs/learning/agent-runtime-day-08.html) 和 [完整附件及验证记录](../docs/learning/exercises/day08/README.md)。本次只改教学交付，不更换稳定接口或修改学习者实现；后续页面按这一结构增量演进。
 
 ## Day 09–15 易读 TDD 版增量（2026-11-09）
 
