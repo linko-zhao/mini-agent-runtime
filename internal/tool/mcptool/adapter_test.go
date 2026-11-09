@@ -1,0 +1,218 @@
+package mcptool
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/linko-zhao/mini-agent-runtime/internal/mcp"
+	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
+)
+
+type stubCaller struct {
+	list func(context.Context, string) (mcp.ToolsPage, error)
+	call func(context.Context, string, json.RawMessage) (mcp.ToolResult, error)
+}
+
+func (s stubCaller) ListTools(ctx context.Context, cursor string) (mcp.ToolsPage, error) {
+	if s.list == nil {
+		return mcp.ToolsPage{Tools: []mcp.Descriptor{}}, nil
+	}
+	return s.list(ctx, cursor)
+}
+
+func (s stubCaller) CallTool(ctx context.Context, name string, args json.RawMessage) (mcp.ToolResult, error) {
+	if s.call == nil {
+		return mcp.ToolResult{}, errors.New("unexpected execution")
+	}
+	return s.call(ctx, name, args)
+}
+
+func descriptor(name string) mcp.Descriptor {
+	return mcp.Descriptor{Name: name, Description: "knowledge lookup", InputSchema: json.RawMessage(`{"type":"object"}`), Annotations: json.RawMessage(`{"readOnlyHint":true}`)}
+}
+
+func text(s string) json.RawMessage {
+	b, _ := json.Marshal(map[string]string{"type": "text", "text": s})
+	return b
+}
+
+func TestMetadataSnapshotAndNameBoundary(t *testing.T) {
+	calls := 0
+	caller := stubCaller{call: func(context.Context, string, json.RawMessage) (mcp.ToolResult, error) {
+		calls++
+		return mcp.ToolResult{}, nil
+	}}
+	d := descriptor("get_document")
+	remote, err := New(caller, "knowledge", d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.InputSchema[0] = 'x'
+	spec, err := remote.Meta(context.Background())
+	if err != nil || spec.Name != "knowledge__get_document" || !json.Valid(spec.InputSchema) || calls != 0 {
+		t.Fatalf("%+v %v calls=%d", spec, err, calls)
+	}
+	spec.InputSchema[0] = 'x'
+	again, _ := remote.Meta(context.Background())
+	if !json.Valid(again.InputSchema) {
+		t.Fatal("metadata mutation changed snapshot")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := remote.Meta(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ prefix, name string }{
+		{"", "x"}, {"bad_prefix", "x"}, {"knowledge", "server.read"}, {"knowledge", "中文"},
+		{"knowledge", strings.Repeat("x", 64)}, {"knowledge", ""},
+	} {
+		if _, err := New(caller, tc.prefix, descriptor(tc.name)); !errors.Is(err, ErrDiscovery) {
+			t.Fatalf("%+v %v", tc, err)
+		}
+	}
+	if _, err := New(nil, "knowledge", descriptor("x")); !errors.Is(err, ErrDiscovery) {
+		t.Fatal(err)
+	}
+	bad := descriptor("x")
+	bad.InputSchema = json.RawMessage(`{"type":"array"}`)
+	if _, err := New(caller, "knowledge", bad); !errors.Is(err, ErrDiscovery) {
+		t.Fatal(err)
+	}
+}
+
+func TestDiscoveryPaginationAndAtomicFailure(t *testing.T) {
+	var cursors []string
+	caller := stubCaller{list: func(_ context.Context, cursor string) (mcp.ToolsPage, error) {
+		cursors = append(cursors, cursor)
+		if cursor == "" {
+			return mcp.ToolsPage{Tools: []mcp.Descriptor{descriptor("search")}, NextCursor: "opaque-next"}, nil
+		}
+		return mcp.ToolsPage{Tools: []mcp.Descriptor{descriptor("read")}}, nil
+	}}
+	tools, err := Discover(context.Background(), caller, "knowledge", 2)
+	if err != nil || len(tools) != 2 || strings.Join(cursors, ",") != ",opaque-next" {
+		t.Fatalf("%v %v %v", tools, err, cursors)
+	}
+	first, _ := tools[0].Meta(context.Background())
+	if first.Name != "knowledge__search" {
+		t.Fatal(first)
+	}
+	tools, err = Discover(context.Background(), caller, "knowledge", 1)
+	if tools != nil || !errors.Is(err, ErrDiscovery) {
+		t.Fatalf("partial discovery: %v %v", tools, err)
+	}
+	loop := stubCaller{list: func(context.Context, string) (mcp.ToolsPage, error) {
+		return mcp.ToolsPage{Tools: []mcp.Descriptor{}, NextCursor: "same"}, nil
+	}}
+	if tools, err = Discover(context.Background(), loop, "knowledge", 4); tools != nil || !errors.Is(err, ErrDiscovery) {
+		t.Fatalf("%v %v", tools, err)
+	}
+	duplicate := stubCaller{list: func(_ context.Context, cursor string) (mcp.ToolsPage, error) {
+		page := mcp.ToolsPage{Tools: []mcp.Descriptor{descriptor("read")}}
+		if cursor == "" {
+			page.NextCursor = "next"
+		}
+		return page, nil
+	}}
+	if tools, err = Discover(context.Background(), duplicate, "knowledge", 3); tools != nil || !errors.Is(err, ErrDiscovery) {
+		t.Fatalf("%v %v", tools, err)
+	}
+	invalidPage := stubCaller{list: func(context.Context, string) (mcp.ToolsPage, error) { return mcp.ToolsPage{}, nil }}
+	if _, err = Discover(context.Background(), invalidPage, "knowledge", 1); !errors.Is(err, ErrDiscovery) {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err = Discover(ctx, caller, "knowledge", 2); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+}
+
+func TestResultProjectionAndCancellation(t *testing.T) {
+	caller := stubCaller{call: func(_ context.Context, name string, args json.RawMessage) (mcp.ToolResult, error) {
+		if name != "get_document" || string(args) != `{"id":"doc-1"}` {
+			t.Fatalf("%s %s", name, args)
+		}
+		args[0] = 'x'
+		return mcp.ToolResult{Content: []json.RawMessage{text("first"), text("second")}, StructuredContent: json.RawMessage(`{"id":"doc-1"}`)}, nil
+	}}
+	remote, _ := New(caller, "knowledge", descriptor("get_document"))
+	args := json.RawMessage(`{"id":"doc-1"}`)
+	out, err := remote.Invoke(context.Background(), args)
+	if err != nil || !json.Valid(args) {
+		t.Fatalf("%q %v %s", out, err, args)
+	}
+	var result ResultEnvelope
+	if json.Unmarshal([]byte(out), &result) != nil || strings.Join(result.Text, ",") != "first,second" || string(result.StructuredContent) != `{"id":"doc-1"}` {
+		t.Fatal(out)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	late := stubCaller{call: func(context.Context, string, json.RawMessage) (mcp.ToolResult, error) {
+		cancel()
+		return mcp.ToolResult{Content: []json.RawMessage{text("late")}}, nil
+	}}
+	remote, _ = New(late, "knowledge", descriptor("read"))
+	if out, err = remote.Invoke(ctx, nil); out != "" || !errors.Is(err, context.Canceled) {
+		t.Fatalf("%q %v", out, err)
+	}
+}
+
+func TestRemoteErrorsAreControlledAndNeverRetried(t *testing.T) {
+	secret := "SECRET-backend-token"
+	rpc := &mcp.RPCError{Code: -32603, Message: secret, Data: json.RawMessage(`{"private":"SECRET-backend-token"}`)}
+	cases := []struct {
+		name        string
+		result      mcp.ToolResult
+		cause, want error
+	}{
+		{"RPC", mcp.ToolResult{}, rpc, rpc},
+		{"transport", mcp.ToolResult{}, errors.New(secret), nil},
+		{"business", mcp.ToolResult{IsError: true, Content: []json.RawMessage{text(secret)}}, nil, ErrRemoteExecution},
+		{"image", mcp.ToolResult{Content: []json.RawMessage{text("partial"), json.RawMessage(`{"type":"image","data":"AA=="}`)}}, nil, ErrUnsupportedContent},
+		{"malformed text", mcp.ToolResult{Content: []json.RawMessage{json.RawMessage(`{"type":"text"}`)}}, nil, ErrInvalidResult},
+		{"null structured", mcp.ToolResult{Content: []json.RawMessage{}, StructuredContent: json.RawMessage("null")}, nil, ErrInvalidResult},
+		{"missing content", mcp.ToolResult{}, nil, ErrInvalidResult},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			caller := stubCaller{call: func(context.Context, string, json.RawMessage) (mcp.ToolResult, error) {
+				calls++
+				return tc.result, tc.cause
+			}}
+			remote, _ := New(caller, "knowledge", descriptor("read"))
+			adapted, err := tool.Adapt(context.Background(), remote)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wrapped, err := tool.WithPolicy(adapted, tool.Policy{MaxAttempts: 3, ReadOnly: true, Retryable: func(error) bool { return true }})
+			if err != nil {
+				t.Fatal(err)
+			}
+			out, err := wrapped.Execute(context.Background(), json.RawMessage("{}"))
+			var known *tool.Error
+			if out != "" || !errors.As(err, &known) || known.Kind != tool.ExecutionError || strings.Contains(err.Error(), secret) || calls != 1 {
+				t.Fatalf("out=%q err=%v calls=%d", out, err, calls)
+			}
+			if tc.want != nil && !errors.Is(err, tc.want) {
+				t.Fatal("lost diagnostic cause")
+			}
+			if tc.name == "RPC" {
+				var nested *mcp.RPCError
+				if !errors.As(err, &nested) || nested != rpc {
+					t.Fatal("RPC diagnostic lost")
+				}
+			}
+		})
+	}
+	for _, cause := range []error{context.Canceled, context.DeadlineExceeded} {
+		caller := stubCaller{call: func(context.Context, string, json.RawMessage) (mcp.ToolResult, error) { return mcp.ToolResult{}, cause }}
+		remote, _ := New(caller, "knowledge", descriptor("read"))
+		if _, err := remote.Invoke(context.Background(), nil); !errors.Is(err, cause) {
+			t.Fatal(err)
+		}
+	}
+}

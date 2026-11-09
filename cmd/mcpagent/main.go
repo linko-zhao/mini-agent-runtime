@@ -2,16 +2,33 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"log"
 	"time"
 
+	"github.com/linko-zhao/mini-agent-runtime/internal/agent"
 	"github.com/linko-zhao/mini-agent-runtime/internal/mcp"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
 	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
 	"github.com/linko-zhao/mini-agent-runtime/internal/tool/knowledge"
 	"github.com/linko-zhao/mini-agent-runtime/internal/tool/mcptool"
 )
 
+type observedModel struct {
+	base    model.Model
+	history []model.Message
+}
+
+func (m *observedModel) Generate(ctx context.Context, messages []model.Message) (*model.Response, error) {
+	m.history = append([]model.Message(nil), messages...)
+	return m.base.Generate(ctx, messages)
+}
+
 func main() {
-	
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
 }
 
 func run() error {
@@ -54,4 +71,39 @@ func run() error {
 		}
 		tools[name] = wrapped
 	}
+	authorizer, err := tool.NewCapabilityAuthorizer(
+		map[string]tool.Capability{"knowledge__get_document": tool.ReadCapability},
+		map[string][]tool.Capability{"reader": {tool.ReadCapability}},
+	)
+	if err != nil {
+		return err
+	}
+	scripted := model.NewMock([]model.Response{
+		{Message: model.Message{Role: "assistant", ToolCalls: []model.ToolCall{{ID: "model-read-1", Name: "knowledge__get_document", Arguments: json.RawMessage(`{"id":"doc-1"}`)}}}},
+		{Message: model.Message{Role: "assistant", Content: "MCP工具往返完成"}},
+	})
+	observer := &observedModel{base: scripted}
+	runtime, err := agent.New(observer, tools, 3, agent.WithVisibleTools("knowledge__get_document"), agent.WithAuthorizer(authorizer))
+	if err != nil {
+		return err
+	}
+	output, err := runtime.Run(ctx, "读取远端知识文档")
+	if err != nil {
+		return err
+	}
+	if len(observer.history) != 3 || observer.history[2].Role != "tool" || observer.history[2].ToolCallID != "model-read-1" {
+		return fmt.Errorf("unexpected tool history")
+	}
+	var result mcptool.ResultEnvelope
+	if err = json.Unmarshal([]byte(observer.history[2].Content), &result); err != nil {
+		return err
+	}
+	if len(result.Text) != 1 {
+		return fmt.Errorf("missing document text")
+	}
+	fmt.Println("本地工具: knowledge__get_document")
+	fmt.Println("工具消息CallID:", observer.history[2].ToolCallID)
+	fmt.Println("远端正文:", result.Text[0])
+	fmt.Println("Agent结果:", output)
+	return nil
 }

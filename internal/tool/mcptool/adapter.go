@@ -118,6 +118,7 @@ func (t *remoteTool) Invoke(ctx context.Context, args json.RawMessage) (string, 
 		if json.Unmarshal(result.StructuredContent, &object) != nil || object == nil {
 			return "", failure("invalid remote result", ErrInvalidResult)
 		}
+		envelope.StructuredContent = append(json.RawMessage(nil), result.StructuredContent...)
 	}
 	output, err := json.Marshal(envelope)
 	if err != nil {
