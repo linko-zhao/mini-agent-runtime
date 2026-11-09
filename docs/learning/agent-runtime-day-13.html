@@ -1,84 +1,725 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>Day 13 · MCP 工具适配与 Agent 往返</title><style>
-:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#58667b;--line:#e0e6ee;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:920px;margin:auto;padding:32px 22px 70px}.hero{background:#183561;color:#fff;border-radius:18px;padding:29px 30px}.hero small{opacity:.8;letter-spacing:1px}.hero h1{margin:7px 0;font-size:30px;line-height:1.3}.hero p{margin:0;color:#e6eefa}.chips{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}.chip{border:1px solid #8ea4c8;border-radius:20px;padding:3px 10px;font-size:12px}section{background:var(--paper);border:1px solid var(--line);border-radius:14px;margin-top:18px;padding:22px 26px}h2{font-size:19px;margin:0 0 13px}h3{font-size:16px;margin:18px 0 6px}.time{font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.4px}p{margin:8px 0}a{color:var(--accent)}li{margin:6px 0}code{background:#f0f3f8;padding:2px 5px;border-radius:4px}pre{overflow:auto;background:#142136;color:#e7f3ff;padding:17px;border-radius:10px;font-size:13px;line-height:1.65}pre code{background:transparent;padding:0}.goal{background:var(--pale);border-left:3px solid var(--accent);padding:12px 15px;border-radius:4px}.note{background:#fff8e9;border:1px solid #f2deb2;border-radius:9px;padding:11px 14px;color:#644b18}.info{background:#eff6ff;border:1px solid #d5e4fc;border-radius:9px;padding:11px 14px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.grid>div{padding:12px;background:#f6f8fc;border-radius:9px}.grid strong{display:block;font-size:19px}.grid span{font-size:12px;color:var(--sub)}.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0}.check input{margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer;flex:1}.check.done label{text-decoration:line-through;color:var(--sub)}.progress{height:8px;background:#e3e9f2;border-radius:99px;overflow:hidden}.fill{height:100%;background:var(--accent);width:0%;transition:width .2s}.meta{display:flex;justify-content:space-between;font-size:13px;color:var(--sub);margin-bottom:9px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px;vertical-align:top}th{background:#f4f7fc}.tag{display:inline-block;background:#eaf0fc;color:#2459bd;border-radius:5px;font-size:12px;padding:2px 7px;margin-right:6px}.muted{color:var(--sub);font-size:13px}footer{text-align:center;color:var(--sub);font-size:12px;margin:24px}@media(max-width:600px){main{padding:14px 12px 40px}.hero{padding:22px}.hero h1{font-size:24px}section{padding:18px}.grid{grid-template-columns:1fr}table{font-size:12px}th,td{padding:8px}pre{font-size:12px}}
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="description" content="Day 13 图解设计与测试先行学习文档"><title>Day 13 · 让远端 MCP 工具接回已有 Agent</title><style>
+:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#52617a;--line:#dce4ef;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.85 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:820px;padding:28px 22px 64px;margin:auto}.hero{background:#183561;color:white;border-radius:18px;padding:30px}.hero h1{font-size:30px;line-height:1.45;margin:12px 0}.hero p{color:#e6eefa}.eyebrow,.time{font-size:14px;font-weight:700}.chips{display:flex;flex-wrap:wrap;gap:8px}.chips span{font-size:14px;border:1px solid #9cb5d9;border-radius:20px;padding:3px 12px}section,nav{background:white;border:1px solid var(--line);border-radius:14px;padding:26px;margin-top:20px}h2{font-size:24px;line-height:1.5;margin:0 0 20px}h3{font-size:20px;line-height:1.5;margin:24px 0 10px}p{margin:12px 0}a{color:var(--accent);text-underline-offset:3px}li{margin:10px 0}code{font-size:.88em;background:#edf1f7;padding:2px 4px;border-radius:4px;overflow-wrap:anywhere}pre{background:#142136;color:#e7f3ff;border-radius:10px;padding:18px;overflow:auto;font-size:14px;line-height:1.7;tab-size:4}pre code{background:none;padding:0;font-size:inherit;overflow-wrap:normal}.note,.goal{border-left:4px solid var(--accent);background:var(--pale);padding:14px 18px;border-radius:4px}.warn{border-left-color:#9b6500;background:#fff6e3}.card,.rule,.step{border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:18px 0}.card h3,.step h3{margin-top:0}.muted{color:var(--sub);font-size:15px}.flow{display:flex;flex-direction:column;gap:10px;margin:20px 0}.node{border:2px solid #9eb6db;border-radius:10px;padding:15px;background:#f4f8ff}.node strong{display:block}.arrow{text-align:center;color:#345276;font-size:16px}.branch{border:2px dashed #9b6500;background:#fff7e8}.time{color:var(--accent)}details{border:1px solid var(--line);border-radius:9px;padding:12px 16px;margin:16px 0}summary{cursor:pointer;font-weight:650}summary:focus-visible,a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid #c67800;outline-offset:4px}button{font:inherit;font-size:15px;background:#edf3ff;color:#183561;border:1px solid #9eb6db;border-radius:7px;padding:7px 12px;cursor:pointer}.check{display:flex;gap:12px;margin:14px 0}.check input{width:20px;height:20px;flex-shrink:0;margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer}.done label{color:var(--sub);text-decoration:line-through}.progress{background:#e3e9f2;height:12px;border-radius:8px;overflow:hidden}.fill{background:var(--accent);height:100%;width:0}.meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:15px}footer{font-size:15px;text-align:center;padding:24px}.toplinks{display:flex;flex-wrap:wrap;gap:10px 22px}.download{font-size:15px}.code-actions{display:flex;gap:12px;align-items:center;margin-top:12px}.copy-state{font-size:14px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@media(max-width:600px){main{padding:12px 10px 36px}section,nav{padding:20px 16px}.hero{padding:23px 20px}.hero h1{font-size:26px}h2{font-size:22px}pre{padding:14px;font-size:13px}.card,.rule,.step{padding:14px}body{font-size:18px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+
+figure{margin-inline:0}p,.node,figcaption{overflow-wrap:anywhere}.file-label{overflow-wrap:anywhere}.phase{font-weight:700;color:#183561}.copy-status{font-size:14px;color:#52617a}details>pre{margin-bottom:12px}
 </style></head><body><main>
-<header class="hero"><small>MINI AGENT RUNTIME · WEEK 02 · EINO / MCP 对照</small><h1>Day 13 / 56 · MCP 工具适配与 Agent 往返</h1><p>把昨天的协议客户端接到前序工具契约，让远端能力经过同一套注册、策略、授权和消息历史。</p><div class="chips"><span class="chip">阅读 20 分钟</span><span class="chip">编码 80 分钟</span><span class="chip">测试复盘 20 分钟</span></div></header>
-<section><h2>协议能调用了，为什么还要一层适配？</h2><div class="goal">能在不改Agent Loop和消息类型的前提下，将远端工具描述转成本地Spec，将CallTool转成Invoke，解释名称、错误、内容与权限分别在哪里转换。</div>
-<p>Day12的MCP Client已完成初始化、能力协商、发现和调用。若现在直接在Agent.Run里写tools/call分支，Loop就需要知道JSON-RPC、分页、远端名称和内容块；下一个后端又会增加分支。前序Meta/Invoke已经是业务能力的共同入口，今天让远端工具实现它。</p><p>场景仍是读取知识文档。业务逻辑继续复用GetDocument和FakeStore，不再写一套文档工具。新增的是协议到Runtime的边界。课堂按设计路线推进，不以根internal/cmd中的学习者代码状态作为课题或发布门禁。</p></section>
-<section><h2>先走通完整过程：两个名字、两个ID域</h2><pre><code>装配：
-Host → Client.Initialize → Discover("knowledge", maxPages=4)
-     → 远端Descriptor快照 → 本地Meta/Invoke对象
-     → 新Registry → Registry.Tools → Day10 WithPolicy
-     → Agent.New(WithVisibleTools, Day11 WithAuthorizer)
+<header class="hero"><div class="eyebrow">DAY 13 / 56 · 第 2 周 · 图解与 TDD</div><h1>让远端 MCP 工具接回已有 Agent</h1><p>名字隔离、目录分页和结果投影，分别解决不同问题。</p><div class="chips"><span>阅读 20 分钟</span><span>实现 80 分钟</span><span>测试复盘 20 分钟</span></div></header>
+<nav aria-label="本页学习路线"><strong>一次只做一小步，答案最后看</strong><div class="toplinks"><a href="#goal">① 今天做什么</a><a href="#concepts">② 概念与图解</a><a href="#design">③ 设计理由</a><a href="#contract">④ 行为契约</a><a href="#skeleton">⑤ 骨架</a><a href="#tests">⑥ 完整测试</a><a href="#tasks">⑦ 动手步骤</a><a href="#review">⑧ 验收</a></div></nav>
+<section id="goal"><h2>今天只解决什么？</h2><div class="goal">实现 mcptool 适配器和 Discover，让远端能力实现 Day 08 的 Meta/Invoke，不重写 Loop。</div><p>两个服务器都可能提供 get_document；本地也有同名工具。远端返回内容块，而 Loop 只接收字符串。</p><p>在 Loop 中判断每种远端协议会不断增加分支。适配层负责名称和数据形状转换，Loop 继续按相同接口调用。</p><div class="note">只投影文本块与对象 structuredContent，不假装支持图片。发现不修改活动注册表；不从 annotations 自动授予权限或启用安全重试。</div></section>
+<section id="concepts"><h2>先把概念说清楚</h2><article class="card"><h3>本地别名与远端原名</h3><p>模型看到 knowledge__get_document，远端请求仍使用 get_document。</p><p>前缀由可信宿主分配，区分不同服务器。</p></article><article class="card"><h3>Caller：适配层需要的最小客户端能力</h3><p>只有 ListTools 和 CallTool 两个方法。</p><p>已初始化的 Day 12 Client 实现它；适配器不负责握手、连接关闭或自动重连。</p></article><article class="card"><h3>结果投影：转换表示方式</h3><p>远端 Content 是块数组；本地 Invoke 返回 ResultEnvelope 的 JSON 字符串。</p><p>文本保留在 text 数组，结构化对象保留在 structuredContent。</p></article><h3>图 1 · 模块职责与数据去向</h3><figure class="flow" aria-label="图 1 · 模块职责与数据去向"><div class="node"><strong>Day 12 Client / Caller</strong>管理协议会话，提供目录与调用结果。</div><div class="arrow">↓ ToolsPage / ToolResult</div><div class="node"><strong>Discover / remoteTool</strong>完整收集候选，做名称转换、描述快照和结果投影。</div><div class="arrow">↓ Invokable 与安全结果</div><div class="node"><strong>Registry → Policy → Agent</strong>复用注册、策略和授权；Loop 保留原模型调用 ID。</div><figcaption class="muted">沿箭头从上到下读；每个框说明负责的事或当前输入输出。</figcaption></figure><details><summary>展开这张图的逐步文字说明</summary><ol><li><strong>Day 12 Client / Caller</strong>：管理协议会话，提供目录与调用结果。</li><li><strong>Discover / remoteTool</strong>：完整收集候选，做名称转换、描述快照和结果投影。</li><li><strong>Registry → Policy → Agent</strong>：复用注册、策略和授权；Loop 保留原模型调用 ID。</li></ol></details></section>
+<section id="walkthrough"><h2>沿同一个例子走一遍</h2><h3>图 2 · 一次完整过程</h3><figure class="flow" aria-label="图 2 · 一次完整过程"><div class="node"><strong>① Host 发现 knowledge 服务器</strong>ListTools 返回 get_document；New 创建本地 knowledge__get_document 描述。</div><div class="arrow">↓ 本地描述与别名</div><div class="node"><strong>② 模型选择本地别名</strong>ToolCallID=remote-read，Arguments={&quot;id&quot;:&quot;doc-1&quot;}；授权使用本地别名。</div><div class="arrow">↓ 原名与参数副本</div><div class="node"><strong>③ Invoke 路由原名</strong>Caller.CallTool(&quot;get_document&quot;,args)；Client 单独分配整数 RPC ID。</div><div class="arrow">↓ ResultEnvelope JSON</div><div class="node"><strong>④ 投影后回填</strong>Content text → {&quot;text&quot;:[&quot;文档正文&quot;]}；Loop 用原 remote-read 关联结果，再交模型。</div><figcaption class="muted">沿箭头从上到下读；每个框说明负责的事或当前输入输出。</figcaption></figure><details><summary>展开这张图的逐步文字说明</summary><ol><li><strong>① Host 发现 knowledge 服务器</strong>：ListTools 返回 get_document；New 创建本地 knowledge__get_document 描述。</li><li><strong>② 模型选择本地别名</strong>：ToolCallID=remote-read，Arguments={&quot;id&quot;:&quot;doc-1&quot;}；授权使用本地别名。</li><li><strong>③ Invoke 路由原名</strong>：Caller.CallTool(&quot;get_document&quot;,args)；Client 单独分配整数 RPC ID。</li><li><strong>④ 投影后回填</strong>：Content text → {&quot;text&quot;:[&quot;文档正文&quot;]}；Loop 用原 remote-read 关联结果，再交模型。</li></ol></details><h3>失败时停在哪里？</h3><div class="node branch">先收到一块 text，后面还有 image。适配器返回 ErrUnsupportedContent 的受控错误，不能只取文本然后声称完整处理了结果。</div></section>
+<section id="design"><h2>这些字段、接口和方法为什么存在？</h2><article class="card"><h3>remoteTool 的三个字段</h3><p>caller 保存调用端口，remoteName 用来路由原名，spec 保存带别名的描述快照。</p><p>Meta 只读快照，不请求远端。</p></article><article class="card"><h3>New 的输入输出</h3><p>New(caller,prefix,Descriptor) 返回 tool.Invokable。</p><p>构造拒绝 nil、非法名称、非 object schema；复制 InputSchema，不执行工具。</p></article><article class="card"><h3>名称约束为何明确拒绝？</h3><p>prefix 匹配 ^[A-Za-z][A-Za-z0-9-]*$，不允许下划线；原名匹配 ^[A-Za-z0-9_-]+$。</p><p>组合 prefix__name 最长 64 字节。</p><p>静默清洗可能让两个名字碰撞，所以不自动更名。</p></article><article class="card"><h3>Discover 的页数和两个集合</h3><p>maxPages 是正整数预算。</p><p>seenNames 检测跨页重名，seenCursors 检测游标循环；cursor 原样传回，不解析。</p><p>失败返回 nil，不泄露半套候选。</p></article><article class="card"><h3>ResultEnvelope 的两个字段</h3><p>Text 收集全部 text 文本，空 content 数组产生空 text 数组；StructuredContent 可缺省，存在时必须是对象并复制原 JSON。</p><p>只要有非文本块，整个投影失败，不保留部分文本伪装成功。</p></article><article class="card"><h3>Invoke 的错误语义</h3><p>取消/超时保留 context 原因并终止 Run。</p><p>RPC/传输错误和远端 IsError 返回 tool.ExecutionError 受控摘要，Cause 保留可信诊断；原错误正文不进入模型。</p></article><article class="card"><h3>装配与执行分开</h3><p>Initialize → Discover → 新 Registry → Tools → Policy → Agent。</p><p>Meta 不执行远端工具；本地授权名用别名，实际 tools/call 用原名；Principal 与模型调用 ID 不塞进 Arguments。</p></article></section>
+<section id="contract"><h2>行为契约：不用猜参考代码</h2><p>按下面规则实现。内部算法可以不同；未约定的错误文本不必逐字一致，错误链用 errors.Is/As 检查。</p><article class="rule"><h3>R1 · 名称与快照</h3><p>严格遵守前缀/原名模式与 64 字节上限；基本 schema 为 object。Meta 不调用远端、每次返回描述副本，已取消则返回 context 错误。</p><p class="muted">对应测试：<code>TestMetadataSnapshotAndNameBoundary</code></p></article><article class="rule"><h3>R2 · 完整发现</h3><p>正 maxPages；按 NextCursor 原样翻页；tools 必须数组；跨页重名、重复游标、超预算、目录或构造失败均返回 nil。Discover 不改变 Registry。</p><p class="muted">对应测试：<code>TestDiscoveryPaginationAndAtomicFailure / TestDay13DiscoveryEdges / TestRegistryConflictDoesNotReplaceExistingTool</code></p></article><article class="rule"><h3>R3 · 结果形状</h3><p>Content 不可 nil；块须有 type=text 和 text 字段；非文本→ErrUnsupportedContent，畸形→ErrInvalidResult。StructuredContent 如存在必须对象，成功返回明确的 ResultEnvelope JSON。</p><p class="muted">对应测试：<code>TestResultProjectionAndCancellation / TestRemoteErrorsAreControlledAndNeverRetried / TestDay13BoundaryAndEmptyResult</code></p></article><article class="rule"><h3>R4 · 安全错误与取消</h3><p>IsError→ErrRemoteExecution；RPC/传输错误保持 Cause，摘要不带私有内容；取消保留 errors.Is。受控错误不会触发 Day 10 自动重试。</p><p class="muted">对应测试：<code>TestRemoteErrorsAreControlledAndNeverRetried / TestResultProjectionAndCancellation / TestRemoteErrorsAreControlledAndNeverRetried / TestDay13BoundaryAndEmptyResult</code></p></article><article class="rule"><h3>R5 · 真实接回 Loop</h3><p>本地描述、授权使用别名，远端请求使用原名；保留模型调用 ID，不把它与 Principal 塞进 Arguments；授权拒绝时后续 tools/call=0。</p><p class="muted">对应测试：<code>TestAgentRemoteRoundTripAndAuthorization</code></p></article></section>
+<section id="read"><h2>官方阅读 20 分钟：带着问题找证据</h2><article class="card"><div class="time">12 分钟</div><h3><a href="https://github.com/cloudwego/eino-ext/blob/main/components/tool/mcp/mcp.go">eino-ext · GetTools / InvokableRun</a></h3><p>定位目录描述怎样变成工具、调用结果怎样映射。用两种颜色之外的文字标签标明协议层和适配层。</p></article><article class="card"><div class="time">8 分钟</div><h3><a href="https://github.com/cloudwego/eino/blob/main/components/tool/interface.go">Eino · BaseTool / InvokableTool</a></h3><p>对照 Info/InvokableRun 与本课 Meta/Invoke；为什么新增远端协议不应要求 Loop 改成另一套消息？</p></article><p class="muted">外部链接供源码对照；正文独立可读。本次未重新核对所有远端 main 符号，阅读时记录 commit，名称变化时按职责定位；不把框架默认策略直接视为本课约定。</p></section>
+<section id="continuity"><h2>承接前序设计与本日增量</h2><p>复用 Day 12 的 Descriptor/ToolsPage/ToolResult/Client、Day 08 的 Spec/Invokable、Day 09 ID 关联、Day 10 Policy、Day 11 授权。新增/修改 internal/tool/mcptool/adapter.go 与 discovery.go；公开 Agent API 不迁移。</p><p><strong>路径约定：</strong>练习使用 internal；参考使用 examples/internal。两套包只映射路径前缀，不能混用 model.Message。共用原仓库 go.mod，Go ≥ 1.22.2；没有每日独立 module。</p><p>新增或修改：internal/tool/mcptool/adapter.go；已有实现先保留，不把同名定义重复追加。</p><p>新增或修改：internal/tool/mcptool/discovery.go；已有实现先保留，不把同名定义重复追加。</p><div class="note"><strong>安全开始：</strong>下面命令只新建仓库外的临时练习副本，复制同一累计模块的前置依赖，再把当天目标换成 TODO。不会修改你当前的 internal/cmd，也不根据你的代码判断进度。</div><pre><code>python3 docs/learning/exercises/prepare.py 13</code></pre><p>在原仓库根运行。脚本打印新副本的绝对路径；进入该目录后再编辑和测试。需要 Python 3.9+ 和 Go 工具链，不需要 API Key。</p><p>副本内包含为兼容累计版本提供的组件；当天任务只编辑上面列出的目标。已经实现过时，也可以只把完整测试应用到自己的版本，无需挖空重做。</p><details><summary>手工应用文件与保留旧实现</summary><p>先备份或在独立工作区操作。按本页路径保存骨架与测试；前序依赖使用同一套累计类型。当天测试文件若已存在，比较后更新，不与旧版重复定义。不要自动覆盖当前项目；参考基线仅用于准备依赖。</p><p>prepare.py 把参考依赖映射到副本 internal；当天方法始终使用未实现骨架。装配脚本不运行用户任务，也不证明你的原实现通过测试。</p></details></section>
+<section id="skeleton"><h2>完整骨架：方法体留给你</h2><p>每个文件的 package、import、类型和签名齐全。panic("TODO: ...") 表示尚未实现；它不是最终错误处理方式。按文件名保存，不只复制某个方法。</p><h3 class="file-label">待实现骨架：internal/tool/mcptool/adapter.go</h3><p class="download"><a href="exercises/day13/skeleton/internal/tool/mcptool/adapter.go.txt" download="adapter.go">下载 adapter.go</a></p><details class="code-file" data-kind="skeleton" data-source="day13/skeleton/internal/tool/mcptool/adapter.go.txt"><summary>展开完整文件：adapter.go</summary><pre id="day13-skeleton-internal-tool-mcptool-adapter-go"><code>// Package mcptool adapts the Day12 MCP client to the existing Day08 tool contract.
+package mcptool
 
-运行：
-Model.ToolCall{ID:"model-call-42", Name:"knowledge__get_document"}
- → Loop保存assistant，检查整批ID/名称 → 本地主体授权
- → Execute → 旧适配器 → remote.Invoke(ctx,args)
- → Client.CallTool("get_document", args)
- → JSON-RPC{id:3, method:"tools/call"} → Server → GetDocument.Invoke
- ← MCP ToolResult → 本地ResultEnvelope JSON
- ← tool{ToolCallID:"model-call-42", Content:结果}
- → Model.Generate(完整历史) → 最终回答</code></pre>
-<p><strong>名字不同：</strong>模型/注册表/授权表使用本地别名knowledge__get_document；远端协议仍使用原名get_document。<strong>ID不同：</strong>模型ID由Agent保留，RPC整数ID由Client分配；适配器不把模型ID或Principal塞进arguments。</p><p><strong>先预测：</strong>模型能看到别名，但reader没有该能力权限。初始化和发现可能已发生，执行授权仍会在Invoke之前拒绝；测试要求后续<strong>tools/call次数为0</strong>，不是声称整个流程没有协议消息。</p><p>脚本模型验证装配、调用关联和结果历史，不证明真实LLM会选对工具。内存Server验证真实JSON报文，但不证明生产网络认证或后端ACL已经部署。</p></section>
-<section><h2>承接前序设计与本日增量</h2><table><thead><tr><th>操作</th><th>路径</th><th>职责与兼容关系</th></tr></thead><tbody>
-<tr><td>新增</td><td>examples/internal/tool/mcptool/adapter.go</td><td>Descriptor→Spec、Meta快照、Invoke→CallTool、结果/错误转换</td></tr>
-<tr><td>新增</td><td>examples/internal/tool/mcptool/discovery.go</td><td>有界分页、游标循环/跨页重名检查；完整成功才返回候选</td></tr>
-<tr><td>新增</td><td>examples/internal/tool/mcptool/adapter_test.go、integration_test.go</td><td>边界反例和真正经过Agent/MCP Client的内存往返</td></tr>
-<tr><td>新增</td><td>examples/cmd/mcpagent/main.go</td><td>注册远端别名、装配策略和授权、观察下一轮模型输入</td></tr>
-<tr><td>复用</td><td>examples/internal/mcp、tool/contract.go、registry.go、policy.go、access.go、agent、model</td><td>维持前序公开接口、消息与错误契约，不复制Loop或业务工具</td></tr>
-<tr><td>更新</td><td>examples/README.md、CONTRACTS.md</td><td>记录名称规则、投影格式、失败策略与真实验收</td></tr>
-</tbody></table><p>共享根go.mod，包前缀仍为github.com/linko-zhao/mini-agent-runtime/examples/internal/。没有每日Module，也不依赖Eino SDK运行。外部SDK若要接入，需实现本课的Caller协议端口，不假定其类型与Day12客户端天然相同。</p>
-<p><strong>迁移说明：</strong>旧本地工具和Agent.New/Run不用改。新增远端工具按新别名注册；调用方若解析它的结果，应使用ResultEnvelope，而不是当成旧本地Document JSON。Host继续负责先初始化客户端和最终的会话清理/恢复。</p></section>
-<section><h2>为什么这样设计？</h2><table><thead><tr><th>设计</th><th>直接做法的局限</th><th>选择与代价</th></tr></thead><tbody>
-<tr><td>本地别名，远端原名</td><td>两个Server都叫get_document会冲突，授权表也无法区分来源</td><td>宿主分配prefix__name；前缀不含下划线，组合最长64字节。部分MCP名称不能直接映射，明确拒绝而非偷偷清洗</td></tr>
-<tr><td>完整发现后装配新Registry</td><td>边翻页边写活动注册表，后页失败会暴露半套目录</td><td>页数上限、游标循环和重名检查；失败返回nil。注册仍用新Registry，成功后再发布，不热改共享Agent</td></tr>
-<tr><td>Meta只读快照</td><td>每次枚举都访问Server会使绑定依赖网络和目录变化</td><td>复制Schema，Meta不发远端请求；目录更新需宿主显式重新发现和装配</td></tr>
-<tr><td>结果投影显式定义</td><td>直接连接字符串可能丢图片/结构化内容，还无法判断失败</td><td>成功返回JSON Envelope；暂只支持文本块，非文本明确失败；真正多模态需扩展消息契约</td></tr>
-</tbody></table>
-<p>本地别名不能认证Server，也不能证明远端工具是只读。服务器身份、目录来源和能力分类必须由宿主信任配置；远端annotations/readOnlyHint既不自动授予权限，也不自动配置安全重试。</p></section>
-<section><h2>结果与错误怎样进入下一轮模型？</h2><p>成功结果统一为以下JSON字符串。多个文本块按顺序放入text数组；structuredContent存在时保留对象，不把它偷偷拼进一段散文：</p><pre><code>// 数据示意，不是独立Go程序
-MCP结果：
-{"content":[{"type":"text","text":"文档正文"}],
- "structuredContent":{"id":"doc-1"}}
+import (
+	&quot;context&quot;
+	&quot;encoding/json&quot;
+	&quot;errors&quot;
 
-本地Invoke返回字符串的JSON内容：
-{"text":["文档正文"],"structuredContent":{"id":"doc-1"}}</code></pre>
-<p>原GetDocument返回的正文可能本身就是Document JSON，因此演示的text[0]是那段JSON字符串。接口仍返回string，但投影契约清楚可见；不改旧本地工具的输出。</p>
-<table><thead><tr><th>远端情况</th><th>适配结果</th><th>Agent行为</th></tr></thead><tbody>
-<tr><td>ctx取消/超时</td><td>保留errors.Is语义，不转成普通业务错误</td><td>终止Run，不继续下一轮</td></tr>
-<tr><td>有效MCP结果isError=true</td><td>受控ExecutionError：remote tool execution failed</td><td>回填安全摘要和原CallID，模型可据此结束或调整</td></tr>
-<tr><td>RPC/传输/失效会话错误</td><td>受控request failed，Cause供可信宿主诊断；不回填原始Message/Data</td><td>不自动重连重放；failed客户端仍拒绝后续发送，Loop保留原有限步数</td></tr>
-<tr><td>图片/资源等非文本块</td><td>明确返回ErrUnsupportedContent，不返回前面部分文本</td><td>不会把部分结果冒充完整成功</td></tr>
-<tr><td>畸形文本或structuredContent</td><td>受控ErrInvalidResult</td><td>不将畸形数据标为成功结果</td></tr>
-</tbody></table><p>Day10的WithPolicy作用在Invoke外侧，对最终投影JSON施加结果预算。受控tool.Error不会触发自动重试；这项保守选择避免把不确定远端执行重放。权限由Day11独立检查，远端错误和正文都不是新的授权指令。</p></section>
-<section><div class="time">20 MIN · READ</div><h2>带着映射问题读Eino与规范</h2><h3>12分钟 · Eino的MCP工具桥接</h3><p>阅读 <a href="https://github.com/cloudwego/eino-ext/blob/main/components/tool/mcp/mcp.go">eino-ext/components/tool/mcp/mcp.go</a> 的Config.Cli、GetTools、ToolNameList、toolHelper.Info、InvokableRun及ToolCallResultHandler。</p><p><strong>问题与产出：</strong>初始化在哪里完成？ListTools如何变成ToolInfo？工具执行如何调用Cli.CallTool？结果在哪层整形？画出GetTools→Info/InvokableRun与本课Discover→Meta/Invoke的对应。ToolNameList过滤不等于授权；Eino源码对结果序列化的选择与本课文本投影不同，不应盲目照搬。</p><h3>8分钟 · MCP工具结果与不可信提示</h3><p>阅读固定版本 <a href="https://modelcontextprotocol.io/specification/2025-06-18/server/tools">MCP Tools规范</a> 的工具描述、内容块、structuredContent、isError与annotations。解释为什么协议结构可保留丰富内容，但当前Runtime的string消息仍需要明确投影或拒绝策略。</p><p><strong>产出：</strong>列出协议层、适配层、执行授权层各负责的一项检查；说明为什么远端readOnlyHint不足以证明安全重试。本课继续固定2025-06-18版本，源码main可能演进，阅读时记录版本。</p></section>
-<section><div class="time">80 MIN · BUILD</div><h2>四项连续练习：先设计边界，再对照参考</h2>
-<h3>任务一 · 20分钟：发现目录与名称隔离</h3><p><strong>为什么做：</strong>让多个Server的能力进入同一Runtime，同时避免半套目录和名称覆盖。<strong>操作与观察：</strong>5分钟手画分页与本地/远端名称表；10分钟阅读discovery.go与adapter.go的构造；5分钟预测游标循环、后页重名和不兼容名字。下面是实际参考接口摘录，不是独立程序：</p><pre><code>func Discover(ctx context.Context, caller Caller,
-    prefix string, maxPages int) ([]tool.Invokable, error)
-func New(caller Caller, prefix string,
-    descriptor mcp.Descriptor) (tool.Invokable, error)
-// 调用前由Host完成client.Initialize。
-// 本地knowledge__get_document，远端仍叫get_document。</code></pre><p><strong>完成证据：</strong>超出页数预算/重复游标/跨页重名返回nil而非部分候选；Meta不调用远端业务；构造输入和返回的Schema副本被修改，也不影响内部快照。前缀限字母开头的字母/数字/连字符，远端名限字母/数字/下划线/连字符；这是本地适配限制，不是所有MCP名字的定义。</p>
-<h3>任务二 · 20分钟：把CallTool接成Invoke，选择投影</h3><p><strong>为什么做：</strong>Loop不应理解JSON-RPC，也不能直接信任所有远端结果格式。<strong>操作与观察：</strong>10分钟跟踪Invoke里的context检查、原名路由、错误分类和ResultEnvelope编码；5分钟预测文本+structuredContent和文本+image两种输入；5分钟看失败时是否有部分正文泄漏。</p><p><strong>完成证据：</strong>成功保留文本顺序和结构化对象；不支持的块明确失败；RPC私有错误信息不进入模型错误文本；context仍能终止Run。只有新远端别名使用Envelope，旧knowledge工具不变。</p>
-<h3>任务三 · 25分钟：复用装配链，观察模型第二轮</h3><p><strong>为什么做：</strong>接入新能力应扩展工具边界，而不是在Agent.Run里增加MCP分支。<strong>操作与观察：</strong>10分钟阅读examples/cmd/mcpagent/main.go，沿已初始化Client→Discover→新Registry→Registry.Tools→WithPolicy→WithAuthorizer走一遍；10分钟运行入口并检查真实回填文档；5分钟对照integration_test.go里的两个ID域。</p><pre><code># 从仓库根执行，继续共享根go.mod
-go run ./examples/cmd/mcpagent</code></pre><p><strong>完成证据：</strong>本地别名绑定给模型，远端收到get_document；第二轮历史有原assistant消息和原ToolCallID的tool结果。演示用脚本模型，最终文本不能单独证明成功，必须同时核对工具结果和调用关联。</p>
-<h3>任务四 · 15分钟：验证拒绝路径与注册冲突</h3><p><strong>为什么做：</strong>适配新协议不能绕开已有权限和错误策略。<strong>操作与观察：</strong>5分钟把reader的授权清空，观察远端调用计数；5分钟登记两个同别名工具和两个不同Server前缀；5分钟讨论真实Server身份与本地主体的区别。</p><p><strong>完成证据：</strong>描述可见也可能被拒绝，拒绝后tools/call为0、模型只调用一次；Registry拒绝重名且不替换旧工具。内存夹具在同进程传context，不意味着Principal会自动跨网络；真实服务的认证与资源授权仍是独立边界。</p></section>
-<section><div class="time">20 MIN · TEST &amp; REVIEW</div><h2>用反例验收，而不仅是输出一句成功</h2><p><strong>12分钟实作：</strong>先预测断言，再从仓库根运行：</p><pre><code>go test ./examples/...
-go test -race ./examples/...
-go run ./examples/cmd/mcpagent</code></pre>
-<table><thead><tr><th>测试</th><th>对应的搭建判断</th></tr></thead><tbody>
-<tr><td>TestMetadataSnapshotAndNameBoundary</td><td>元信息是快照；名字不兼容明确拒绝；Meta不执行工具</td></tr>
-<tr><td>TestDiscoveryPaginationAndAtomicFailure</td><td>发现必须有界、检测循环/重名、失败无部分发布</td></tr>
-<tr><td>TestResultProjectionAndCancellation</td><td>投影保持文本与结构化结果；参数副本；取消优先于迟到成功</td></tr>
-<tr><td>TestRemoteErrorsAreControlledAndNeverRetried</td><td>秘密错误内容不回填；不支持内容不截断成成功；受控远端错误不被Policy重试</td></tr>
-<tr><td>TestAgentRemoteRoundTripAndAuthorization</td><td>真的经过Agent和内存JSON-RPC；名称/ID分域、结果进入下一轮、拒绝后远端call为0</td></tr>
-<tr><td>TestRegistryConflictDoesNotReplaceExistingTool</td><td>同名冲突不覆盖；不同来源前缀可以并存</td></tr>
-</tbody></table>
-<p class="info"><strong>本次真实验证：</strong>官方Go1.22.2 linux/amd64下，累计examples普通测试与race命令均退出码0；mcpagent演示实际输出本地别名、模型原始CallID、夹具文档正文JSON及脚本模型结束结果。本次没有连接真实MCP网络服务或真实LLM，不宣称OAuth、服务器认证或生产端到端链路已验证。</p><p><strong>8分钟理解验收：</strong></p><ol><li>不看代码，讲出一条远端调用如何经过本地授权、MCP协议、投影并回到下一轮模型。</li><li>新增第二个Server且工具同名，哪个装配层需要变化？为什么不修改Agent Loop？</li><li>若要求支持图片输入/输出，当前string契约不足在哪里？为什么不能只忽略image块？</li><li>远端错误包含私有数据或声明readOnlyHint时，哪些信息可供模型、哪些只能供可信宿主判断？</li></ol>
-<h3>学习清单</h3><div class="meta"><span>浏览器自评进度，不替代测试与理解证据</span><span id="count">0 / 8</span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div><div id="checks"></div></section>
-<section><h2>Definition of Done 与 Day14衔接</h2><p>理解上：能定位协议/适配/Loop/权限的职责，解释本地名字和两个ID域、结果投影和不重放的取舍。实现上：分页与冲突有界、成功与失败映射明确、结果进入模型历史、拒绝路径零远端执行，累计examples和race通过。本次参考示例已按上述命令完成验证。</p><p>Day14进行第二周综合集成与复盘：把工具抽象、批次执行、策略、授权、MCP生命周期与适配串成完整路径，用需求变化和故障反例检验搭建判断。生产网络传输、认证、多模态与持久恢复仍需单独设计，不能由离线Mock通过推断完成。</p></section>
-<footer>Agent Runtime · Day13 / 56 · 离线学习内容 · <a href="../../index.html">返回学习首页</a></footer></main>
+	&quot;regexp&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/mcp&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool&quot;
+)
+
+var (
+	ErrDiscovery          = errors.New(&quot;mcptool: discovery rejected&quot;)
+	ErrRemoteExecution    = errors.New(&quot;mcptool: remote execution failed&quot;)
+	ErrUnsupportedContent = errors.New(&quot;mcptool: unsupported content&quot;)
+	ErrInvalidResult      = errors.New(&quot;mcptool: invalid result&quot;)
+	prefixPattern         = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9-]*$`)
+	namePattern           = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+)
+
+// Caller is implemented by an already-initialized *mcp.Client.
+// The host owns initialization, transport cleanup and recovery.
+type Caller interface {
+	ListTools(context.Context, string) (mcp.ToolsPage, error)
+	CallTool(context.Context, string, json.RawMessage) (mcp.ToolResult, error)
+}
+
+// ResultEnvelope is the explicit projection into the existing string result.
+// Non-text blocks are rejected, not silently flattened or discarded.
+type ResultEnvelope struct {
+	Text              []string        `json:&quot;text&quot;`
+	StructuredContent json.RawMessage `json:&quot;structuredContent,omitempty&quot;`
+}
+
+type remoteTool struct {
+	caller     Caller
+	remoteName string
+	spec       tool.Spec
+}
+
+func localName(prefix, name string) (string, error) { panic(&quot;TODO: localName&quot;) }
+
+// New snapshots metadata. It does not initialize a client, execute a tool,
+// or derive authorization/retry policy from remote annotations.
+func New(caller Caller, prefix string, d mcp.Descriptor) (tool.Invokable, error) { panic(&quot;TODO: New&quot;) }
+
+func (t *remoteTool) Meta(ctx context.Context) (tool.Spec, error) { panic(&quot;TODO: Meta&quot;) }
+
+func failure(message string, cause error) error { panic(&quot;TODO: failure&quot;) }
+
+func (t *remoteTool) Invoke(ctx context.Context, args json.RawMessage) (string, error) {
+	panic(&quot;TODO: Invoke&quot;)
+}
+</code></pre><button type="button" data-copy="day13-skeleton-internal-tool-mcptool-adapter-go">复制本文件</button></details><h3 class="file-label">待实现骨架：internal/tool/mcptool/discovery.go</h3><p class="download"><a href="exercises/day13/skeleton/internal/tool/mcptool/discovery.go.txt" download="discovery.go">下载 discovery.go</a></p><details class="code-file" data-kind="skeleton" data-source="day13/skeleton/internal/tool/mcptool/discovery.go.txt"><summary>展开完整文件：discovery.go</summary><pre id="day13-skeleton-internal-tool-mcptool-discovery-go"><code>package mcptool
+
+import (
+	&quot;context&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool&quot;
+)
+
+// Discover returns all candidate adapters or nil on any failure. It never
+// mutates a registry; the host assembles a new registry after discovery succeeds.
+func Discover(ctx context.Context, caller Caller, prefix string, maxPages int) ([]tool.Invokable, error) {
+	panic(&quot;TODO: Discover&quot;)
+}
+</code></pre><button type="button" data-copy="day13-skeleton-internal-tool-mcptool-discovery-go">复制本文件</button></details></section>
+<section id="tests"><h2>完整测试：夹具和断言都已提供</h2><p>下面是全部测试文件，不需要补 fake、fixture 或断言。测试调用练习的 internal 包，不是已完成的 examples 答案。</p><h3 class="file-label">完整测试：internal/tool/mcptool/adapter_test.go</h3><p class="download"><a href="exercises/day13/tests/internal/tool/mcptool/adapter_test.go.txt" download="adapter_test.go">下载 adapter_test.go</a></p><details class="code-file" data-kind="tests" data-source="day13/tests/internal/tool/mcptool/adapter_test.go.txt"><summary>展开完整文件：adapter_test.go</summary><pre id="day13-tests-internal-tool-mcptool-adapter-test-go"><code>package mcptool
+
+import (
+	&quot;context&quot;
+	&quot;encoding/json&quot;
+	&quot;errors&quot;
+	&quot;strings&quot;
+	&quot;testing&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/mcp&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool&quot;
+)
+
+type stubCaller struct {
+	list func(context.Context, string) (mcp.ToolsPage, error)
+	call func(context.Context, string, json.RawMessage) (mcp.ToolResult, error)
+}
+
+func (s stubCaller) ListTools(ctx context.Context, cursor string) (mcp.ToolsPage, error) {
+	if s.list == nil {
+		return mcp.ToolsPage{Tools: []mcp.Descriptor{}}, nil
+	}
+	return s.list(ctx, cursor)
+}
+func (s stubCaller) CallTool(ctx context.Context, name string, args json.RawMessage) (mcp.ToolResult, error) {
+	if s.call == nil {
+		return mcp.ToolResult{}, errors.New(&quot;unexpected execution&quot;)
+	}
+	return s.call(ctx, name, args)
+}
+func descriptor(name string) mcp.Descriptor {
+	return mcp.Descriptor{Name: name, Description: &quot;knowledge lookup&quot;, InputSchema: json.RawMessage(`{&quot;type&quot;:&quot;object&quot;}`), Annotations: json.RawMessage(`{&quot;readOnlyHint&quot;:true}`)}
+}
+func text(s string) json.RawMessage {
+	b, _ := json.Marshal(map[string]string{&quot;type&quot;: &quot;text&quot;, &quot;text&quot;: s})
+	return b
+}
+
+func TestMetadataSnapshotAndNameBoundary(t *testing.T) {
+	calls := 0
+	caller := stubCaller{call: func(context.Context, string, json.RawMessage) (mcp.ToolResult, error) {
+		calls++
+		return mcp.ToolResult{}, nil
+	}}
+	d := descriptor(&quot;get_document&quot;)
+	remote, err := New(caller, &quot;knowledge&quot;, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.InputSchema[0] = &#x27;x&#x27;
+	spec, err := remote.Meta(context.Background())
+	if err != nil || spec.Name != &quot;knowledge__get_document&quot; || !json.Valid(spec.InputSchema) || calls != 0 {
+		t.Fatalf(&quot;%+v %v calls=%d&quot;, spec, err, calls)
+	}
+	spec.InputSchema[0] = &#x27;x&#x27;
+	again, _ := remote.Meta(context.Background())
+	if !json.Valid(again.InputSchema) {
+		t.Fatal(&quot;metadata mutation changed snapshot&quot;)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := remote.Meta(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ prefix, name string }{
+		{&quot;&quot;, &quot;x&quot;}, {&quot;bad_prefix&quot;, &quot;x&quot;}, {&quot;knowledge&quot;, &quot;server.read&quot;}, {&quot;knowledge&quot;, &quot;中文&quot;},
+		{&quot;knowledge&quot;, strings.Repeat(&quot;x&quot;, 64)}, {&quot;knowledge&quot;, &quot;&quot;},
+	} {
+		if _, err := New(caller, tc.prefix, descriptor(tc.name)); !errors.Is(err, ErrDiscovery) {
+			t.Fatalf(&quot;%+v %v&quot;, tc, err)
+		}
+	}
+	if _, err := New(nil, &quot;knowledge&quot;, descriptor(&quot;x&quot;)); !errors.Is(err, ErrDiscovery) {
+		t.Fatal(err)
+	}
+	bad := descriptor(&quot;x&quot;)
+	bad.InputSchema = json.RawMessage(`{&quot;type&quot;:&quot;array&quot;}`)
+	if _, err := New(caller, &quot;knowledge&quot;, bad); !errors.Is(err, ErrDiscovery) {
+		t.Fatal(err)
+	}
+}
+
+func TestDiscoveryPaginationAndAtomicFailure(t *testing.T) {
+	var cursors []string
+	caller := stubCaller{list: func(_ context.Context, cursor string) (mcp.ToolsPage, error) {
+		cursors = append(cursors, cursor)
+		if cursor == &quot;&quot; {
+			return mcp.ToolsPage{Tools: []mcp.Descriptor{descriptor(&quot;search&quot;)}, NextCursor: &quot;opaque-next&quot;}, nil
+		}
+		return mcp.ToolsPage{Tools: []mcp.Descriptor{descriptor(&quot;read&quot;)}}, nil
+	}}
+	tools, err := Discover(context.Background(), caller, &quot;knowledge&quot;, 2)
+	if err != nil || len(tools) != 2 || strings.Join(cursors, &quot;,&quot;) != &quot;,opaque-next&quot; {
+		t.Fatalf(&quot;%v %v %v&quot;, tools, err, cursors)
+	}
+	first, _ := tools[0].Meta(context.Background())
+	if first.Name != &quot;knowledge__search&quot; {
+		t.Fatal(first)
+	}
+	tools, err = Discover(context.Background(), caller, &quot;knowledge&quot;, 1)
+	if tools != nil || !errors.Is(err, ErrDiscovery) {
+		t.Fatalf(&quot;partial discovery: %v %v&quot;, tools, err)
+	}
+	loop := stubCaller{list: func(context.Context, string) (mcp.ToolsPage, error) {
+		return mcp.ToolsPage{Tools: []mcp.Descriptor{}, NextCursor: &quot;same&quot;}, nil
+	}}
+	if tools, err = Discover(context.Background(), loop, &quot;knowledge&quot;, 4); tools != nil || !errors.Is(err, ErrDiscovery) {
+		t.Fatalf(&quot;%v %v&quot;, tools, err)
+	}
+	duplicate := stubCaller{list: func(_ context.Context, cursor string) (mcp.ToolsPage, error) {
+		page := mcp.ToolsPage{Tools: []mcp.Descriptor{descriptor(&quot;read&quot;)}}
+		if cursor == &quot;&quot; {
+			page.NextCursor = &quot;next&quot;
+		}
+		return page, nil
+	}}
+	if tools, err = Discover(context.Background(), duplicate, &quot;knowledge&quot;, 3); tools != nil || !errors.Is(err, ErrDiscovery) {
+		t.Fatalf(&quot;%v %v&quot;, tools, err)
+	}
+	invalidPage := stubCaller{list: func(context.Context, string) (mcp.ToolsPage, error) { return mcp.ToolsPage{}, nil }}
+	if _, err = Discover(context.Background(), invalidPage, &quot;knowledge&quot;, 1); !errors.Is(err, ErrDiscovery) {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err = Discover(ctx, caller, &quot;knowledge&quot;, 2); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+}
+
+func TestResultProjectionAndCancellation(t *testing.T) {
+	caller := stubCaller{call: func(_ context.Context, name string, args json.RawMessage) (mcp.ToolResult, error) {
+		if name != &quot;get_document&quot; || string(args) != `{&quot;id&quot;:&quot;doc-1&quot;}` {
+			t.Fatalf(&quot;%s %s&quot;, name, args)
+		}
+		args[0] = &#x27;x&#x27;
+		return mcp.ToolResult{Content: []json.RawMessage{text(&quot;first&quot;), text(&quot;second&quot;)}, StructuredContent: json.RawMessage(`{&quot;id&quot;:&quot;doc-1&quot;}`)}, nil
+	}}
+	remote, _ := New(caller, &quot;knowledge&quot;, descriptor(&quot;get_document&quot;))
+	args := json.RawMessage(`{&quot;id&quot;:&quot;doc-1&quot;}`)
+	out, err := remote.Invoke(context.Background(), args)
+	if err != nil || !json.Valid(args) {
+		t.Fatalf(&quot;%q %v %s&quot;, out, err, args)
+	}
+	var result ResultEnvelope
+	if json.Unmarshal([]byte(out), &amp;result) != nil || strings.Join(result.Text, &quot;,&quot;) != &quot;first,second&quot; || string(result.StructuredContent) != `{&quot;id&quot;:&quot;doc-1&quot;}` {
+		t.Fatal(out)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	late := stubCaller{call: func(context.Context, string, json.RawMessage) (mcp.ToolResult, error) {
+		cancel()
+		return mcp.ToolResult{Content: []json.RawMessage{text(&quot;late&quot;)}}, nil
+	}}
+	remote, _ = New(late, &quot;knowledge&quot;, descriptor(&quot;read&quot;))
+	if out, err = remote.Invoke(ctx, nil); out != &quot;&quot; || !errors.Is(err, context.Canceled) {
+		t.Fatalf(&quot;%q %v&quot;, out, err)
+	}
+}
+
+func TestRemoteErrorsAreControlledAndNeverRetried(t *testing.T) {
+	secret := &quot;SECRET-backend-token&quot;
+	rpc := &amp;mcp.RPCError{Code: -32603, Message: secret, Data: json.RawMessage(`{&quot;private&quot;:&quot;SECRET-backend-token&quot;}`)}
+	cases := []struct {
+		name        string
+		result      mcp.ToolResult
+		cause, want error
+	}{
+		{&quot;RPC&quot;, mcp.ToolResult{}, rpc, rpc},
+		{&quot;transport&quot;, mcp.ToolResult{}, errors.New(secret), nil},
+		{&quot;business&quot;, mcp.ToolResult{IsError: true, Content: []json.RawMessage{text(secret)}}, nil, ErrRemoteExecution},
+		{&quot;image&quot;, mcp.ToolResult{Content: []json.RawMessage{text(&quot;partial&quot;), json.RawMessage(`{&quot;type&quot;:&quot;image&quot;,&quot;data&quot;:&quot;AA==&quot;}`)}}, nil, ErrUnsupportedContent},
+		{&quot;malformed text&quot;, mcp.ToolResult{Content: []json.RawMessage{json.RawMessage(`{&quot;type&quot;:&quot;text&quot;}`)}}, nil, ErrInvalidResult},
+		{&quot;null structured&quot;, mcp.ToolResult{Content: []json.RawMessage{}, StructuredContent: json.RawMessage(&quot;null&quot;)}, nil, ErrInvalidResult},
+		{&quot;missing content&quot;, mcp.ToolResult{}, nil, ErrInvalidResult},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			caller := stubCaller{call: func(context.Context, string, json.RawMessage) (mcp.ToolResult, error) {
+				calls++
+				return tc.result, tc.cause
+			}}
+			remote, _ := New(caller, &quot;knowledge&quot;, descriptor(&quot;read&quot;))
+			adapted, err := tool.Adapt(context.Background(), remote)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wrapped, err := tool.WithPolicy(adapted, tool.Policy{MaxAttempts: 3, ReadOnly: true, Retryable: func(error) bool { return true }})
+			if err != nil {
+				t.Fatal(err)
+			}
+			out, err := wrapped.Execute(context.Background(), json.RawMessage(&quot;{}&quot;))
+			var known *tool.Error
+			if out != &quot;&quot; || !errors.As(err, &amp;known) || known.Kind != tool.ExecutionError || strings.Contains(err.Error(), secret) || calls != 1 {
+				t.Fatalf(&quot;out=%q err=%v calls=%d&quot;, out, err, calls)
+			}
+			if tc.want != nil &amp;&amp; !errors.Is(err, tc.want) {
+				t.Fatal(&quot;lost diagnostic cause&quot;)
+			}
+			if tc.name == &quot;RPC&quot; {
+				var nested *mcp.RPCError
+				if !errors.As(err, &amp;nested) || nested != rpc {
+					t.Fatal(&quot;RPC diagnostic lost&quot;)
+				}
+			}
+		})
+	}
+	for _, cause := range []error{context.Canceled, context.DeadlineExceeded} {
+		caller := stubCaller{call: func(context.Context, string, json.RawMessage) (mcp.ToolResult, error) { return mcp.ToolResult{}, cause }}
+		remote, _ := New(caller, &quot;knowledge&quot;, descriptor(&quot;read&quot;))
+		if _, err := remote.Invoke(context.Background(), nil); !errors.Is(err, cause) {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestDay13DiscoveryEdges(t *testing.T) {
+	for _, tc := range []struct {
+		caller Caller
+		prefix string
+		max    int
+	}{{nil, &quot;k&quot;, 1}, {stubCaller{}, &quot;&quot;, 1}, {stubCaller{}, &quot;k&quot;, 0}, {stubCaller{}, &quot;k&quot;, -1}} {
+		got, err := Discover(context.Background(), tc.caller, tc.prefix, tc.max)
+		if got != nil || !errors.Is(err, ErrDiscovery) {
+			t.Fatalf(&quot;%+v %v&quot;, got, err)
+		}
+	}
+	cause := errors.New(&quot;directory unavailable&quot;)
+	got, err := Discover(context.Background(), stubCaller{list: func(context.Context, string) (mcp.ToolsPage, error) { return mcp.ToolsPage{}, cause }}, &quot;k&quot;, 1)
+	if got != nil || !errors.Is(err, cause) {
+		t.Fatalf(&quot;%+v %v&quot;, got, err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	got, err = Discover(ctx, stubCaller{list: func(context.Context, string) (mcp.ToolsPage, error) {
+		cancel()
+		return mcp.ToolsPage{Tools: []mcp.Descriptor{}}, nil
+	}}, &quot;k&quot;, 1)
+	if got != nil || !errors.Is(err, context.Canceled) {
+		t.Fatalf(&quot;%+v %v&quot;, got, err)
+	}
+}
+func TestDay13BoundaryAndEmptyResult(t *testing.T) {
+	calls := 0
+	caller := stubCaller{call: func(context.Context, string, json.RawMessage) (mcp.ToolResult, error) {
+		calls++
+		return mcp.ToolResult{Content: []json.RawMessage{}}, nil
+	}}
+	remote, err := New(caller, &quot;k&quot;, descriptor(strings.Repeat(&quot;a&quot;, 61)))
+	if err != nil {
+		t.Fatal(&quot;64 byte name must fit&quot;, err)
+	}
+	spec, err := remote.Meta(context.Background())
+	if err != nil || len(spec.Name) != 64 {
+		t.Fatal(spec, err)
+	}
+	out, err := remote.Invoke(context.Background(), nil)
+	var envelope ResultEnvelope
+	if err != nil || json.Unmarshal([]byte(out), &amp;envelope) != nil || envelope.Text == nil || len(envelope.Text) != 0 {
+		t.Fatalf(&quot;empty array contract: %q %v&quot;, out, err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := remote.Invoke(ctx, nil); !errors.Is(err, context.Canceled) || calls != 1 {
+		t.Fatal(&quot;pre-cancelled invocation sent&quot;, calls, err)
+	}
+}
+</code></pre><button type="button" data-copy="day13-tests-internal-tool-mcptool-adapter-test-go">复制本文件</button></details><h3 class="file-label">完整测试：internal/tool/mcptool/integration_test.go</h3><p class="download"><a href="exercises/day13/tests/internal/tool/mcptool/integration_test.go.txt" download="integration_test.go">下载 integration_test.go</a></p><details class="code-file" data-kind="tests" data-source="day13/tests/internal/tool/mcptool/integration_test.go.txt"><summary>展开完整文件：integration_test.go</summary><pre id="day13-tests-internal-tool-mcptool-integration-test-go"><code>package mcptool
+
+import (
+	&quot;context&quot;
+	&quot;encoding/json&quot;
+	&quot;errors&quot;
+	&quot;strings&quot;
+	&quot;testing&quot;
+	&quot;time&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/agent&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/mcp&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool/knowledge&quot;
+)
+
+type recordingTransport struct {
+	base  mcp.Transport
+	calls int
+	last  []byte
+}
+
+func (r *recordingTransport) Send(ctx context.Context, b []byte) ([]byte, error) {
+	var req struct {
+		Method string `json:&quot;method&quot;`
+	}
+	_ = json.Unmarshal(b, &amp;req)
+	if req.Method == &quot;tools/call&quot; {
+		r.calls++
+		r.last = append([]byte(nil), b...)
+	}
+	return r.base.Send(ctx, b)
+}
+
+type scriptedModel struct {
+	calls   int
+	defs    []model.ToolDefinition
+	history []model.Message
+}
+
+func (m *scriptedModel) WithTools(defs []model.ToolDefinition) (model.Model, error) {
+	m.defs = defs
+	return m, nil
+}
+func (m *scriptedModel) Generate(_ context.Context, msgs []model.Message) (*model.Response, error) {
+	m.calls++
+	m.history = append([]model.Message(nil), msgs...)
+	if m.calls == 1 {
+		return &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, ToolCalls: []model.ToolCall{{ID: &quot;model-call-42&quot;, Name: &quot;knowledge__get_document&quot;, Arguments: json.RawMessage(`{&quot;id&quot;:&quot;doc-1&quot;}`)}}}}, nil
+	}
+	return &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, Content: &quot;done&quot;}}, nil
+}
+
+func TestAgentRemoteRoundTripAndAuthorization(t *testing.T) {
+	for _, allowed := range []bool{true, false} {
+		label := &quot;denied&quot;
+		if allowed {
+			label = &quot;allowed&quot;
+		}
+		t.Run(label, func(t *testing.T) {
+			ctx := tool.WithPrincipal(context.Background(), tool.Principal{ID: &quot;reader&quot;})
+			store := knowledge.NewFakeStore([]knowledge.Document{{ID: &quot;doc-1&quot;, Summary: &quot;MCP&quot;, Content: &quot;existing document body&quot;}})
+			peer, err := mcp.NewDemoServer(ctx, &amp;knowledge.GetDocument{Store: store})
+			if err != nil {
+				t.Fatal(err)
+			}
+			transport := &amp;recordingTransport{base: peer}
+			client, err := mcp.NewClient(transport)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = client.Initialize(ctx); err != nil {
+				t.Fatal(err)
+			}
+			discovered, err := Discover(ctx, client, &quot;knowledge&quot;, 4)
+			if err != nil {
+				t.Fatal(err)
+			}
+			registry := tool.NewRegistry()
+			for _, remote := range discovered {
+				if err = registry.Register(ctx, remote); err != nil {
+					t.Fatal(err)
+				}
+			}
+			tools := registry.Tools()
+			for name, target := range tools {
+				described, ok := target.(tool.DescribedTool)
+				if !ok {
+					t.Fatal(&quot;lost description&quot;)
+				}
+				wrapped, err := tool.WithPolicy(described, tool.Policy{Timeout: time.Second, MaxResultBytes: 4096})
+				if err != nil {
+					t.Fatal(err)
+				}
+				tools[name] = wrapped
+			}
+			grants := []tool.Capability{}
+			if allowed {
+				grants = append(grants, tool.ReadCapability)
+			}
+			authorizer, err := tool.NewCapabilityAuthorizer(map[string]tool.Capability{&quot;knowledge__get_document&quot;: tool.ReadCapability}, map[string][]tool.Capability{&quot;reader&quot;: grants})
+			if err != nil {
+				t.Fatal(err)
+			}
+			scripted := &amp;scriptedModel{}
+			runtime, err := agent.New(scripted, tools, 3, agent.WithVisibleTools(&quot;knowledge__get_document&quot;), agent.WithAuthorizer(authorizer))
+			if err != nil {
+				t.Fatal(err)
+			}
+			output, err := runtime.Run(ctx, &quot;read a remote document&quot;)
+			if len(scripted.defs) != 1 || scripted.defs[0].Name != &quot;knowledge__get_document&quot; {
+				t.Fatal(scripted.defs)
+			}
+			if !allowed {
+				if !errors.Is(err, tool.ErrForbidden) || transport.calls != 0 || scripted.calls != 1 {
+					t.Fatalf(&quot;%v remote=%d model=%d&quot;, err, transport.calls, scripted.calls)
+				}
+				return
+			}
+			if err != nil || output != &quot;done&quot; || transport.calls != 1 || scripted.calls != 2 {
+				t.Fatalf(&quot;%q %v remote=%d&quot;, output, err, transport.calls)
+			}
+			if len(scripted.history) != 3 || scripted.history[1].Role != &quot;assistant&quot; || scripted.history[2].Role != &quot;tool&quot; || scripted.history[2].ToolCallID != &quot;model-call-42&quot; {
+				t.Fatalf(&quot;history=%+v&quot;, scripted.history)
+			}
+			var projected ResultEnvelope
+			if json.Unmarshal([]byte(scripted.history[2].Content), &amp;projected) != nil || len(projected.Text) != 1 || !strings.Contains(projected.Text[0], &quot;existing document body&quot;) {
+				t.Fatal(scripted.history[2].Content)
+			}
+			var request struct {
+				ID     json.RawMessage `json:&quot;id&quot;`
+				Params struct {
+					Name      string          `json:&quot;name&quot;`
+					Arguments json.RawMessage `json:&quot;arguments&quot;`
+				} `json:&quot;params&quot;`
+			}
+			if err = json.Unmarshal(transport.last, &amp;request); err != nil {
+				t.Fatal(err)
+			}
+			var rpcID uint64
+			if json.Unmarshal(request.ID, &amp;rpcID) != nil || rpcID == 0 || request.Params.Name != &quot;get_document&quot; || string(request.Params.Arguments) != `{&quot;id&quot;:&quot;doc-1&quot;}` {
+				t.Fatalf(&quot;wire=%s&quot;, transport.last)
+			}
+			if strings.Contains(string(transport.last), &quot;model-call-42&quot;) || strings.Contains(string(transport.last), &quot;reader&quot;) {
+				t.Fatalf(&quot;local call identity leaked into wire arguments: %s&quot;, transport.last)
+			}
+		})
+	}
+}
+
+func TestRegistryConflictDoesNotReplaceExistingTool(t *testing.T) {
+	caller := stubCaller{}
+	remote, _ := New(caller, &quot;knowledge&quot;, descriptor(&quot;read&quot;))
+	registry := tool.NewRegistry()
+	if err := registry.Register(context.Background(), remote); err != nil {
+		t.Fatal(err)
+	}
+	conflicting, _ := New(caller, &quot;knowledge&quot;, descriptor(&quot;read&quot;))
+	if err := registry.Register(context.Background(), conflicting); err == nil {
+		t.Fatal(&quot;duplicate overwritten&quot;)
+	}
+	found, _ := registry.Lookup(&quot;knowledge__read&quot;)
+	if found != remote {
+		t.Fatal(&quot;original registration replaced&quot;)
+	}
+	other, _ := New(caller, &quot;other&quot;, descriptor(&quot;read&quot;))
+	if err := registry.Register(context.Background(), other); err != nil {
+		t.Fatal(err)
+	}
+}
+</code></pre><button type="button" data-copy="day13-tests-internal-tool-mcptool-integration-test-go">复制本文件</button></details><h3>先编译，再看到明确红灯</h3><pre><code>go test ./internal/tool/mcptool -run &#x27;^$&#x27; -timeout 20s
+go test ./internal/tool/mcptool -run &#x27;^(TestMetadata|TestDiscovery|TestResultProjection|TestRemoteErrors|TestAgentRemote|TestRegistryConflict|TestDay13)&#x27; -count=1 -v -timeout 20s</code></pre><p>编译命令预期退出码 0，“no tests to run”在这一步是正常的。第二条必须实际运行用例，并在当天方法的 TODO 处失败；缺包、语法错误、命令未匹配到测试都不算行为红灯。</p><p>已有实现可能直接全绿。保留这些结果，再用契约检查设计；不要为了制造红灯破坏已完成代码。</p></section>
+<section id="tasks"><h2>分步实现：一次只改变一组行为</h2><div class="time">编码 80 分钟 · 每次只看当前任务卡</div><article class="step"><h3>1 · 20 分钟</h3><p><strong>为什么做：</strong>让模型名称稳定且不会触发远端执行。</p><p><strong>位置：</strong>localName / New / Meta</p><p><strong>动作：</strong>先建立描述快照和别名，校验名称与 schema；Meta 不访问网络。</p><pre><code>go test ./internal/tool/mcptool -run &#x27;^TestMetadataSnapshotAndNameBoundary$&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>原描述被外部修改后，本地说明仍稳定；非法名称明确拒绝。</p><details><summary>卡住时再看提示</summary><p>本地别名仅存在 spec；remoteName 保留原始服务器名称。</p></details></article><article class="step"><h3>2 · 20 分钟</h3><p><strong>为什么做：</strong>一次交付完整候选，避免半套能力被发布。</p><p><strong>位置：</strong>Discover</p><p><strong>动作：</strong>收集所有页；检测游标循环、重名和预算；最后才交给宿主装配新 Registry。</p><pre><code>go test ./internal/tool/mcptool -run &#x27;^(TestDiscoveryPaginationAndAtomicFailure|TestDay13DiscoveryEdges)$&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>任何失败返回 nil，不能交付一半工具。</p><details><summary>卡住时再看提示</summary><p>把游标当不透明字符串；集合分别记录原名和已经使用的游标。</p></details></article><article class="step"><h3>3 · 25 分钟</h3><p><strong>为什么做：</strong>明确数据形状和错误边界，防止丢内容或泄密。</p><p><strong>位置：</strong>Invoke 与 failure</p><p><strong>动作：</strong>传原名和参数副本，投影文本与结构化对象；明确非文本、IsError、RPC 失败和取消。</p><pre><code>go test ./internal/tool/mcptool -run &#x27;^(TestResultProjectionAndCancellation|TestRemoteErrorsAreControlledAndNeverRetried|TestDay13BoundaryAndEmptyResult)$&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>成功 JSON 形状明确；未知内容不被忽略；私有失败正文不泄露。</p><details><summary>卡住时再看提示</summary><p>不要把所有 error 都转成可继续的业务消息；context 错误要保留。</p></details></article><article class="step"><h3>4 · 15 分钟</h3><p><strong>为什么做：</strong>单个适配器通过测试还不能证明它接回了模型循环。</p><p><strong>位置：</strong>装配回归</p><p><strong>动作：</strong>使用完整集成夹具核对 alias、原名、两个 ID 域和授权零执行；不再新增业务工具。</p><pre><code>go test ./internal/tool/mcptool -run &#x27;^(TestAgentRemoteRoundTripAndAuthorization|TestRegistryConflictDoesNotReplaceExistingTool)$&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>模型第二轮收到原 ID 对应的结果；冲突注册没有覆盖旧对象。</p><details><summary>卡住时再看提示</summary><p>目录发现有协议流量；零执行只检查业务 tools/call，不能说初始化也没发生。</p></details></article></section>
+<section id="review"><h2>测试与复盘 20 分钟</h2><div class="time">12 分钟 · 从目标到累计回归</div><pre><code>go test ./internal/tool/mcptool -run &#x27;^(TestMetadata|TestDiscovery|TestResultProjection|TestRemoteErrors|TestAgentRemote|TestRegistryConflict|TestDay13)&#x27; -count=1 -v -timeout 20s
+go test -race ./internal/tool/mcptool -run &#x27;^(TestMetadata|TestDiscovery|TestResultProjection|TestRemoteErrors|TestAgentRemote|TestRegistryConflict|TestDay13)&#x27; -count=1 -timeout 30s
+go test ./internal/... -timeout 60s
+go test ./examples/... -timeout 60s
+go test -race ./examples/... -timeout 60s</code></pre><p>先让当天目标全绿，再运行累计回归。examples 验证参考基线，不能替代对 internal 练习的测试。若前序练习接口不同，先按迁移说明对齐，不通过修改测试 import 绕到答案。</p><p>重构时保持同一套断言，整理重复逻辑后再运行；不要通过删测试、跳过用例或改预期来“变绿”。</p><div class="time">8 分钟 · 合上代码回答</div><ol><li>为什么不能把两个服务器的 get_document 直接同名注册？</li><li>为什么授权用别名、远端调用用原名？</li><li>图片块被丢掉后只留文本，为什么不算成功？</li></ol><details><summary>完成回答后，再看参考思路</summary><article class="card"><h3>为什么不能把两个服务器的 get_document 直接同名注册？</h3><p>名称是执行路由键；别名隔离能避免覆盖和歧义，但不能代替服务器认证。</p></article><article class="card"><h3>为什么授权用别名、远端调用用原名？</h3><p>宿主配置本地能力身份；协议端仍只认识服务器原名。</p></article><article class="card"><h3>图片块被丢掉后只留文本，为什么不算成功？</h3><p>会把不完整结果伪装成完整支持；当前模型字符串协议需要显式拒绝或另行扩展。</p></article></details><h3>完成定义</h3><p><strong>实现验收：</strong>当天完整目标用例与 race 通过，记录累计回归的实际结果；失败时记录阶段、原因与未验证范围。</p><p><strong>理解验收：</strong>不看代码，用本日例子讲清输入、职责、结果和失败出口；再说出一个需求变化应该修改哪一层。</p><h3>本次发布验证</h3><div class="note"><p>Go 1.22.2 linux/amd64：原样骨架编译通过；目标测试在 TODO 处按预期失败；同一套测试对兼容参考实现通过（含 race）。</p><p>目标包含 8 个顶层通过测试及其子场景；完整输出见验证记录。</p><p>验证在临时副本中完成，不代表你的当前实现已通过。真实网络、模型或崩溃恢复不在本次验证范围。</p><p><a href="exercises/README.md">查看准备方法与验证范围</a> · <a href="exercises/verification.json">查看原始红绿测试记录</a></p></div><h3>学习清单</h3><div class="meta"><span>本浏览器自评进度；新版清单单独保存</span><span id="count">0 / 8</span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="fill" class="fill"></div></div><div id="checks"></div><noscript><p>未启用脚本仍可展开全文和手动复制；清单不自动保存。</p></noscript></section>
+<section id="answer"><h2>最后再看参考答案</h2><p>这些实现与骨架签名一致，保留相同契约。内部写法可以不同；先按规则和测试独立完成，再对照取舍。</p><h3 class="file-label">参考实现：internal/tool/mcptool/adapter.go</h3><p class="download"><a href="exercises/day13/reference/internal/tool/mcptool/adapter.go.txt" download="adapter.go">下载 adapter.go</a></p><details class="code-file" data-kind="reference" data-source="day13/reference/internal/tool/mcptool/adapter.go.txt"><summary>展开完整文件：adapter.go</summary><pre id="day13-reference-internal-tool-mcptool-adapter-go"><code>// Package mcptool adapts the Day12 MCP client to the existing Day08 tool contract.
+package mcptool
+
+import (
+	&quot;context&quot;
+	&quot;encoding/json&quot;
+	&quot;errors&quot;
+	&quot;fmt&quot;
+	&quot;regexp&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/mcp&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool&quot;
+)
+
+var (
+	ErrDiscovery          = errors.New(&quot;mcptool: discovery rejected&quot;)
+	ErrRemoteExecution    = errors.New(&quot;mcptool: remote execution failed&quot;)
+	ErrUnsupportedContent = errors.New(&quot;mcptool: unsupported content&quot;)
+	ErrInvalidResult      = errors.New(&quot;mcptool: invalid result&quot;)
+	prefixPattern         = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9-]*$`)
+	namePattern           = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+)
+
+// Caller is implemented by an already-initialized *mcp.Client.
+// The host owns initialization, transport cleanup and recovery.
+type Caller interface {
+	ListTools(context.Context, string) (mcp.ToolsPage, error)
+	CallTool(context.Context, string, json.RawMessage) (mcp.ToolResult, error)
+}
+
+// ResultEnvelope is the explicit projection into the existing string result.
+// Non-text blocks are rejected, not silently flattened or discarded.
+type ResultEnvelope struct {
+	Text              []string        `json:&quot;text&quot;`
+	StructuredContent json.RawMessage `json:&quot;structuredContent,omitempty&quot;`
+}
+
+type remoteTool struct {
+	caller     Caller
+	remoteName string
+	spec       tool.Spec
+}
+
+func localName(prefix, name string) (string, error) {
+	local := prefix + &quot;__&quot; + name
+	// Prefixes deliberately exclude underscores so namespace boundaries are unique.
+	if !prefixPattern.MatchString(prefix) || !namePattern.MatchString(name) || len(local) &gt; 64 {
+		return &quot;&quot;, fmt.Errorf(&quot;%w: incompatible local tool name&quot;, ErrDiscovery)
+	}
+	return local, nil
+}
+
+// New snapshots metadata. It does not initialize a client, execute a tool,
+// or derive authorization/retry policy from remote annotations.
+func New(caller Caller, prefix string, d mcp.Descriptor) (tool.Invokable, error) {
+	if caller == nil {
+		return nil, fmt.Errorf(&quot;%w: nil caller&quot;, ErrDiscovery)
+	}
+	name, err := localName(prefix, d.Name)
+	if err != nil {
+		return nil, err
+	}
+	var schema map[string]any
+	if json.Unmarshal(d.InputSchema, &amp;schema) != nil || schema[&quot;type&quot;] != &quot;object&quot; {
+		return nil, fmt.Errorf(&quot;%w: object input schema required&quot;, ErrDiscovery)
+	}
+	return &amp;remoteTool{caller: caller, remoteName: d.Name, spec: tool.Spec{
+		Name: name, Description: d.Description, InputSchema: append(json.RawMessage(nil), d.InputSchema...),
+	}}, nil
+}
+func (t *remoteTool) Meta(ctx context.Context) (tool.Spec, error) {
+	if err := ctx.Err(); err != nil {
+		return tool.Spec{}, err
+	}
+	spec := t.spec
+	spec.InputSchema = append(json.RawMessage(nil), spec.InputSchema...)
+	return spec, nil
+}
+func failure(message string, cause error) error {
+	return &amp;tool.Error{Kind: tool.ExecutionError, Message: message, Cause: cause}
+}
+func (t *remoteTool) Invoke(ctx context.Context, args json.RawMessage) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return &quot;&quot;, err
+	}
+	result, err := t.caller.CallTool(ctx, t.remoteName, append(json.RawMessage(nil), args...))
+	if ctx.Err() != nil {
+		return &quot;&quot;, ctx.Err()
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return &quot;&quot;, err
+	}
+	if err != nil {
+		return &quot;&quot;, failure(&quot;remote tool request failed&quot;, err)
+	}
+	if result.IsError {
+		return &quot;&quot;, failure(&quot;remote tool execution failed&quot;, ErrRemoteExecution)
+	}
+	if result.Content == nil {
+		return &quot;&quot;, failure(&quot;invalid remote result&quot;, ErrInvalidResult)
+	}
+	envelope := ResultEnvelope{Text: make([]string, 0, len(result.Content))}
+	for _, raw := range result.Content {
+		var block struct {
+			Type string  `json:&quot;type&quot;`
+			Text *string `json:&quot;text&quot;`
+		}
+		if json.Unmarshal(raw, &amp;block) != nil || block.Type == &quot;&quot; {
+			return &quot;&quot;, failure(&quot;invalid remote result&quot;, ErrInvalidResult)
+		}
+		if block.Type != &quot;text&quot; {
+			return &quot;&quot;, failure(&quot;remote content type is not supported&quot;, ErrUnsupportedContent)
+		}
+		if block.Text == nil {
+			return &quot;&quot;, failure(&quot;invalid remote result&quot;, ErrInvalidResult)
+		}
+		envelope.Text = append(envelope.Text, *block.Text)
+	}
+	if len(result.StructuredContent) &gt; 0 {
+		var object map[string]json.RawMessage
+		if json.Unmarshal(result.StructuredContent, &amp;object) != nil || object == nil {
+			return &quot;&quot;, failure(&quot;invalid remote result&quot;, ErrInvalidResult)
+		}
+		envelope.StructuredContent = append(json.RawMessage(nil), result.StructuredContent...)
+	}
+	output, err := json.Marshal(envelope)
+	if err != nil {
+		return &quot;&quot;, failure(&quot;invalid remote result&quot;, ErrInvalidResult)
+	}
+	return string(output), nil
+}
+</code></pre><button type="button" data-copy="day13-reference-internal-tool-mcptool-adapter-go">复制本文件</button></details><h3 class="file-label">参考实现：internal/tool/mcptool/discovery.go</h3><p class="download"><a href="exercises/day13/reference/internal/tool/mcptool/discovery.go.txt" download="discovery.go">下载 discovery.go</a></p><details class="code-file" data-kind="reference" data-source="day13/reference/internal/tool/mcptool/discovery.go.txt"><summary>展开完整文件：discovery.go</summary><pre id="day13-reference-internal-tool-mcptool-discovery-go"><code>package mcptool
+
+import (
+	&quot;context&quot;
+	&quot;fmt&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool&quot;
+)
+
+// Discover returns all candidate adapters or nil on any failure. It never
+// mutates a registry; the host assembles a new registry after discovery succeeds.
+func Discover(ctx context.Context, caller Caller, prefix string, maxPages int) ([]tool.Invokable, error) {
+	if caller == nil || !prefixPattern.MatchString(prefix) || maxPages &lt;= 0 {
+		return nil, fmt.Errorf(&quot;%w: invalid discovery configuration&quot;, ErrDiscovery)
+	}
+	tools := make([]tool.Invokable, 0)
+	seenNames := make(map[string]bool)
+	seenCursors := map[string]bool{&quot;&quot;: true}
+	cursor := &quot;&quot;
+	for pageNumber := 0; pageNumber &lt; maxPages; pageNumber++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		page, err := caller.ListTools(ctx, cursor)
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if err != nil {
+			return nil, fmt.Errorf(&quot;mcptool: listing tools: %w&quot;, err)
+		}
+		if page.Tools == nil {
+			return nil, fmt.Errorf(&quot;%w: tools array required&quot;, ErrDiscovery)
+		}
+		for _, d := range page.Tools {
+			if seenNames[d.Name] {
+				return nil, fmt.Errorf(&quot;%w: duplicate remote name&quot;, ErrDiscovery)
+			}
+			t, err := New(caller, prefix, d)
+			if err != nil {
+				return nil, err
+			}
+			seenNames[d.Name] = true
+			tools = append(tools, t)
+		}
+		if page.NextCursor == &quot;&quot; {
+			return tools, nil
+		}
+		if seenCursors[page.NextCursor] {
+			return nil, fmt.Errorf(&quot;%w: repeated cursor&quot;, ErrDiscovery)
+		}
+		seenCursors[page.NextCursor] = true
+		cursor = page.NextCursor
+	}
+	return nil, fmt.Errorf(&quot;%w: page budget exceeded&quot;, ErrDiscovery)
+}
+</code></pre><button type="button" data-copy="day13-reference-internal-tool-mcptool-discovery-go">复制本文件</button></details><h3>为什么接着学下一天？</h3><p>今天把远端能力接回同一个 Loop。Day 14 用本地与远端混合场景，复盘整周的边界和失败语义。</p></section>
+<footer><a href="agent-runtime-day-12.html">前一天 Day 12</a> · <a href="agent-runtime-day-14.html">下一天 Day 14</a> · <a href="../../index.html">返回学习首页</a><p>Day 13 / 56 · 正文、图示、骨架与测试离线可读</p></footer></main>
 <script>
-const items=["画出MCP接入既有工具契约的完整装配链","解释本地别名、远端原名和两个ID域","预测分页/重名/游标循环的失败行为","对照Eino的GetTools与Info/InvokableRun","理解结果投影、非文本拒绝和受控错误","运行MCP Agent入口并核对工具消息","验证授权拒绝后tools/call次数为0","运行累计测试与race并完成需求变化推演"];
-const key="agent-runtime-day13-v1";let saved=[];try{const v=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(v))saved=v}catch(_){}const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const p=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=p+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(p))}items.forEach((s,i)=>{const r=document.createElement("div");r.className="check";const c=document.createElement("input");c.type="checkbox";c.id="task-"+i;c.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=c.id;label.textContent=s;r.append(c,label);box.append(r);c.onchange=()=>{saved[i]=c.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+const items=["用自己的话解释当天三个概念", "根据两张图讲清输入、职责和返回", "完成官方阅读并写下问题答案", "确认骨架可编译且目标出现预期红灯", "按任务卡逐步完成当天实现", "完整目标与 race 测试通过", "记录累计回归实际结果和未验证项", "合上代码完成需求变化与失败边界复盘"];const key="mini-agent-runtime-day-13-tdd-v3";
+let saved=[];try{const value=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(value))saved=value}catch(_){}
+const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const percent=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=percent+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(percent))}
+items.forEach((s,i)=>{const row=document.createElement("div");row.className="check";const input=document.createElement("input");input.type="checkbox";input.id="task-"+i;input.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=input.id;label.textContent=s;row.append(input,label);box.append(row);input.onchange=()=>{saved[i]=input.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+document.querySelectorAll("button[data-copy]").forEach(button=>button.addEventListener("click",async()=>{const target=document.getElementById(button.dataset.copy);try{await navigator.clipboard.writeText(target.textContent);button.textContent="已复制"}catch(_){const range=document.createRange();range.selectNodeContents(target);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);button.textContent="已选中，请手动复制"}}));
 </script></body></html>

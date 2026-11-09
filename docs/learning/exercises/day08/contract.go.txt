@@ -1,0 +1,40 @@
+package tool
+
+import (
+	"context"
+	"encoding/json"
+
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+)
+
+// Spec 是工具的说明，不保存业务数据或执行结果。
+type Spec struct {
+	Name, Description string
+	InputSchema       json.RawMessage
+}
+type Described interface {
+	Meta(context.Context) (Spec, error)
+}
+type Invokable interface {
+	Described
+	Invoke(context.Context, json.RawMessage) (string, error)
+}
+type Call = model.ToolCall
+
+func cloneSpec(s Spec) Spec { panic("TODO: cloneSpec") }
+func Adapt(ctx context.Context, t Invokable) (DescribedTool, error) {
+	panic("TODO: Adapt")
+}
+
+type legacyAdapter struct {
+	spec   Spec
+	target Invokable
+}
+
+func (t *legacyAdapter) Name() string { panic("TODO: Name") }
+func (t *legacyAdapter) Definition() model.ToolDefinition {
+	panic("TODO: Definition")
+}
+func (t *legacyAdapter) Execute(ctx context.Context, args json.RawMessage) (string, error) {
+	panic("TODO: Execute")
+}

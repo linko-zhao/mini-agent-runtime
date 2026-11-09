@@ -1,0 +1,326 @@
+package tool_test
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"reflect"
+	"sync"
+	"testing"
+
+	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
+)
+
+// fake 只记录行为，不连接模型、资料库或网络。
+type day08Fake struct {
+	spec               tool.Spec
+	metaErr, invokeErr error
+	metas, invokes     int
+	gotCtx, metaCtx    context.Context
+	gotArgs            json.RawMessage
+}
+
+func day08New(name string) *day08Fake {
+	return &day08Fake{spec: tool.Spec{
+		Name: name, Description: "读取资料",
+		InputSchema: json.RawMessage(`{"type":"object"}`),
+	}}
+}
+func (f *day08Fake) Meta(ctx context.Context) (tool.Spec, error) {
+	f.metas++
+	f.metaCtx = ctx
+	return f.spec, f.metaErr
+}
+func (f *day08Fake) Invoke(ctx context.Context, args json.RawMessage) (string, error) {
+	f.invokes++
+	f.gotCtx, f.gotArgs = ctx, append(json.RawMessage(nil), args...)
+	return "doc-1", f.invokeErr
+}
+func day08Register(t *testing.T, r *tool.Registry, f *day08Fake) {
+	t.Helper()
+	if err := r.Register(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+}
+func day08Names(specs []tool.Spec) []string {
+	names := make([]string, len(specs))
+	for i, s := range specs {
+		names[i] = s.Name
+	}
+	return names
+}
+
+func TestDay08RegisterLookup(t *testing.T) {
+	r := tool.NewRegistry()
+	if r == nil {
+		t.Fatal("构造函数返回 nil")
+	}
+	f := day08New("get_document")
+	type key struct{}
+	ctx := context.WithValue(context.Background(), key{}, "register-1")
+	if err := r.Register(ctx, f); err != nil {
+		t.Fatal(err)
+	}
+	if f.metaCtx != ctx {
+		t.Fatal("Meta 必须收到本次注册 context")
+	}
+	if f.metas != 1 || f.invokes != 0 {
+		t.Fatal("注册只读一次说明，不执行业务")
+	}
+	got, ok := r.Lookup("get_document")
+	if !ok || got != f {
+		t.Fatal("名称应查到原工具对象")
+	}
+	if got, ok := r.Lookup("missing"); ok || got != nil {
+		t.Fatal("未知工具应为 nil,false")
+	}
+	if err := r.Register(context.Background(), day08New("get_document")); err == nil {
+		t.Fatal("重复名称必须报错")
+	}
+	if got, _ := r.Lookup("get_document"); got != f {
+		t.Fatal("重复注册不能覆盖原对象")
+	}
+	if f.metas != 1 || f.invokes != 0 {
+		t.Fatal("查询不得重新 Meta 或 Invoke")
+	}
+	raw := day08New(" a ")
+	raw.spec.Description = ""
+	day08Register(t, r, raw)
+	if got, ok := r.Lookup(" a "); !ok || got != raw {
+		t.Fatal("合法名称应保持原样，说明允许为空")
+	}
+}
+
+func TestDay08RejectInvalid(t *testing.T) {
+	for _, tc := range []struct{ name, toolName, schema string }{
+		{"empty-name", "", `{"type":"object"}`},
+		{"blank-name", " \t", `{"type":"object"}`},
+		{"bad-json", "x", `{`},
+		{"null-schema", "x", `null`},
+		{"array-schema", "x", `[]`},
+		{"wrong-type", "x", `{"type":"string"}`},
+		{"missing-type", "x", `{}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := tool.NewRegistry()
+			f := day08New(tc.toolName)
+			f.spec.InputSchema = json.RawMessage(tc.schema)
+			if err := r.Register(context.Background(), f); err == nil {
+				t.Fatal("非法说明被接受")
+			}
+			specs, err := r.Specs(nil)
+			if err != nil || len(specs) != 0 || f.invokes != 0 {
+				t.Fatal("失败注册污染了状态")
+			}
+			if _, err := tool.Adapt(context.Background(), f); err == nil {
+				t.Fatal("Adapt 也应校验说明")
+			}
+		})
+	}
+	r := tool.NewRegistry()
+	if err := r.Register(context.Background(), nil); err == nil {
+		t.Fatal("应拒绝 nil 接口")
+	}
+	if _, err := tool.Adapt(context.Background(), nil); err == nil {
+		t.Fatal("Adapt 应拒绝 nil 接口")
+	}
+	sentinel := errors.New("metadata unavailable")
+	f := day08New("x")
+	f.metaErr = sentinel
+	if err := r.Register(context.Background(), f); !errors.Is(err, sentinel) {
+		t.Fatalf("丢失原因: %v", err)
+	}
+	if _, err := tool.Adapt(context.Background(), f); !errors.Is(err, sentinel) {
+		t.Fatalf("丢失原因: %v", err)
+	}
+	specs, err := r.Specs(nil)
+	if err != nil || len(specs) != 0 {
+		t.Fatal("Meta 失败不得注册")
+	}
+}
+
+func TestDay08CancelledRegistration(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	r, f := tool.NewRegistry(), day08New("x")
+	if err := r.Register(ctx, f); !errors.Is(err, context.Canceled) {
+		t.Fatalf("取消原因错误: %v", err)
+	}
+	if f.metas != 0 || f.invokes != 0 {
+		t.Fatal("已取消时不得调用工具")
+	}
+	if _, ok := r.Lookup("x"); ok {
+		t.Fatal("已取消调用不应注册")
+	}
+}
+
+func TestDay08Visibility(t *testing.T) {
+	r := tool.NewRegistry()
+	a, b := day08New("a"), day08New("b")
+	day08Register(t, r, b)
+	day08Register(t, r, a)
+	for _, tc := range []struct {
+		name          string
+		visible, want []string
+	}{
+		{"all", nil, []string{"a", "b"}},
+		{"none", []string{}, []string{}},
+		{"one", []string{"b"}, []string{"b"}},
+		{"sorted-deduplicated", []string{"b", "a", "b"}, []string{"a", "b"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			before := append([]string(nil), tc.visible...)
+			got, err := r.Specs(tc.visible)
+			if err != nil || !reflect.DeepEqual(day08Names(got), tc.want) {
+				t.Fatalf("got %v, %v", day08Names(got), err)
+			}
+			if len(before) > 0 && !reflect.DeepEqual(before, tc.visible) {
+				t.Fatal("修改了调用方 visible")
+			}
+		})
+	}
+	if got, err := r.Specs([]string{"a", "missing"}); err == nil || len(got) != 0 {
+		t.Fatal("未知名称应报错且不返回部分结果")
+	}
+	if got, ok := r.Lookup("a"); !ok || got != a {
+		t.Fatal("可见性筛选不能删除执行对象")
+	}
+	if a.invokes+b.invokes != 0 || a.metas+b.metas != 2 {
+		t.Fatal("列说明应只使用快照")
+	}
+}
+
+func TestDay08Snapshots(t *testing.T) {
+	r, f := tool.NewRegistry(), day08New("a")
+	day08Register(t, r, f)
+	f.spec.Name, f.spec.Description = "changed", "changed"
+	f.spec.InputSchema[0] = 'x'
+	specs, err := r.Specs(nil)
+	if err != nil || len(specs) != 1 || specs[0].Name != "a" || specs[0].Description != "读取资料" || !json.Valid(specs[0].InputSchema) {
+		t.Fatalf("未复制注册输入: %+v, %v", specs, err)
+	}
+	specs[0].Name, specs[0].Description, specs[0].InputSchema[0] = "bad", "bad", 'x'
+	again, err := r.Specs(nil)
+	if err != nil || again[0].Name != "a" || again[0].Description != "读取资料" || !json.Valid(again[0].InputSchema) {
+		t.Fatal("Specs 未深拷贝")
+	}
+	defs := tool.Definitions(again)
+	if len(defs) != 1 || defs[0].Name != "a" || defs[0].Description != "读取资料" || string(defs[0].Parameters) != string(again[0].InputSchema) {
+		t.Fatal("Definitions 字段映射错误")
+	}
+	defs[0].Parameters[0] = 'x'
+	if !json.Valid(again[0].InputSchema) {
+		t.Fatal("Definitions 共享了 schema")
+	}
+	empty := tool.Definitions(nil)
+	if len(empty) != 0 {
+		t.Fatal("空输入应生成零个描述")
+	}
+}
+
+func TestDay08LegacyBridge(t *testing.T) {
+	ctx := context.Background()
+	f := day08New("a")
+	adapted, err := tool.Adapt(ctx, f)
+	if err != nil || adapted == nil {
+		t.Fatalf("Adapt: %v", err)
+	}
+	if f.metas != 1 || f.invokes != 0 {
+		t.Fatal("适配只读取说明")
+	}
+	f.spec.InputSchema[0] = 'x'
+	if adapted.Name() != "a" {
+		t.Fatal("Name 映射错误")
+	}
+	def := adapted.Definition()
+	if def.Name != "a" || def.Description != "读取资料" || !json.Valid(def.Parameters) {
+		t.Fatal("适配时未保存描述快照")
+	}
+	def.Parameters[0] = 'x'
+	if !json.Valid(adapted.Definition().Parameters) {
+		t.Fatal("Definition 未深拷贝")
+	}
+	type requestKey struct{}
+	runCtx := context.WithValue(ctx, requestKey{}, "run-1")
+	args := json.RawMessage(`{"id":"doc-1"}`)
+	got, err := adapted.Execute(runCtx, args)
+	if err != nil || got != "doc-1" || f.gotCtx != runCtx || string(f.gotArgs) != string(args) || f.invokes != 1 {
+		t.Fatal("Execute 必须把本次 context/参数传给 Invoke，并返回其结果")
+	}
+	sentinel := errors.New("backend failure")
+	f.invokeErr = sentinel
+	if _, err := adapted.Execute(runCtx, args); !errors.Is(err, sentinel) {
+		t.Fatal("Execute 丢失错误原因")
+	}
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	_, _ = adapted.Execute(cancelled, args)
+	if f.gotCtx != cancelled {
+		t.Fatal("适配器必须保留取消的 context，下游负责合作取消")
+	}
+
+	r, g := tool.NewRegistry(), day08New("b")
+	day08Register(t, r, g)
+	tools := r.Tools()
+	if len(tools) != 1 || tools["b"] == nil || tools["b"].Name() != "b" {
+		t.Fatal("Tools 应提供完整旧接口映射")
+	}
+	described, ok := tools["b"].(tool.DescribedTool)
+	if !ok || described.Definition().Name != "b" {
+		t.Fatal("旧接口仍须提供描述")
+	}
+	if g.metas != 1 || g.invokes != 0 {
+		t.Fatal("Tools 不得再次读取 Meta 或执行")
+	}
+	out, err := tools["b"].Execute(runCtx, args)
+	if err != nil || out != "doc-1" || g.gotCtx != runCtx || string(g.gotArgs) != string(args) {
+		t.Fatal("Tools 适配丢失执行输入/输出")
+	}
+	delete(tools, "b")
+	day08Register(t, r, day08New("c"))
+	if len(tools) != 0 || len(r.Tools()) != 2 {
+		t.Fatal("Tools 应返回独立 map 快照")
+	}
+}
+
+func TestDay08ZeroValue(t *testing.T) {
+	var r tool.Registry
+	specs, err := r.Specs(nil)
+	if err != nil || len(specs) != 0 || len(r.Tools()) != 0 {
+		t.Fatal("零值应可查询")
+	}
+	day08Register(t, &r, day08New("a"))
+	if _, ok := r.Lookup("a"); !ok {
+		t.Fatal("零值应可注册")
+	}
+}
+
+func TestDay08ConcurrentRegistry(t *testing.T) {
+	r := tool.NewRegistry()
+	var wg sync.WaitGroup
+	for i := 0; i < 12; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			// 每个 goroutine 有独立 fake；不并发执行同一个 fake。
+			name := fmt.Sprintf("tool-%02d", i)
+			if err := r.Register(context.Background(), day08New(name)); err != nil {
+				t.Error(err)
+				return
+			}
+			if _, ok := r.Lookup(name); !ok {
+				t.Errorf("丢失 %s", name)
+			}
+			if _, err := r.Specs(nil); err != nil {
+				t.Error(err)
+			}
+			_ = r.Tools()
+		}(i)
+	}
+	wg.Wait()
+	specs, err := r.Specs(nil)
+	if err != nil || len(specs) != 12 {
+		t.Fatalf("并发注册丢失数据: %d, %v", len(specs), err)
+	}
+}

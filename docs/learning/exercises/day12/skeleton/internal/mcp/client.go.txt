@@ -1,0 +1,39 @@
+package mcp
+
+import (
+	"context"
+	"encoding/json"
+)
+
+type Client struct {
+	transport      Transport
+	gate           chan struct{}
+	state          string
+	nextID         uint64
+	toolsAvailable bool
+}
+
+func NewClient(t Transport) (*Client, error) { panic("TODO: NewClient") }
+
+// A session serializes requests. Cancellation while queued sends no message.
+func (c *Client) enter(ctx context.Context) error { panic("TODO: enter") }
+
+func (c *Client) leave()                        { panic("TODO: leave") }
+func (c *Client) protocol(message string) error { panic("TODO: protocol") }
+
+// rpc is called with the session gate held. Transport/protocol failures mark
+// the session failed because the peer may already have executed the request.
+// A valid JSON-RPC error does not automatically invalidate the session.
+func (c *Client) rpc(ctx context.Context, method string, params any) (json.RawMessage, error) {
+	panic("TODO: rpc")
+}
+
+func (c *Client) Initialize(ctx context.Context) (InitializeResult, error) { panic("TODO: Initialize") }
+
+func (c *Client) ListTools(ctx context.Context, cursor string) (ToolsPage, error) {
+	panic("TODO: ListTools")
+}
+
+func (c *Client) CallTool(ctx context.Context, name string, args json.RawMessage) (ToolResult, error) {
+	panic("TODO: CallTool")
+}

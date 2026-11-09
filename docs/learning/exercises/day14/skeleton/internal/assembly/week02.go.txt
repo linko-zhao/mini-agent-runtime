@@ -1,0 +1,35 @@
+// Package assembly is a host-side composition root, not a new Runtime protocol.
+package assembly
+
+import (
+	"context"
+
+	"time"
+
+	"github.com/linko-zhao/mini-agent-runtime/internal/agent"
+	"github.com/linko-zhao/mini-agent-runtime/internal/mcp"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
+)
+
+type Config struct {
+	Model              model.Model
+	Local              tool.Invokable
+	Transport          mcp.Transport
+	Prefix             string
+	Rules              map[string]tool.Capability
+	Grants             map[string][]tool.Capability
+	Policies           map[string]tool.Policy
+	Visible            []string
+	MaxPages, MaxSteps int
+	ToolTimeout        time.Duration
+	Sink               agent.EventSink
+}
+type Runtime struct {
+	Agent  *agent.Agent
+	Client *mcp.Client
+}
+
+// Build initializes/discovers capabilities but does not invoke business tools.
+// The caller owns transport cleanup; a failed/ambiguous session is not replayed.
+func Build(ctx context.Context, c Config) (*Runtime, error) { panic("TODO: Build") }

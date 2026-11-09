@@ -1,83 +1,524 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>Day 14 · 第二周综合集成与复盘</title><style>
-:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#58667b;--line:#e0e6ee;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:920px;margin:auto;padding:32px 22px 70px}.hero{background:#183561;color:#fff;border-radius:18px;padding:29px 30px}.hero small{opacity:.8;letter-spacing:1px}.hero h1{margin:7px 0;font-size:30px;line-height:1.3}.hero p{margin:0;color:#e6eefa}.chips{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}.chip{border:1px solid #8ea4c8;border-radius:20px;padding:3px 10px;font-size:12px}section{background:var(--paper);border:1px solid var(--line);border-radius:14px;margin-top:18px;padding:22px 26px}h2{font-size:19px;margin:0 0 13px}h3{font-size:16px;margin:18px 0 6px}.time{font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.4px}p{margin:8px 0}a{color:var(--accent)}li{margin:6px 0}code{background:#f0f3f8;padding:2px 5px;border-radius:4px}pre{overflow:auto;background:#142136;color:#e7f3ff;padding:17px;border-radius:10px;font-size:13px;line-height:1.65}pre code{background:transparent;padding:0}.goal{background:var(--pale);border-left:3px solid var(--accent);padding:12px 15px;border-radius:4px}.note{background:#fff8e9;border:1px solid #f2deb2;border-radius:9px;padding:11px 14px;color:#644b18}.info{background:#eff6ff;border:1px solid #d5e4fc;border-radius:9px;padding:11px 14px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.grid>div{padding:12px;background:#f6f8fc;border-radius:9px}.grid strong{display:block;font-size:19px}.grid span{font-size:12px;color:var(--sub)}.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0}.check input{margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer;flex:1}.check.done label{text-decoration:line-through;color:var(--sub)}.progress{height:8px;background:#e3e9f2;border-radius:99px;overflow:hidden}.fill{height:100%;background:var(--accent);width:0%;transition:width .2s}.meta{display:flex;justify-content:space-between;font-size:13px;color:var(--sub);margin-bottom:9px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px;vertical-align:top}th{background:#f4f7fc}.tag{display:inline-block;background:#eaf0fc;color:#2459bd;border-radius:5px;font-size:12px;padding:2px 7px;margin-right:6px}.muted{color:var(--sub);font-size:13px}footer{text-align:center;color:var(--sub);font-size:12px;margin:24px}@media(max-width:600px){main{padding:14px 12px 40px}.hero{padding:22px}.hero h1{font-size:24px}section{padding:18px}.grid{grid-template-columns:1fr}table{font-size:12px}th,td{padding:8px}pre{font-size:12px}}
-.matrix-scroll{overflow-x:auto}.matrix-scroll table{min-width:660px}td code{overflow-wrap:anywhere}details{margin:12px 0}summary{cursor:pointer;color:var(--accent);font-weight:600}</style></head><body><main>
-<header class="hero"><small>MINI AGENT RUNTIME · WEEK 02 · 集成 / EINO 对照</small><h1>Day 14 / 56 · 第二周综合集成与复盘</h1><p>用同一轮本地与远端文档读取，检验工具抽象、执行策略、授权和MCP边界是否真正组合起来。</p><div class="chips"><span class="chip">阅读 20 分钟</span><span class="chip">Go集成练习 80 分钟</span><span class="chip">测试复盘 20 分钟</span></div></header>
-<section><h2>为什么今天先整合，而不继续加接口？</h2><div class="goal">能从用户需求出发画出完整Agent数据流，用消息、调用次数和事件共同判断行为，并解释需求或故障变化时应改哪一层。</div>
-<p>Day08–13已经建立工具描述/执行分离、注册与批次调用、策略包装、执行授权、MCP会话和适配器。如果只分别测试每个类，很容易忽略连接处：授权拒绝之前是否已经发出远端请求？工具失败是否必然使Run失败？模型下一轮拿到的是正文、错误还是错配的调用ID？</p>
-<p>场景：用户已给出local-1与remote-1两个文档ID，要求比较正文。因此模型可以在同一批提出两次独立读取。若ID必须先检索得到，应安排后续模型轮次；顺序执行不会自动把前一个结果注入后一个参数。</p><p>今天不新增Runtime公共接口。代码增量是可运行集成夹具、断言和设计记录，业务仍复用GetDocument/FakeStore。课程按设计进度推进，不以根internal/cmd学习者代码的完成状态作为发布条件。</p></section>
-<section><h2>先走通装配和运行两条路径</h2><pre><code>装配：
-本地Store → GetDocument → Registry
-远端Store → GetDocument → 内存MCP Server
-  → Client.Initialize → Discover("knowledge") → Registry
-Registry.Tools → WithPolicy → Agent.New
-  （绑定两份描述，配置WithVisibleTools、WithAuthorizer、EventSink）
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="description" content="Day 14 图解设计与测试先行学习文档"><title>Day 14 · 第二周复盘：亲手把整条链装起来</title><style>
+:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#52617a;--line:#dce4ef;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.85 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:820px;padding:28px 22px 64px;margin:auto}.hero{background:#183561;color:white;border-radius:18px;padding:30px}.hero h1{font-size:30px;line-height:1.45;margin:12px 0}.hero p{color:#e6eefa}.eyebrow,.time{font-size:14px;font-weight:700}.chips{display:flex;flex-wrap:wrap;gap:8px}.chips span{font-size:14px;border:1px solid #9cb5d9;border-radius:20px;padding:3px 12px}section,nav{background:white;border:1px solid var(--line);border-radius:14px;padding:26px;margin-top:20px}h2{font-size:24px;line-height:1.5;margin:0 0 20px}h3{font-size:20px;line-height:1.5;margin:24px 0 10px}p{margin:12px 0}a{color:var(--accent);text-underline-offset:3px}li{margin:10px 0}code{font-size:.88em;background:#edf1f7;padding:2px 4px;border-radius:4px;overflow-wrap:anywhere}pre{background:#142136;color:#e7f3ff;border-radius:10px;padding:18px;overflow:auto;font-size:14px;line-height:1.7;tab-size:4}pre code{background:none;padding:0;font-size:inherit;overflow-wrap:normal}.note,.goal{border-left:4px solid var(--accent);background:var(--pale);padding:14px 18px;border-radius:4px}.warn{border-left-color:#9b6500;background:#fff6e3}.card,.rule,.step{border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:18px 0}.card h3,.step h3{margin-top:0}.muted{color:var(--sub);font-size:15px}.flow{display:flex;flex-direction:column;gap:10px;margin:20px 0}.node{border:2px solid #9eb6db;border-radius:10px;padding:15px;background:#f4f8ff}.node strong{display:block}.arrow{text-align:center;color:#345276;font-size:16px}.branch{border:2px dashed #9b6500;background:#fff7e8}.time{color:var(--accent)}details{border:1px solid var(--line);border-radius:9px;padding:12px 16px;margin:16px 0}summary{cursor:pointer;font-weight:650}summary:focus-visible,a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid #c67800;outline-offset:4px}button{font:inherit;font-size:15px;background:#edf3ff;color:#183561;border:1px solid #9eb6db;border-radius:7px;padding:7px 12px;cursor:pointer}.check{display:flex;gap:12px;margin:14px 0}.check input{width:20px;height:20px;flex-shrink:0;margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer}.done label{color:var(--sub);text-decoration:line-through}.progress{background:#e3e9f2;height:12px;border-radius:8px;overflow:hidden}.fill{background:var(--accent);height:100%;width:0}.meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:15px}footer{font-size:15px;text-align:center;padding:24px}.toplinks{display:flex;flex-wrap:wrap;gap:10px 22px}.download{font-size:15px}.code-actions{display:flex;gap:12px;align-items:center;margin-top:12px}.copy-state{font-size:14px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@media(max-width:600px){main{padding:12px 10px 36px}section,nav{padding:20px 16px}.hero{padding:23px 20px}.hero h1{font-size:26px}h2{font-size:22px}pre{padding:14px;font-size:13px}.card,.rule,.step{padding:14px}body{font-size:18px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 
-运行：
-Model.Generate → assistant.ToolCalls [
-  local-read : get_document({"id":"local-1"}),
-  remote-read: knowledge__get_document({"id":"remote-1"})
-]
-→ 保存原assistant → 整批ID/名称检查 → 整批授权
-→ 本地Execute/Invoke → Document JSON
-→ 远端适配Invoke → Client.CallTool("get_document")
-  → JSON-RPC整数ID → Server.Invoke → MCP Result → ResultEnvelope JSON
-→ tool{ToolCallID:local-read}、tool{ToolCallID:remote-read}
-→ Model.Generate(完整历史) → 返回脚本文本或继续决策</code></pre>
-<p><strong>控制权：</strong>Host装配可信上下文、注册与MCP会话；Loop管理消息和模型轮次；授权决定能否执行；Policy限制调用；适配器转换协议/结果；Server负责业务与后端资源权限。</p><p>测试分别解析本地Document JSON与远端ResultEnvelope，保持Day13的输出契约。MCP整数请求ID独立于模型ToolCallID；Principal不会被塞进工具arguments。</p>
-<p class="note">脚本模型最后返回的字符串是测试夹具输出，不证明真实模型正确完成文档比较。每个场景还要检查实际调用、第二轮历史、错误投影与唯一Run终态。</p></section>
-<section><h2>第二周的设计地图</h2><table><thead><tr><th>课程</th><th>解决的问题</th><th>保留的边界</th></tr></thead><tbody>
-<tr><td><a href="agent-runtime-day-08.html">Day08 工具抽象</a></td><td>描述与执行如何接入</td><td>Meta不执行业务；Registry拒绝重名</td></tr>
-<tr><td><a href="agent-runtime-day-09.html">Day09 批次调用</a></td><td>一次多工具请求如何检查、关联</td><td>整批ID/名称预校验，原ID回填</td></tr>
-<tr><td><a href="agent-runtime-day-10.html">Day10 策略</a></td><td>耗时、重试资格、结果成本</td><td>合作式超时，默认不重试，预算不等于回滚</td></tr>
-<tr><td><a href="agent-runtime-day-11.html">Day11 授权</a></td><td>用户是否有权使用能力</td><td>可见性与权限分开，决策事件不等于已执行</td></tr>
-<tr><td><a href="agent-runtime-day-12.html">Day12 MCP协议</a></td><td>协商、发现、调用和响应</td><td>能力声明不授权，不确定会话不重放</td></tr>
-<tr><td><a href="agent-runtime-day-13.html">Day13 适配</a></td><td>远端能力如何回到既有工具入口</td><td>别名/原名、两个ID域、结果投影明确</td></tr>
-</tbody></table><p>本页给出完整流程和验收逻辑；前序链接供回看，不是离线理解本页的必要依赖。所有示例继续共享根go.mod和examples包前缀。</p></section>
-<section><h2>承接前序设计与本日增量</h2><table><thead><tr><th>操作</th><th>文件</th><th>目的</th></tr></thead><tbody>
-<tr><td>新增</td><td>examples/integration/week02_test.go</td><td>仅用现有公开API装配本地/远端工具，运行7种成功/故障路径</td></tr>
-<tr><td>新增</td><td>examples/integration/README.md</td><td>记录计数含义、预期矩阵与设计复盘方式</td></tr>
-<tr><td>更新</td><td>examples/README.md、CONTRACTS.md</td><td>将本日集成不变量加入累计参考契约</td></tr>
-<tr><td>复用</td><td>examples/internal/model、agent、tool、mcp、tool/mcptool</td><td>New/Run、Message/ToolCall、Meta/Invoke、Policy、Authorizer、Client全部不变</td></tr>
-</tbody></table><p>没有新Module，没有把学习者实现接进参考代码，也没有接口迁移。测试私有的计数器、传输探针和脚本模型只是夹具，用于观察既有组件，不构成第二套Runtime。</p></section>
-<section><h2>先预测：一次故障会影响哪一层？</h2><p>在看参考计数前，为每种场景写出本地Invoke、tools/call尝试、远端Invoke和模型调用次数，再写出Run终态。</p><ol><li>两份读取都成功。</li><li>远端能力没有宿主授权规则，但两个描述都对模型可见。</li><li>两个模型调用使用了同一个ToolCall ID。</li><li>远端结果超过投影后的字节预算。</li><li>远端工具报告isError=true。</li><li>Server已完成读取，但返回损坏的RPC响应ID。</li><li>传输等待到工具调用超时。</li></ol>
-<details><summary>展开参考计数与解释</summary><div class="matrix-scroll"><table><thead><tr><th>场景</th><th>本地Invoke</th><th>tools/call尝试</th><th>远端Invoke</th><th>模型调用</th><th>Run终态</th></tr></thead><tbody>
-<tr><td>正常混合读取</td><td>1</td><td>1</td><td>1</td><td>2</td><td>Finished</td></tr>
-<tr><td>远端未批准</td><td>0</td><td>0</td><td>0</td><td>1</td><td>Failed</td></tr>
-<tr><td>重复模型ID</td><td>0</td><td>0</td><td>0</td><td>1</td><td>Failed</td></tr>
-<tr><td>结果预算</td><td>1</td><td>1</td><td>1</td><td>2</td><td>Finished，tool受控错误</td></tr>
-<tr><td>远端业务失败</td><td>1</td><td>1</td><td>1</td><td>2</td><td>Finished，tool受控错误</td></tr>
-<tr><td>执行后响应损坏</td><td>1</td><td>1</td><td>1</td><td>2</td><td>Finished，Client failed</td></tr>
-<tr><td>远端超时</td><td>1</td><td>1</td><td>0</td><td>1</td><td>Failed，DeadlineExceeded</td></tr>
-</tbody></table></div>
-<p>tools/call统计传输调用尝试；远端Invoke统计业务方法进入次数，不等于成功提交。超时夹具故意在转发前等待context，所以远端Invoke为0；真实网络超时不能据此推断远端未执行。损坏响应夹具则先执行Server再返回坏ID，展示错误不会撤销已经发生的调用。</p></details>
-<h3>如何理解“Run结束了，但工具有错误”？</h3><p>按已有契约，结果预算、MCP业务失败和适配后的协议错误可作为受控tool消息回填，脚本模型随后返回文本，因此RunFinished。这个事件只表示Run以文本返回，业务目标是否完成还需检查结果和需求验收。取消、授权拒绝、模型调用ID错误则终止Run。</p><p>MCP响应损坏会令Client失效；适配器回填安全摘要后，Run仍可能结束。客户端会话状态与Run状态不同，失败会话的后续探针不应产生协议发送。不能把所有层压成一个“成功/失败”标志。</p>
-<h3>如何理解“授权允许，却没调用工具”？</h3><p>授权循环先检查完整批次。第一项读取获得允许，第二项远端能力因未配置规则被拒绝，于是整个批次零执行。允许决策是判断记录，不是执行承诺。初始化和目录发现此前可能已有协议流量，零执行断言专指业务tools/call。</p></section>
-<section><div class="time">20 MIN · READ</div><h2>回到Eino：闭环如何被组织起来？</h2><h3>12分钟 · ReAct图中的模型与工具闭环</h3><p>阅读 <a href="https://github.com/cloudwego/eino/blob/main/flow/agent/react/react.go">flow/agent/react/react.go</a> 的AgentConfig、NewAgent、state.Messages、AddChatModelNode、AddToolsNode、modelPostBranchCondition和AddBranch。只追踪一条“模型→工具→模型→结束”路径。</p><p><strong>问题与产出：</strong>描述如何绑定给模型？工具结果如何回到历史？何时走END？把图节点/状态映射为本课Loop、执行边界与局部messages。Eino的MaxStep限制图运行步骤，本课maxSteps按模型轮次计数，不能直接视作相同单位；ToolReturnDirectly也是额外策略，不等于本课默认结束条件。</p>
-<h3>8分钟 · 复核调用策略与协议适配边界</h3><p>回看 <a href="https://github.com/cloudwego/eino/blob/main/compose/tool_node.go">compose/tool_node.go</a> 的Invoke、ExecuteSequentially和ToolCallMiddlewares，再对照 <a href="https://github.com/cloudwego/eino-ext/blob/main/components/tool/mcp/mcp.go">eino-ext的GetTools/InvokableRun</a>。定位调度、错误传播和协议转换分别在哪一层。</p><p><strong>问题与产出：</strong>框架的并行/错误默认值与本课程有哪些差异？若要改变失败策略，应修改哪个边界并新增什么断言？源码路径与符号已核对，main会变化，阅读时记录版本。本课只做结构对照，不引入Eino运行依赖，也不替换已发布接口。</p></section>
-<section><div class="time">80 MIN · BUILD</div><h2>四项集成练习：从判断到证据</h2>
-<h3>任务一 · 20分钟：不看代码重建装配图</h3><p><strong>为什么做：</strong>先知道控制权和数据归属，才能在需求变化时定位改动层。<strong>操作与观察：</strong>5分钟画Host、Model、Loop、策略、授权、适配、Client和Server；10分钟对照week02_test.go的装配段；5分钟标出元信息、参数、结果、主体和两类ID的来源。</p><p><strong>完成证据：</strong>能解释装配阶段的Initialize/Discover与运行阶段的tools/call不同；能说明两份已知ID的读取可以同批，而依赖检索输出的读取应进入后续模型轮次。</p>
-<h3>任务二 · 25分钟：亲自预测并补充历史断言</h3><p><strong>为什么做：</strong>最终字符串无法证明两份正确结果都进入了下一轮。<strong>操作与观察：</strong>10分钟盖住参考期望，手写7行计数；10分钟阅读或自行补充模型第二轮断言，分别解析本地Document和远端ResultEnvelope，检查原assistant与两条tool消息；5分钟运行目标矩阵并解释差异。</p><pre><code># 从仓库根运行，7个子场景会打印计数
-go test ./examples/integration -run TestWeek02EndToEndMatrix -v</code></pre><p><strong>完成证据：</strong>两条结果分别携带local-read/remote-read，远端协议仍用get_document，RPC整数ID不覆盖模型ID；错误回填不包含原始文档或私有坏报文。不要为了断言方便改变旧工具输出格式。</p>
-<h3>任务三 · 20分钟：移动一次故障注入点并解释变化</h3><p><strong>为什么做：</strong>知道错误出现在哪里，比看到error更有助于判断恢复策略。<strong>操作与观察：</strong>5分钟跟踪wireProbe中的“转发前等待”与“执行后损坏响应”；10分钟作为个人扩展练习，把等待移动到Server返回之后，先预测远端Invoke计数再改断言；5分钟核对ToolCompleted与Run终态。</p><p><strong>完成证据：</strong>能解释为何同样超时可能发生在执行之前或之后；为什么本地先完成的读取不被自动撤销；为什么预算超限仍可能RunFinished。该移动故障点是建议扩展，本次交付验证的是上方明确列出的7个参考场景。</p>
-<h3>任务四 · 15分钟：形成第二周设计复盘</h3><p><strong>为什么做：</strong>理解搭建思路，要能面对新要求给出改动位置和证据。<strong>操作与观察：</strong>在自己的复盘记录中用“需求变化→改动层→保持契约→新断言”写三条：增加第二个MCP Server、按租户限制文档、要求远端会话失败就终止Run。对照examples/integration/README.md，避免只罗列类名。</p><p><strong>完成证据：</strong>新增后端主要改能力适配和装配；资源授权仍需后端与可信规则；改变失败语义需要明确修改契约和调用方测试。模型提示词不能代替执行授权，也不应悄悄改变已有错误行为。</p></section>
-<section><div class="time">20 MIN · TEST &amp; REVIEW</div><h2>分别验收实作与理解</h2><p><strong>12分钟实作：</strong>从仓库根执行累计验收，不创建每日Module：</p><pre><code>go test ./examples/integration -run TestWeek02EndToEndMatrix -v
-go test ./examples/...
-go test -race ./examples/...</code></pre><p class="info"><strong>本次真实结果：</strong>官方Go1.22.2 linux/amd64下，目标矩阵7个子场景全部通过，累计examples普通/race命令均退出码0。测试覆盖内存JSON-RPC、FakeStore和脚本模型；没有验证生产HTTP/stdio、OAuth、真实LLM、持久化审计或跨进程恢复。</p>
-<table><thead><tr><th>证据</th><th>检查的设计判断</th></tr></thead><tbody>
-<tr><td>实际调用计数与模型轮次</td><td>拒绝前有没有越过执行边界；故障是否已在Server之后发生</td></tr>
-<tr><td>第二轮消息历史与原ID</td><td>工具结果确实进入模型，协议适配没有改错调用域</td></tr>
-<tr><td>RunStarted与唯一终态</td><td>工具失败、控制流终止与Run返回语义保持一致</td></tr>
-<tr><td>已开始工具的Completed</td><td>正常、错误和取消都能形成可解释的调用生命周期</td></tr>
-<tr><td>failed Client后续不发送</td><td>不确定外部请求不会被会话层隐式重放</td></tr>
-</tbody></table><p><strong>8分钟理解验收：</strong>合上代码回答，再看提示：</p>
-<details><summary>为什么描述可见、调用允许、执行完成必须分开？</summary><p>描述供模型选择；授权基于可信主体和能力规则；执行结果由实际调用返回。允许决策不能证明执行发生，Run返回文本也不能证明用户目标已完成。</p></details>
-<details><summary>当前测试为什么不能证明真实模型会正确比较文档？</summary><p>脚本模型只提供确定的调用和结束文本。测试核对协议和历史输入，不评估真实模型选择、推理或答案质量；后续评估需要真实模型/数据与独立质量标准。</p></details>
-<details><summary>如果进程在Server执行后、响应入历史前崩溃，保存messages就够了吗？</summary><p>需要区分已确认与不确定调用、恢复位置和外部副作用；仅重跑Loop可能重复操作。连接对象、context和本地变量也不能直接当作持久恢复协议。</p></details>
-<h3>学习清单</h3><div class="meta"><span>记录自评进度，测试通过不自动代替理解</span><span id="count">0 / 8</span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div><div id="checks"></div></section>
-<section><h2>Definition of Done 与 Day15衔接</h2><p><strong>理解验收：</strong>不看代码讲完整数据流，手算7场景计数，解释各层状态差异，并为三个需求变化定位改动层。<strong>实作验收：</strong>消息、计数、受控错误和事件共同验证，目标矩阵与两条累计测试通过。本次参考代码已完成实作验证，学习者仍需独立完成理解复盘。</p>
-<p>Day15进入第三周：状态机、运行状态与Checkpoint。当前messages、步数和未确认调用分散在Run局部状态与MCP会话中；下一步需要定义可恢复的语义状态。Eino的state.Messages/局部图状态也需要结合具体Checkpoint配置判断持久性，不能只凭有state对象就推断可恢复。</p><p>Checkpoint不会自动回滚外部操作或提供exactly-once；今天先把恢复边界说明白，明天再按原消息与接口增量设计，不在复盘日另起一套工程。</p></section>
-<footer>Agent Runtime · Day14 / 56 · 第二周课程集成复盘 · <a href="../../index.html">返回学习首页</a></footer></main>
+figure{margin-inline:0}p,.node,figcaption{overflow-wrap:anywhere}.file-label{overflow-wrap:anywhere}.phase{font-weight:700;color:#183561}.copy-status{font-size:14px;color:#52617a}details>pre{margin-bottom:12px}
+</style></head><body><main>
+<header class="hero"><div class="eyebrow">DAY 14 / 56 · 第 2 周 · 图解与 TDD</div><h1>第二周复盘：亲手把整条链装起来</h1><p>少加新概念，多用图、装配骨架和故障矩阵检验理解。</p><div class="chips"><span>阅读 20 分钟</span><span>实现 80 分钟</span><span>测试复盘 20 分钟</span></div></header>
+<nav aria-label="本页学习路线"><strong>一次只做一小步，答案最后看</strong><div class="toplinks"><a href="#goal">① 今天做什么</a><a href="#concepts">② 概念与图解</a><a href="#design">③ 设计理由</a><a href="#contract">④ 行为契约</a><a href="#skeleton">⑤ 骨架</a><a href="#tests">⑥ 完整测试</a><a href="#tasks">⑦ 动手步骤</a><a href="#review">⑧ 验收</a></div></nav>
+<section id="goal"><h2>今天只解决什么？</h2><div class="goal">实现宿主装配函数 Build，把本地工具、远端 MCP、Policy、授权和模型接成一个可验收的 Runtime。</div><p>用户已知 local-1 与 remote-1，希望同时读取本地和远端两份资料。每个组件单独通过测试，不代表描述、权限、调用 ID 和结果已经接对。</p><p>本日把注意力放在组件连接处：谁初始化会话、谁注册别名、谁加策略、谁授予能力。用实际计数和下一轮消息检查，不只看最终字符串。</p><div class="note">总结日不新增 Runtime 协议或业务算法。Build 是宿主装配入口；7 个混合成功/故障场景复用 Day 08–13；不实现跨进程恢复。</div></section>
+<section id="concepts"><h2>先把概念说清楚</h2><article class="card"><h3>装配根：集中接好依赖</h3><p>Build 接收配置，创建会话与 Registry，最后返回 Agent。</p><p>它负责连接组件，不负责运行用户的一次问答。</p></article><article class="card"><h3>三种观察证据</h3><p>调用计数说明执行到了哪里；模型历史说明结果是否回填；事件说明生命周期是否一致。</p><p>脚本模型最终返回文本不是业务成功的充分证据。</p></article><article class="card"><h3>三个不同的状态</h3><p>授权允许不等于已执行；远端业务失败不一定使 Run 失败；Client 会话失效也不等于 Loop 不能回填受控错误。</p></article><h3>图 1 · 模块职责与数据去向</h3><figure class="flow" aria-label="图 1 · 模块职责与数据去向"><div class="node"><strong>宿主 Build</strong>Initialize → Discover → 新 Registry → Policy → Authorizer → Agent.New。</div><div class="arrow">↓ 装配完成的 Agent</div><div class="node"><strong>Agent.Run</strong>模型请求 → 整批协议/授权 → 本地与远端 Execute → 回填结果。</div><div class="arrow">↓ 消息、计数、事件</div><div class="node"><strong>测试探针</strong>记录本地 Invoke、tools/call 尝试、远端 Invoke、模型轮次与事件。</div><figcaption class="muted">沿箭头从上到下读；每个框说明负责的事或当前输入输出。</figcaption></figure><details><summary>展开这张图的逐步文字说明</summary><ol><li><strong>宿主 Build</strong>：Initialize → Discover → 新 Registry → Policy → Authorizer → Agent.New。</li><li><strong>Agent.Run</strong>：模型请求 → 整批协议/授权 → 本地与远端 Execute → 回填结果。</li><li><strong>测试探针</strong>：记录本地 Invoke、tools/call 尝试、远端 Invoke、模型轮次与事件。</li></ol></details></section>
+<section id="walkthrough"><h2>沿同一个例子走一遍</h2><h3>图 2 · 一次完整过程</h3><figure class="flow" aria-label="图 2 · 一次完整过程"><div class="node"><strong>① Build 接好两种工具</strong>本地 get_document，远端 knowledge__get_document；给模型两份说明。业务调用仍为 0。</div><div class="arrow">↓ 两个本地名称与能力表</div><div class="node"><strong>② 同一批读取</strong>local-read 读取 local-1；remote-read 读取 remote-1。两者 ID 已知、无检索数据依赖。</div><div class="arrow">↓ 已通过检查的调用批次</div><div class="node"><strong>③ 检查、授权、执行</strong>整批通过后先本地、再远端。协议请求用远端原名 get_document 和整数 RPC ID。</div><div class="arrow">↓ 两种结果格式与原调用 ID</div><div class="node"><strong>④ 第二轮输入与终态</strong>user、原 assistant、local-read 结果、remote-read 结果完整保留；脚本模型返回 scripted final，RunFinished 恰好一次。</div><figcaption class="muted">沿箭头从上到下读；每个框说明负责的事或当前输入输出。</figcaption></figure><details><summary>展开这张图的逐步文字说明</summary><ol><li><strong>① Build 接好两种工具</strong>：本地 get_document，远端 knowledge__get_document；给模型两份说明。业务调用仍为 0。</li><li><strong>② 同一批读取</strong>：local-read 读取 local-1；remote-read 读取 remote-1。两者 ID 已知、无检索数据依赖。</li><li><strong>③ 检查、授权、执行</strong>：整批通过后先本地、再远端。协议请求用远端原名 get_document 和整数 RPC ID。</li><li><strong>④ 第二轮输入与终态</strong>：user、原 assistant、local-read 结果、remote-read 结果完整保留；脚本模型返回 scripted final，RunFinished 恰好一次。</li></ol></details><h3>失败时停在哪里？</h3><div class="node branch">未给远端工具配置宿主能力规则时，即使两个描述都可见，整批仍被拒绝：本地 Invoke=0，tools/call=0，远端 Invoke=0，模型轮次=1。</div></section>
+<section id="design"><h2>这些字段、接口和方法为什么存在？</h2><article class="card"><h3>Config 的能力输入</h3><p>Model 是模型；Local 是本地 Invokable；Transport 是尚未初始化的单会话通道；Prefix 给远端工具分配别名。</p><p>Build 自己 Initialize，调用方不要提前初始化同一传输。</p></article><article class="card"><h3>Config 的策略与身份</h3><p>Rules/Grants 是可信授权配置；Policies 以本地工具名索引 Policy，缺失按零值。</p><p>Visible=nil 表示全部，非 nil 空集合表示零描述；它不删执行能力，也不授予权限。</p></article><article class="card"><h3>Config 的限制与观察</h3><p>MaxPages、MaxSteps 为正；ToolTimeout≥0，0 禁用；Sink 接收已有事件，可为 nil。</p><p>ToolTimeout 与 Policy.Timeout 更早的截止时间生效。</p><p>前置 nil 检查只承诺普通 nil 接口。</p></article><article class="card"><h3>Runtime 为什么返回两个对象？</h3><p>Agent 用来 Run，Client 用来检查会话与宿主管理连接。</p><p>真实传输资源由调用方关闭；当前 Transport 没有发明 Close/shutdown RPC。</p></article><article class="card"><h3>Build 的顺序</h3><p>先检查 ctx 和基本配置，再初始化、发现、建立全新 Registry、逐项包装、创建授权器、Agent.New。</p><p>任一失败返回 nil,error，保留原因；不发布半装配 Runtime。</p></article><article class="card"><h3>失败没有自动回滚</h3><p>装配可能已发送 initialize/list 流量，但不能 Invoke 业务工具。</p><p>构造失败不回放不确定会话；实际运行后的错误也不自动撤销前面的调用。</p></article><article class="card"><h3>保留两种结果格式</h3><p>本地 get_document 仍返回 Document JSON；远端适配返回 ResultEnvelope JSON。</p><p>测试分别解析，不能为了统一断言而悄悄改旧契约。</p></article></section>
+<section id="matrix"><h2>总结练习：先预测，再运行</h2><p>先写自己的预测，再展开计数。四个数字依次是：本地 Invoke、tools/call 尝试、远端 Invoke、模型轮次。</p><details><summary>展开七场景参考计数与解释</summary><article class="card"><h3>正常混合读取</h3><p>1 / 1 / 1 / 2；RunFinished。</p></article><article class="card"><h3>远端未批准</h3><p>0 / 0 / 0 / 1；RunFailed。</p></article><article class="card"><h3>重复模型 ID</h3><p>0 / 0 / 0 / 1；RunFailed。</p></article><article class="card"><h3>远端结果超预算</h3><p>1 / 1 / 1 / 2；RunFinished，tool 受控错误。</p></article><article class="card"><h3>远端业务失败</h3><p>1 / 1 / 1 / 2；RunFinished，tool 受控错误。</p></article><article class="card"><h3>执行后坏响应</h3><p>1 / 1 / 1 / 2；RunFinished，Client.failed。</p></article><article class="card"><h3>转发前超时</h3><p>1 / 1 / 0 / 1；RunFailed，DeadlineExceeded。</p></article><p>tools/call 计数是尝试，不是提交证明。超时发生在夹具转发前，所以本例远端 Invoke=0；不能套用到所有真实超时。</p></details></section>
+<section id="contract"><h2>行为契约：不用猜参考代码</h2><p>按下面规则实现。内部算法可以不同；未约定的错误文本不必逐字一致，错误链用 errors.Is/As 检查。</p><article class="rule"><h3>R1 · 装配入口</h3><p>已取消 ctx 或基本配置缺失/非法时返回 nil,error；Model/Local/Transport 非 nil，MaxPages/MaxSteps 正，ToolTimeout 非负。初始化、发现或后续构造失败不返回部分 Runtime。</p><p class="muted">对应测试：<code>TestDay14BuildFailure / TestDay14ConfigAndVisibility</code></p></article><article class="rule"><h3>R2 · 正常混合闭环</h3><p>Build 不执行业务；运行后本地 1 次、远端请求 1 次、远端执行 1 次、模型 2 轮；第二轮历史与原 ID 完整，描述绑定两个本地名。</p><p class="muted">对应测试：<code>TestDay14EndToEndMatrix/mixed-success</code></p></article><article class="rule"><h3>R3 · 拒绝和批次错误</h3><p>未批准远端能力或重复模型调用 ID，使整批零执行、模型 1 轮、唯一 RunFailed。允许决策不是执行承诺。</p><p class="muted">对应测试：<code>TestDay14EndToEndMatrix/unapproved-remote / duplicate-model-ID</code></p></article><article class="rule"><h3>R4 · 受控失败可以回填</h3><p>结果超预算、远端 IsError、执行后响应损坏，回填各层的安全摘要；脚本模型仍可结束，唯一 RunFinished 不等于业务目标完成。Client 坏协议后 failed，后续不再发送。</p><p class="muted">对应测试：<code>TestDay14EndToEndMatrix/remote-result-budget / remote-business-failure / corrupt-response-after-execution</code></p></article><article class="rule"><h3>R5 · 超时不是未执行证明</h3><p>夹具在远端执行前等待取消，因而远端 Invoke=0；RunFailed，已开始工具都有 completed。真实网络超时不能据此推断远端未执行。</p><p class="muted">对应测试：<code>TestDay14EndToEndMatrix/remote-timeout</code></p></article></section>
+<section id="read"><h2>官方阅读 20 分钟：带着问题找证据</h2><article class="card"><div class="time">12 分钟</div><h3><a href="https://github.com/cloudwego/eino/blob/main/flow/agent/react/react.go">flow/agent/react/react.go · NewAgent / state.Messages</a></h3><p>只跟一条“模型 → 工具 → 模型 → 结束”路径；把消息历史和分支映射到本课 Loop，不混淆框架 MaxStep 与模型轮次单位。</p></article><article class="card"><div class="time">8 分钟</div><h3><a href="https://github.com/cloudwego/eino-ext/blob/main/components/tool/mcp/mcp.go">eino-ext · MCP 工具适配</a></h3><p>回看协议转换在哪里发生。需求“加入第二个服务器”应改装配/别名，而不是在 Loop 加业务 switch。</p></article><p class="muted">外部链接供源码对照；正文独立可读。本次未重新核对所有远端 main 符号，阅读时记录 commit，名称变化时按职责定位；不把框架默认策略直接视为本课约定。</p></section>
+<section id="continuity"><h2>承接前序设计与本日增量</h2><p>复用 Day 08–13 全部公开契约。新增 internal/assembly/week02.go 的 Config、Runtime、Build，作为宿主装配层；这不替换 Agent.New/Run。完整测试含内存 Server、模型、计数器与事件探针。</p><p><strong>路径约定：</strong>练习使用 internal；参考使用 examples/internal。两套包只映射路径前缀，不能混用 model.Message。共用原仓库 go.mod，Go ≥ 1.22.2；没有每日独立 module。</p><p>新增：internal/assembly/week02.go；已有实现先保留，不把同名定义重复追加。</p><div class="note"><strong>安全开始：</strong>下面命令只新建仓库外的临时练习副本，复制同一累计模块的前置依赖，再把当天目标换成 TODO。不会修改你当前的 internal/cmd，也不根据你的代码判断进度。</div><pre><code>python3 docs/learning/exercises/prepare.py 14</code></pre><p>在原仓库根运行。脚本打印新副本的绝对路径；进入该目录后再编辑和测试。需要 Python 3.9+ 和 Go 工具链，不需要 API Key。</p><p>副本内包含为兼容累计版本提供的组件；当天任务只编辑上面列出的目标。已经实现过时，也可以只把完整测试应用到自己的版本，无需挖空重做。</p><details><summary>手工应用文件与保留旧实现</summary><p>先备份或在独立工作区操作。按本页路径保存骨架与测试；前序依赖使用同一套累计类型。当天测试文件若已存在，比较后更新，不与旧版重复定义。不要自动覆盖当前项目；参考基线仅用于准备依赖。</p><p>prepare.py 把参考依赖映射到副本 internal；当天方法始终使用未实现骨架。装配脚本不运行用户任务，也不证明你的原实现通过测试。</p></details></section>
+<section id="skeleton"><h2>完整骨架：方法体留给你</h2><p>每个文件的 package、import、类型和签名齐全。panic("TODO: ...") 表示尚未实现；它不是最终错误处理方式。按文件名保存，不只复制某个方法。</p><h3 class="file-label">待实现骨架：internal/assembly/week02.go</h3><p class="download"><a href="exercises/day14/skeleton/internal/assembly/week02.go.txt" download="week02.go">下载 week02.go</a></p><details class="code-file" data-kind="skeleton" data-source="day14/skeleton/internal/assembly/week02.go.txt"><summary>展开完整文件：week02.go</summary><pre id="day14-skeleton-internal-assembly-week02-go"><code>// Package assembly is a host-side composition root, not a new Runtime protocol.
+package assembly
+
+import (
+	&quot;context&quot;
+
+	&quot;time&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/agent&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/mcp&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool&quot;
+)
+
+type Config struct {
+	Model              model.Model
+	Local              tool.Invokable
+	Transport          mcp.Transport
+	Prefix             string
+	Rules              map[string]tool.Capability
+	Grants             map[string][]tool.Capability
+	Policies           map[string]tool.Policy
+	Visible            []string
+	MaxPages, MaxSteps int
+	ToolTimeout        time.Duration
+	Sink               agent.EventSink
+}
+type Runtime struct {
+	Agent  *agent.Agent
+	Client *mcp.Client
+}
+
+// Build initializes/discovers capabilities but does not invoke business tools.
+// The caller owns transport cleanup; a failed/ambiguous session is not replayed.
+func Build(ctx context.Context, c Config) (*Runtime, error) { panic(&quot;TODO: Build&quot;) }
+</code></pre><button type="button" data-copy="day14-skeleton-internal-assembly-week02-go">复制本文件</button></details></section>
+<section id="tests"><h2>完整测试：夹具和断言都已提供</h2><p>下面是全部测试文件，不需要补 fake、fixture 或断言。测试调用练习的 internal 包，不是已完成的 examples 答案。</p><h3 class="file-label">完整测试：internal/assembly/week02_test.go</h3><p class="download"><a href="exercises/day14/tests/internal/assembly/week02_test.go.txt" download="week02_test.go">下载 week02_test.go</a></p><details class="code-file" data-kind="tests" data-source="day14/tests/internal/assembly/week02_test.go.txt"><summary>展开完整文件：week02_test.go</summary><pre id="day14-tests-internal-assembly-week02-test-go"><code>package assembly
+
+import (
+	&quot;context&quot;
+	&quot;encoding/json&quot;
+	&quot;errors&quot;
+	&quot;strings&quot;
+	&quot;testing&quot;
+	&quot;time&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/agent&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/mcp&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool/knowledge&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool/mcptool&quot;
+)
+
+const (
+	localName  = &quot;get_document&quot;
+	remoteName = &quot;knowledge__get_document&quot;
+	localID    = &quot;local-read&quot;
+	remoteID   = &quot;remote-read&quot;
+)
+
+type countedTool struct {
+	target tool.Invokable
+	calls  int
+}
+
+func (c *countedTool) Meta(ctx context.Context) (tool.Spec, error) { return c.target.Meta(ctx) }
+func (c *countedTool) Invoke(ctx context.Context, args json.RawMessage) (string, error) {
+	c.calls++
+	return c.target.Invoke(ctx, args)
+}
+
+type wireProbe struct {
+	target              mcp.Transport
+	total, toolRequests int
+	corrupt, wait       bool
+	lastCall            []byte
+}
+
+func (p *wireProbe) Send(ctx context.Context, b []byte) ([]byte, error) {
+	p.total++
+	var req struct {
+		Method string `json:&quot;method&quot;`
+	}
+	if err := json.Unmarshal(b, &amp;req); err != nil {
+		return nil, err
+	}
+	if req.Method != &quot;tools/call&quot; {
+		return p.target.Send(ctx, b)
+	}
+	p.toolRequests++
+	p.lastCall = append([]byte(nil), b...)
+	if p.wait {
+		&lt;-ctx.Done()
+		return nil, ctx.Err()
+	}
+	result, err := p.target.Send(ctx, b)
+	if err == nil &amp;&amp; p.corrupt {
+		// The peer has already executed the operation. A bad response cannot undo it.
+		return []byte(`{&quot;jsonrpc&quot;:&quot;2.0&quot;,&quot;id&quot;:999,&quot;result&quot;:{&quot;content&quot;:[{&quot;type&quot;:&quot;text&quot;,&quot;text&quot;:&quot;PRIVATE-REMOTE&quot;}]}}`), nil
+	}
+	return result, err
+}
+
+type weekModel struct {
+	batch   []model.ToolCall
+	calls   int
+	defs    []model.ToolDefinition
+	history []model.Message
+}
+
+func (m *weekModel) WithTools(defs []model.ToolDefinition) (model.Model, error) {
+	m.defs = append([]model.ToolDefinition(nil), defs...)
+	return m, nil
+}
+func (m *weekModel) Generate(ctx context.Context, messages []model.Message) (*model.Response, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	m.calls++
+	m.history = append([]model.Message(nil), messages...)
+	if m.calls == 1 {
+		return &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, ToolCalls: m.batch}}, nil
+	}
+	return &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, Content: &quot;scripted final&quot;}}, nil
+}
+
+type eventProbe struct{ events []agent.Event }
+
+func (p *eventProbe) Emit(_ context.Context, e agent.Event) { p.events = append(p.events, e) }
+
+func TestDay14EndToEndMatrix(t *testing.T) {
+	cases := []struct {
+		name                                                string
+		deny, duplicate, budget, business, corrupt, wait    bool
+		localCalls, remoteRequests, remoteCalls, modelCalls int
+		terminal                                            bool
+		controlMessage                                      string
+		sentinel                                            error
+	}{
+		{name: &quot;mixed-success&quot;, localCalls: 1, remoteRequests: 1, remoteCalls: 1, modelCalls: 2},
+		{name: &quot;unapproved-remote&quot;, deny: true, modelCalls: 1, terminal: true, sentinel: tool.ErrForbidden},
+		{name: &quot;duplicate-model-ID&quot;, duplicate: true, modelCalls: 1, terminal: true},
+		{name: &quot;remote-result-budget&quot;, budget: true, localCalls: 1, remoteRequests: 1, remoteCalls: 1, modelCalls: 2, controlMessage: &quot;execution_failed: tool result exceeds byte budget&quot;},
+		{name: &quot;remote-business-failure&quot;, business: true, localCalls: 1, remoteRequests: 1, remoteCalls: 1, modelCalls: 2, controlMessage: &quot;execution_failed: remote tool execution failed&quot;},
+		{name: &quot;corrupt-response-after-execution&quot;, corrupt: true, localCalls: 1, remoteRequests: 1, remoteCalls: 1, modelCalls: 2, controlMessage: &quot;execution_failed: remote tool request failed&quot;},
+		{name: &quot;remote-timeout&quot;, wait: true, localCalls: 1, remoteRequests: 1, modelCalls: 1, terminal: true, sentinel: context.DeadlineExceeded},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			parent, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			ctx := tool.WithPrincipal(parent, tool.Principal{ID: &quot;reader&quot;})
+			local := &amp;countedTool{target: &amp;knowledge.GetDocument{Store: knowledge.NewFakeStore([]knowledge.Document{{ID: &quot;local-1&quot;, Content: &quot;local reference&quot;}})}}
+			remote := &amp;countedTool{target: &amp;knowledge.GetDocument{Store: knowledge.NewFakeStore([]knowledge.Document{{ID: &quot;remote-1&quot;, Content: &quot;remote reference&quot;}})}}
+			peer, err := mcp.NewDemoServer(ctx, remote)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wire := &amp;wireProbe{target: peer, corrupt: tc.corrupt, wait: tc.wait}
+			policies := map[string]tool.Policy{
+				localName:  {Timeout: time.Second, MaxResultBytes: 4096},
+				remoteName: {Timeout: time.Second, MaxResultBytes: 4096},
+			}
+			if tc.budget {
+				policies[remoteName] = tool.Policy{Timeout: time.Second, MaxResultBytes: 8}
+			}
+			if tc.wait {
+				policies[remoteName] = tool.Policy{Timeout: 20 * time.Millisecond, MaxResultBytes: 4096}
+			}
+			rules := map[string]tool.Capability{localName: tool.ReadCapability}
+			// A discovered tool is not automatically trusted/classified by the host.
+			if !tc.deny {
+				rules[remoteName] = tool.ReadCapability
+			}
+			document := &quot;remote-1&quot;
+			if tc.business {
+				document = &quot;missing&quot;
+			}
+			args, _ := json.Marshal(map[string]string{&quot;id&quot;: document})
+			batch := []model.ToolCall{
+				{ID: localID, Name: localName, Arguments: json.RawMessage(`{&quot;id&quot;:&quot;local-1&quot;}`)},
+				{ID: remoteID, Name: remoteName, Arguments: args},
+			}
+			if tc.duplicate {
+				batch[1].ID = localID
+			}
+			scripted := &amp;weekModel{batch: batch}
+			trace := &amp;eventProbe{}
+			runtime, err := Build(ctx, Config{
+				Model: scripted, Local: local, Transport: wire, Prefix: &quot;knowledge&quot;,
+				Rules: rules, Grants: map[string][]tool.Capability{&quot;reader&quot;: {tool.ReadCapability}},
+				Policies: policies, Visible: []string{localName, remoteName},
+				MaxPages: 4, MaxSteps: 3, ToolTimeout: 2 * time.Second, Sink: trace,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			client := runtime.Client
+			output, runErr := runtime.Agent.Run(ctx, &quot;compare known local-1 and remote-1 documents&quot;)
+			if tc.terminal {
+				if runErr == nil || output != &quot;&quot; {
+					t.Fatalf(&quot;terminal output=%q err=%v&quot;, output, runErr)
+				}
+				if tc.sentinel != nil &amp;&amp; !errors.Is(runErr, tc.sentinel) {
+					t.Fatalf(&quot;lost terminal error: %v&quot;, runErr)
+				}
+			} else if runErr != nil || output != &quot;scripted final&quot; {
+				t.Fatalf(&quot;%q %v&quot;, output, runErr)
+			}
+			if local.calls != tc.localCalls || wire.toolRequests != tc.remoteRequests || remote.calls != tc.remoteCalls || scripted.calls != tc.modelCalls {
+				t.Fatalf(&quot;local=%d RPC=%d remoteInvoke=%d model=%d&quot;, local.calls, wire.toolRequests, remote.calls, scripted.calls)
+			}
+			defs := map[string]bool{}
+			for _, d := range scripted.defs {
+				defs[d.Name] = true
+			}
+			if len(defs) != 2 || !defs[localName] || !defs[remoteName] {
+				t.Fatal(scripted.defs)
+			}
+			eventCounts := map[agent.EventType]int{}
+			toolErrors, toolCancelled := 0, 0
+			for _, e := range trace.events {
+				eventCounts[e.Type]++
+				if e.Type == agent.EventToolAuthorized || e.Type == agent.EventToolDenied {
+					if e.PrincipalID != &quot;reader&quot; || e.Step != 1 || e.At.IsZero() {
+						t.Fatalf(&quot;audit=%+v&quot;, e)
+					}
+				}
+				if e.Type == agent.EventToolCompleted {
+					if e.Status == &quot;error&quot; {
+						toolErrors++
+					}
+					if e.Status == &quot;cancelled&quot; {
+						toolCancelled++
+					}
+				}
+			}
+			if eventCounts[agent.EventRunStarted] != 1 || eventCounts[agent.EventRunFinished]+eventCounts[agent.EventRunFailed] != 1 {
+				t.Fatalf(&quot;invalid run lifecycle: %+v&quot;, eventCounts)
+			}
+			wantFailed := 0
+			if tc.terminal {
+				wantFailed = 1
+			}
+			if eventCounts[agent.EventRunFailed] != wantFailed {
+				t.Fatalf(&quot;terminal=%+v&quot;, eventCounts)
+			}
+			expectedStarted := tc.localCalls
+			if tc.remoteRequests &gt; 0 {
+				expectedStarted++
+			}
+			if eventCounts[agent.EventToolStarted] != expectedStarted || eventCounts[agent.EventToolCompleted] != expectedStarted {
+				t.Fatalf(&quot;unpaired tool events: %+v&quot;, eventCounts)
+			}
+			if tc.deny {
+				// An allow decision for the first item is not an execution commitment.
+				if eventCounts[agent.EventToolAuthorized] != 1 || eventCounts[agent.EventToolDenied] != 1 || eventCounts[agent.EventToolStarted] != 0 {
+					t.Fatalf(&quot;preflight=%+v&quot;, eventCounts)
+				}
+			}
+			if tc.controlMessage != &quot;&quot; &amp;&amp; toolErrors != 1 {
+				t.Fatalf(&quot;tool errors=%d&quot;, toolErrors)
+			}
+			if tc.wait &amp;&amp; toolCancelled != 1 {
+				t.Fatalf(&quot;cancelled completions=%d&quot;, toolCancelled)
+			}
+			if scripted.calls == 2 {
+				ms := scripted.history
+				if len(ms) != 4 || ms[1].Role != &quot;assistant&quot; || len(ms[1].ToolCalls) != 2 || ms[1].ToolCalls[1].Name != remoteName {
+					t.Fatalf(&quot;missing assistant history: %+v&quot;, ms)
+				}
+				if ms[2].Role != &quot;tool&quot; || ms[2].ToolCallID != localID || ms[3].Role != &quot;tool&quot; || ms[3].ToolCallID != remoteID {
+					t.Fatalf(&quot;message pairing: %+v&quot;, ms)
+				}
+				var localDoc knowledge.Document
+				if json.Unmarshal([]byte(ms[2].Content), &amp;localDoc) != nil || localDoc.Content != &quot;local reference&quot; {
+					t.Fatal(ms[2].Content)
+				}
+				if tc.controlMessage != &quot;&quot; {
+					if ms[3].Content != tc.controlMessage || strings.Contains(ms[3].Content, &quot;PRIVATE-REMOTE&quot;) || strings.Contains(ms[3].Content, &quot;remote reference&quot;) {
+						t.Fatalf(&quot;unsafe error projection: %q&quot;, ms[3].Content)
+					}
+				} else {
+					var projected mcptool.ResultEnvelope
+					if json.Unmarshal([]byte(ms[3].Content), &amp;projected) != nil || len(projected.Text) != 1 {
+						t.Fatal(ms[3].Content)
+					}
+					var remoteDoc knowledge.Document
+					if json.Unmarshal([]byte(projected.Text[0]), &amp;remoteDoc) != nil || remoteDoc.Content != &quot;remote reference&quot; {
+						t.Fatal(projected)
+					}
+				}
+			}
+			if wire.toolRequests &gt; 0 {
+				var request struct {
+					ID     json.RawMessage `json:&quot;id&quot;`
+					Params struct {
+						Name      string          `json:&quot;name&quot;`
+						Arguments json.RawMessage `json:&quot;arguments&quot;`
+					} `json:&quot;params&quot;`
+				}
+				if json.Unmarshal(wire.lastCall, &amp;request) != nil || request.Params.Name != &quot;get_document&quot; {
+					t.Fatalf(&quot;wire=%s&quot;, wire.lastCall)
+				}
+				var id uint64
+				if json.Unmarshal(request.ID, &amp;id) != nil || id == 0 || strings.Contains(string(wire.lastCall), remoteID) || strings.Contains(string(wire.lastCall), &quot;reader&quot;) {
+					t.Fatalf(&quot;identity domains mixed: %s&quot;, wire.lastCall)
+				}
+			}
+			if tc.corrupt || tc.wait {
+				before := wire.total
+				_, err = client.ListTools(ctx, &quot;&quot;)
+				if !errors.Is(err, mcp.ErrSessionState) || wire.total != before {
+					t.Fatalf(&quot;ambiguous session replay: %v total=%d&quot;, err, wire.total)
+				}
+			}
+			t.Logf(&quot;local=%d tools/call=%d remoteInvoke=%d model=%d finished=%d failed=%d&quot;,
+				local.calls, wire.toolRequests, remote.calls, scripted.calls, eventCounts[agent.EventRunFinished], eventCounts[agent.EventRunFailed])
+		})
+	}
+}
+
+func TestDay14BuildFailure(t *testing.T) {
+	t.Run(&quot;invalid-and-cancelled&quot;, func(t *testing.T) {
+		if got, err := Build(context.Background(), Config{}); err == nil || got != nil {
+			t.Fatalf(&quot;%+v %v&quot;, got, err)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		if got, err := Build(ctx, Config{}); !errors.Is(err, context.Canceled) || got != nil {
+			t.Fatalf(&quot;%+v %v&quot;, got, err)
+		}
+	})
+	t.Run(&quot;discovery-failure&quot;, func(t *testing.T) {
+		ctx := context.Background()
+		local := &amp;countedTool{target: &amp;knowledge.GetDocument{Store: knowledge.NewFakeStore(nil)}}
+		server, err := mcp.NewDemoServer(ctx, local)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wire := &amp;wireProbe{target: server}
+		got, err := Build(ctx, Config{Model: &amp;weekModel{}, Local: local, Transport: wire, Prefix: &quot;bad_prefix&quot;, MaxPages: 1, MaxSteps: 1})
+		if err == nil || got != nil || wire.toolRequests != 0 || local.calls != 0 {
+			t.Fatalf(&quot;partial runtime: %+v %v calls=%d&quot;, got, err, local.calls)
+		}
+	})
+}
+
+func TestDay14ConfigAndVisibility(t *testing.T) {
+	for _, mode := range []string{&quot;nil-model&quot;, &quot;nil-local&quot;, &quot;nil-transport&quot;, &quot;pages&quot;, &quot;steps&quot;, &quot;timeout&quot;, &quot;cancelled&quot;, &quot;all&quot;, &quot;none&quot;} {
+		t.Run(mode, func(t *testing.T) {
+			parent, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ctx := tool.WithPrincipal(parent, tool.Principal{ID: &quot;reader&quot;})
+			local := &amp;countedTool{target: &amp;knowledge.GetDocument{Store: knowledge.NewFakeStore([]knowledge.Document{{ID: &quot;local-1&quot;, Content: &quot;body&quot;}})}}
+			peer, err := mcp.NewDemoServer(ctx, local)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wire := &amp;wireProbe{target: peer}
+			m := &amp;weekModel{batch: []model.ToolCall{{ID: &quot;r&quot;, Name: localName, Arguments: json.RawMessage(`{&quot;id&quot;:&quot;local-1&quot;}`)}}}
+			c := Config{Model: m, Local: local, Transport: wire, Prefix: &quot;knowledge&quot;, MaxPages: 1, MaxSteps: 2, Rules: map[string]tool.Capability{localName: tool.ReadCapability}, Grants: map[string][]tool.Capability{&quot;reader&quot;: {tool.ReadCapability}}}
+			switch mode {
+			case &quot;nil-model&quot;:
+				c.Model = nil
+			case &quot;nil-local&quot;:
+				c.Local = nil
+			case &quot;nil-transport&quot;:
+				c.Transport = nil
+			case &quot;pages&quot;:
+				c.MaxPages = 0
+			case &quot;steps&quot;:
+				c.MaxSteps = 0
+			case &quot;timeout&quot;:
+				c.ToolTimeout = -1
+			case &quot;cancelled&quot;:
+				cancel()
+			case &quot;none&quot;:
+				c.Visible = []string{}
+			}
+			got, err := Build(ctx, c)
+			if mode != &quot;all&quot; &amp;&amp; mode != &quot;none&quot; {
+				if got != nil || err == nil || wire.total != 0 || local.calls != 0 {
+					t.Fatalf(&quot;early validation: %+v %v wire=%d&quot;, got, err, wire.total)
+				}
+				return
+			}
+			if err != nil || got == nil || local.calls != 0 || wire.toolRequests != 0 {
+				t.Fatalf(&quot;build invoked business: %+v %v&quot;, got, err)
+			}
+			want := 2
+			if mode == &quot;none&quot; {
+				want = 0
+			}
+			if len(m.defs) != want {
+				t.Fatalf(&quot;visible definitions %d want %d&quot;, len(m.defs), want)
+			}
+			if _, err := got.Agent.Run(ctx, &quot;read&quot;); err != nil || local.calls != 1 {
+				t.Fatal(&quot;visibility removed executable tool&quot;, err, local.calls)
+			}
+		})
+	}
+}
+</code></pre><button type="button" data-copy="day14-tests-internal-assembly-week02-test-go">复制本文件</button></details><h3>先编译，再看到明确红灯</h3><pre><code>go test ./internal/assembly -run &#x27;^$&#x27; -timeout 20s
+go test ./internal/assembly -run &#x27;^TestDay14&#x27; -count=1 -v -timeout 20s</code></pre><p>编译命令预期退出码 0，“no tests to run”在这一步是正常的。第二条必须实际运行用例，并在当天方法的 TODO 处失败；缺包、语法错误、命令未匹配到测试都不算行为红灯。</p><p>已有实现可能直接全绿。保留这些结果，再用契约检查设计；不要为了制造红灯破坏已完成代码。</p></section>
+<section id="tasks"><h2>分步实现：一次只改变一组行为</h2><div class="time">编码 80 分钟 · 每次只看当前任务卡</div><article class="step"><h3>1 · 15 分钟</h3><p><strong>为什么做：</strong>总结时先说清谁创建谁，避免把装配与运行混在一起。</p><p><strong>位置：</strong>Config / Runtime / Build 入场</p><p><strong>动作：</strong>先按图重述装配顺序；实现 ctx 与基础配置校验。</p><pre><code>go test ./internal/assembly -run &#x27;^TestDay14BuildFailure$/^invalid-and-cancelled$&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>非法配置和已取消请求没有可用 Runtime。</p><details><summary>卡住时再看提示</summary><p>先阻止明显错误，再开始初始化；不要在 Build 中 Run 用户任务。</p></details></article><article class="step"><h3>2 · 20 分钟</h3><p><strong>为什么做：</strong>目录准备失败不应留下可用的半装配 Runtime。</p><p><strong>位置：</strong>Build 的初始化与目录发现</p><p><strong>动作：</strong>创建 Client，Initialize，Discover；任何失败返回 nil，业务工具不被执行。</p><pre><code>go test ./internal/assembly -run &#x27;^TestDay14BuildFailure$/^discovery-failure$&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>目录错误不会泄露半装配对象或触发 tools/call。</p><details><summary>卡住时再看提示</summary><p>传输由 Build 初始化一次；发现返回全部候选后再装配新 Registry。</p></details></article><article class="step"><h3>3 · 25 分钟</h3><p><strong>为什么做：</strong>把一周的组件接起来，验证实际数据流。</p><p><strong>位置：</strong>Build 的注册、策略、授权、模型装配</p><p><strong>动作：</strong>注册本地/远端能力，按名称加 Policy，建立授权器，处理 Visible，返回 Agent 与 Client。</p><pre><code>go test ./internal/assembly -run &#x27;^TestDay14EndToEndMatrix$/^mixed-success$&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>本地/远端结果分别解析，ID、描述与历史对齐。</p><details><summary>卡住时再看提示</summary><p>Policy 和授权均使用本地名称；远端原名只在适配器内部。</p></details></article><article class="step"><h3>4 · 20 分钟</h3><p><strong>为什么做：</strong>用反例定位失败层，避免把最终字符串当作成功证明。</p><p><strong>位置：</strong>故障矩阵与口头复盘</p><p><strong>动作：</strong>盖住参考计数，先手算 7 场景；运行全部测试，解释结果差异。</p><pre><code>go test ./internal/assembly -run &#x27;^TestDay14&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>对每个场景说清故障层、已发生的调用和唯一终态。</p><details><summary>卡住时再看提示</summary><p>同时看计数、历史和事件，不能用一句“测试返回最终文本”概括成功。</p></details></article></section>
+<section id="review"><h2>测试与复盘 20 分钟</h2><div class="time">12 分钟 · 从目标到累计回归</div><pre><code>go test ./internal/assembly -run &#x27;^TestDay14&#x27; -count=1 -v -timeout 20s
+go test -race ./internal/assembly -run &#x27;^TestDay14&#x27; -count=1 -timeout 30s
+go test ./internal/... -timeout 60s
+go test ./examples/... -timeout 60s
+go test -race ./examples/... -timeout 60s</code></pre><p>先让当天目标全绿，再运行累计回归。examples 验证参考基线，不能替代对 internal 练习的测试。若前序练习接口不同，先按迁移说明对齐，不通过修改测试 import 绕到答案。</p><p>重构时保持同一套断言，整理重复逻辑后再运行；不要通过删测试、跳过用例或改预期来“变绿”。</p><div class="time">8 分钟 · 合上代码回答</div><ol><li>加入第二个 MCP Server，主要改哪里？</li><li>为什么有授权允许事件却完全零执行？</li><li>远端已执行后坏响应，为什么不能直接重跑？</li></ol><details><summary>完成回答后，再看参考思路</summary><article class="card"><h3>加入第二个 MCP Server，主要改哪里？</h3><p>新增可信连接与前缀，在装配层收集候选；复用 Registry、Policy 和 Loop。</p></article><article class="card"><h3>为什么有授权允许事件却完全零执行？</h3><p>整批预检查后项拒绝，执行循环尚未开始。</p></article><article class="card"><h3>远端已执行后坏响应，为什么不能直接重跑？</h3><p>副作用可能已经发生；Client.failed 防止隐式重放，恢复需要明确确认协议。</p></article></details><h3>完成定义</h3><p><strong>实现验收：</strong>当天完整目标用例与 race 通过，记录累计回归的实际结果；失败时记录阶段、原因与未验证范围。</p><p><strong>理解验收：</strong>不看代码，用本日例子讲清输入、职责、结果和失败出口；再说出一个需求变化应该修改哪一层。</p><h3>本次发布验证</h3><div class="note"><p>Go 1.22.2 linux/amd64：原样骨架编译通过；目标测试在 TODO 处按预期失败；同一套测试对兼容参考实现通过（含 race）。</p><p>目标包含 3 个顶层通过测试及其子场景；完整输出见验证记录。</p><p>验证在临时副本中完成，不代表你的当前实现已通过。真实网络、模型或崩溃恢复不在本次验证范围。</p><p><a href="exercises/README.md">查看准备方法与验证范围</a> · <a href="exercises/verification.json">查看原始红绿测试记录</a></p></div><h3>学习清单</h3><div class="meta"><span>本浏览器自评进度；新版清单单独保存</span><span id="count">0 / 8</span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="fill" class="fill"></div></div><div id="checks"></div><noscript><p>未启用脚本仍可展开全文和手动复制；清单不自动保存。</p></noscript></section>
+<section id="answer"><h2>最后再看参考答案</h2><p>这些实现与骨架签名一致，保留相同契约。内部写法可以不同；先按规则和测试独立完成，再对照取舍。</p><h3 class="file-label">参考实现：internal/assembly/week02.go</h3><p class="download"><a href="exercises/day14/reference/internal/assembly/week02.go.txt" download="week02.go">下载 week02.go</a></p><details class="code-file" data-kind="reference" data-source="day14/reference/internal/assembly/week02.go.txt"><summary>展开完整文件：week02.go</summary><pre id="day14-reference-internal-assembly-week02-go"><code>// Package assembly is a host-side composition root, not a new Runtime protocol.
+package assembly
+
+import (
+	&quot;context&quot;
+	&quot;fmt&quot;
+	&quot;time&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/agent&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/mcp&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool/mcptool&quot;
+)
+
+type Config struct {
+	Model              model.Model
+	Local              tool.Invokable
+	Transport          mcp.Transport
+	Prefix             string
+	Rules              map[string]tool.Capability
+	Grants             map[string][]tool.Capability
+	Policies           map[string]tool.Policy
+	Visible            []string
+	MaxPages, MaxSteps int
+	ToolTimeout        time.Duration
+	Sink               agent.EventSink
+}
+type Runtime struct {
+	Agent  *agent.Agent
+	Client *mcp.Client
+}
+
+// Build initializes/discovers capabilities but does not invoke business tools.
+// The caller owns transport cleanup; a failed/ambiguous session is not replayed.
+func Build(ctx context.Context, c Config) (*Runtime, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if c.Model == nil || c.Local == nil || c.Transport == nil || c.MaxPages &lt;= 0 || c.MaxSteps &lt;= 0 || c.ToolTimeout &lt; 0 {
+		return nil, fmt.Errorf(&quot;assembly: invalid config&quot;)
+	}
+	client, err := mcp.NewClient(c.Transport)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = client.Initialize(ctx); err != nil {
+		return nil, err
+	}
+	candidates, err := mcptool.Discover(ctx, client, c.Prefix, c.MaxPages)
+	if err != nil {
+		return nil, err
+	}
+	registry := tool.NewRegistry()
+	if err = registry.Register(ctx, c.Local); err != nil {
+		return nil, err
+	}
+	for _, candidate := range candidates {
+		if err = registry.Register(ctx, candidate); err != nil {
+			return nil, err
+		}
+	}
+	tools := registry.Tools()
+	for name, target := range tools {
+		described, ok := target.(tool.DescribedTool)
+		if !ok {
+			return nil, fmt.Errorf(&quot;assembly: description required&quot;)
+		}
+		wrapped, err := tool.WithPolicy(described, c.Policies[name])
+		if err != nil {
+			return nil, err
+		}
+		tools[name] = wrapped
+	}
+	auth, err := tool.NewCapabilityAuthorizer(c.Rules, c.Grants)
+	if err != nil {
+		return nil, err
+	}
+	opts := []agent.Option{agent.WithAuthorizer(auth), agent.WithToolTimeout(c.ToolTimeout), agent.WithEventSink(c.Sink)}
+	if c.Visible != nil {
+		opts = append(opts, agent.WithVisibleTools(c.Visible...))
+	}
+	a, err := agent.New(c.Model, tools, c.MaxSteps, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &amp;Runtime{Agent: a, Client: client}, nil
+}
+</code></pre><button type="button" data-copy="day14-reference-internal-assembly-week02-go">复制本文件</button></details><h3>为什么接着学下一天？</h3><p>第二周已经接通工具与 MCP。Day 15 把分散在局部变量中的执行进度整理成显式状态，为后续 Checkpoint 设计准备语义边界。</p></section>
+<footer><a href="agent-runtime-day-13.html">前一天 Day 13</a> · <a href="agent-runtime-day-15.html">下一天 Day 15</a> · <a href="../../index.html">返回学习首页</a><p>Day 14 / 56 · 正文、图示、骨架与测试离线可读</p></footer></main>
 <script>
-const items=["不看代码画出本地/远端工具的完整装配链","手算7个场景的调用次数和终态","对照Eino ReAct图与ToolsNode职责","核对第二轮消息与两个ID域","解释授权允许、工具错误和Run终态的差异","运行目标矩阵与累计普通/race验收","完成三条需求变化设计记录","说明Day15状态与恢复边界"];
-const key="agent-runtime-day14-v1";let saved=[];try{const v=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(v))saved=v}catch(_){}const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const p=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=p+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(p))}items.forEach((s,i)=>{const r=document.createElement("div");r.className="check";const c=document.createElement("input");c.type="checkbox";c.id="task-"+i;c.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=c.id;label.textContent=s;r.append(c,label);box.append(r);c.onchange=()=>{saved[i]=c.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+const items=["用自己的话解释当天三个概念", "根据两张图讲清输入、职责和返回", "完成官方阅读并写下问题答案", "确认骨架可编译且目标出现预期红灯", "按任务卡逐步完成当天实现", "完整目标与 race 测试通过", "记录累计回归实际结果和未验证项", "合上代码完成需求变化与失败边界复盘"];const key="mini-agent-runtime-day-14-tdd-v3";
+let saved=[];try{const value=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(value))saved=value}catch(_){}
+const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const percent=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=percent+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(percent))}
+items.forEach((s,i)=>{const row=document.createElement("div");row.className="check";const input=document.createElement("input");input.type="checkbox";input.id="task-"+i;input.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=input.id;label.textContent=s;row.append(input,label);box.append(row);input.onchange=()=>{saved[i]=input.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+document.querySelectorAll("button[data-copy]").forEach(button=>button.addEventListener("click",async()=>{const target=document.getElementById(button.dataset.copy);try{await navigator.clipboard.writeText(target.textContent);button.textContent="已复制"}catch(_){const range=document.createRange();range.selectNodeContents(target);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);button.textContent="已选中，请手动复制"}}));
 </script></body></html>

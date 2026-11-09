@@ -1,88 +1,903 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>Day 12 · MCP 生命周期与工具协议</title><style>
-:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#58667b;--line:#e0e6ee;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:920px;margin:auto;padding:32px 22px 70px}.hero{background:#183561;color:#fff;border-radius:18px;padding:29px 30px}.hero small{opacity:.8;letter-spacing:1px}.hero h1{margin:7px 0;font-size:30px;line-height:1.3}.hero p{margin:0;color:#e6eefa}.chips{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}.chip{border:1px solid #8ea4c8;border-radius:20px;padding:3px 10px;font-size:12px}section{background:var(--paper);border:1px solid var(--line);border-radius:14px;margin-top:18px;padding:22px 26px}h2{font-size:19px;margin:0 0 13px}h3{font-size:16px;margin:18px 0 6px}.time{font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.4px}p{margin:8px 0}a{color:var(--accent)}li{margin:6px 0}code{background:#f0f3f8;padding:2px 5px;border-radius:4px}pre{overflow:auto;background:#142136;color:#e7f3ff;padding:17px;border-radius:10px;font-size:13px;line-height:1.65}pre code{background:transparent;padding:0}.goal{background:var(--pale);border-left:3px solid var(--accent);padding:12px 15px;border-radius:4px}.note{background:#fff8e9;border:1px solid #f2deb2;border-radius:9px;padding:11px 14px;color:#644b18}.info{background:#eff6ff;border:1px solid #d5e4fc;border-radius:9px;padding:11px 14px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.grid>div{padding:12px;background:#f6f8fc;border-radius:9px}.grid strong{display:block;font-size:19px}.grid span{font-size:12px;color:var(--sub)}.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0}.check input{margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer;flex:1}.check.done label{text-decoration:line-through;color:var(--sub)}.progress{height:8px;background:#e3e9f2;border-radius:99px;overflow:hidden}.fill{height:100%;background:var(--accent);width:0%;transition:width .2s}.meta{display:flex;justify-content:space-between;font-size:13px;color:var(--sub);margin-bottom:9px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px;vertical-align:top}th{background:#f4f7fc}.tag{display:inline-block;background:#eaf0fc;color:#2459bd;border-radius:5px;font-size:12px;padding:2px 7px;margin-right:6px}.muted{color:var(--sub);font-size:13px}footer{text-align:center;color:var(--sub);font-size:12px;margin:24px}@media(max-width:600px){main{padding:14px 12px 40px}.hero{padding:22px}.hero h1{font-size:24px}section{padding:18px}.grid{grid-template-columns:1fr}table{font-size:12px}th,td{padding:8px}pre{font-size:12px}}
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="description" content="Day 12 图解设计与测试先行学习文档"><title>Day 12 · MCP：先握手，再发现和调用工具</title><style>
+:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#52617a;--line:#dce4ef;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.85 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:820px;padding:28px 22px 64px;margin:auto}.hero{background:#183561;color:white;border-radius:18px;padding:30px}.hero h1{font-size:30px;line-height:1.45;margin:12px 0}.hero p{color:#e6eefa}.eyebrow,.time{font-size:14px;font-weight:700}.chips{display:flex;flex-wrap:wrap;gap:8px}.chips span{font-size:14px;border:1px solid #9cb5d9;border-radius:20px;padding:3px 12px}section,nav{background:white;border:1px solid var(--line);border-radius:14px;padding:26px;margin-top:20px}h2{font-size:24px;line-height:1.5;margin:0 0 20px}h3{font-size:20px;line-height:1.5;margin:24px 0 10px}p{margin:12px 0}a{color:var(--accent);text-underline-offset:3px}li{margin:10px 0}code{font-size:.88em;background:#edf1f7;padding:2px 4px;border-radius:4px;overflow-wrap:anywhere}pre{background:#142136;color:#e7f3ff;border-radius:10px;padding:18px;overflow:auto;font-size:14px;line-height:1.7;tab-size:4}pre code{background:none;padding:0;font-size:inherit;overflow-wrap:normal}.note,.goal{border-left:4px solid var(--accent);background:var(--pale);padding:14px 18px;border-radius:4px}.warn{border-left-color:#9b6500;background:#fff6e3}.card,.rule,.step{border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:18px 0}.card h3,.step h3{margin-top:0}.muted{color:var(--sub);font-size:15px}.flow{display:flex;flex-direction:column;gap:10px;margin:20px 0}.node{border:2px solid #9eb6db;border-radius:10px;padding:15px;background:#f4f8ff}.node strong{display:block}.arrow{text-align:center;color:#345276;font-size:16px}.branch{border:2px dashed #9b6500;background:#fff7e8}.time{color:var(--accent)}details{border:1px solid var(--line);border-radius:9px;padding:12px 16px;margin:16px 0}summary{cursor:pointer;font-weight:650}summary:focus-visible,a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid #c67800;outline-offset:4px}button{font:inherit;font-size:15px;background:#edf3ff;color:#183561;border:1px solid #9eb6db;border-radius:7px;padding:7px 12px;cursor:pointer}.check{display:flex;gap:12px;margin:14px 0}.check input{width:20px;height:20px;flex-shrink:0;margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer}.done label{color:var(--sub);text-decoration:line-through}.progress{background:#e3e9f2;height:12px;border-radius:8px;overflow:hidden}.fill{background:var(--accent);height:100%;width:0}.meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:15px}footer{font-size:15px;text-align:center;padding:24px}.toplinks{display:flex;flex-wrap:wrap;gap:10px 22px}.download{font-size:15px}.code-actions{display:flex;gap:12px;align-items:center;margin-top:12px}.copy-state{font-size:14px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@media(max-width:600px){main{padding:12px 10px 36px}section,nav{padding:20px 16px}.hero{padding:23px 20px}.hero h1{font-size:26px}h2{font-size:22px}pre{padding:14px;font-size:13px}.card,.rule,.step{padding:14px}body{font-size:18px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+
+figure{margin-inline:0}p,.node,figcaption{overflow-wrap:anywhere}.file-label{overflow-wrap:anywhere}.phase{font-weight:700;color:#183561}.copy-status{font-size:14px;color:#52617a}details>pre{margin-bottom:12px}
 </style></head><body><main>
-<header class="hero"><small>MINI AGENT RUNTIME · WEEK 02 · MCP / EINO 源码对照</small><h1>Day 12 / 56 · MCP 生命周期与工具协议</h1><p>本地工具接口之外，怎样发现和调用另一个进程或服务提供的能力？先弄清协议会话，再设计 Agent 适配。</p><div class="chips"><span class="chip">阅读 20 分钟</span><span class="chip">编码 80 分钟</span><span class="chip">测试复盘 20 分钟</span><span class="chip">固定协议 2025-06-18</span></div></header>
-<section><h2>为什么现在需要 MCP？</h2><div class="goal">能解释 Host、Client、Server 的职责，画出 initialize → initialized → tools/list → tools/call 的过程，并区分能力声明、执行授权、协议错误和工具执行结果。</div>
-<p>前几天已经把工具描述、调用调度、超时重试和执行授权分层。若另一个团队提供文档服务，直接共享它的 Go 对象无法跨进程；每个后端各定义一套发现和调用 API，又会增加适配成本。MCP（Model Context Protocol）为宿主与能力服务提供约定的会话和消息格式。</p>
-<p>Host 是管理用户会话与 Agent 的应用；它为 Server 建立 MCP Client。模型并非直接发送 MCP 报文的网络客户端，仍然只提出工具调用意图。Server 发布描述并执行请求，具体业务权限也仍由服务端决定。</p><p>今天只完成<strong>协议会话层</strong>。参考实现发送真实 JSON-RPC JSON，使用内存传输复用已有 GetDocument；Day 13 再把它适配成既有 Meta/Invoke 工具。不要把演示输出文档等同于已接入真实 MCP 网络服务或真实模型。</p></section>
-<section><h2>先走通完整数据流，标出今天的位置</h2><pre><code>完整 Agent 目标：
-Host 认证用户 → Agent.Run → Model.Generate → ToolCall
- → Day11 本地授权 → Day10 执行策略
- → [Day13 MCP工具适配器] → MCP Client → Server → 后端
- ← 工具结果 → 保留原 ToolCallID 的 tool 消息 → 下一轮 Model
+<header class="hero"><div class="eyebrow">DAY 12 / 56 · 第 2 周 · 图解与 TDD</div><h1>MCP：先握手，再发现和调用工具</h1><p>把协议消息、工具业务结果、会话状态分开理解。</p><div class="chips"><span>阅读 20 分钟</span><span>实现 80 分钟</span><span>测试复盘 20 分钟</span></div></header>
+<nav aria-label="本页学习路线"><strong>一次只做一小步，答案最后看</strong><div class="toplinks"><a href="#goal">① 今天做什么</a><a href="#concepts">② 概念与图解</a><a href="#design">③ 设计理由</a><a href="#contract">④ 行为契约</a><a href="#skeleton">⑤ 骨架</a><a href="#tests">⑥ 完整测试</a><a href="#tasks">⑦ 动手步骤</a><a href="#review">⑧ 验收</a></div></nav>
+<section id="goal"><h2>今天只解决什么？</h2><div class="goal">实现串行 MCP Client，让 Runtime 的宿主能按正确顺序初始化、列出工具并请求一次远端调用。</div><p>get_document 位于另一个服务中。客户端不能直接调用它的 Go 方法，必须先约定协议版本和能力，再收发 JSON 消息。</p><p>本地函数签名无法跨进程直接使用。Transport 负责传消息，Client 负责消息顺序与校验；业务工具和 Agent 策略仍各自保留。</p><div class="note">固定 MCP 2025-06-18 的教学子集，使用内存 Transport。没有生产 stdio/HTTP、OAuth、服务端主动请求、多路复用或自动重连；不要自造 shutdown RPC。</div></section>
+<section id="concepts"><h2>先把概念说清楚</h2><article class="card"><h3>Host / Client / Server：三个职责</h3><p>Host 是使用工具的应用；Client 管理一条协议会话；Server 公布并执行远端能力。</p><p>本课 Host 创建 Client，DemoServer 仅作离线夹具。</p></article><article class="card"><h3>JSON-RPC：给消息加方法和编号</h3><p>请求包含 jsonrpc、id、method、params；响应沿用 id，携带 result 或 error。</p><p>通知不带 id，也不接收响应。</p></article><article class="card"><h3>会话状态与业务成功不同</h3><p>ready 表示可以发请求；isError=true 表示一次工具业务失败。</p><p>传输/协议不确定则会话 failed，不能无判断重放请求。</p></article><h3>图 1 · 模块职责与数据去向</h3><figure class="flow" aria-label="图 1 · 模块职责与数据去向"><div class="node"><strong>Host</strong>创建 Transport/Client，调用 Initialize，管理真实连接的生命周期。</div><div class="arrow">↓ 方法、参数、context</div><div class="node"><strong>Client</strong>管理会话顺序、独立请求 ID、能力门禁、JSON 校验与错误分层。</div><div class="arrow">↓ JSON-RPC 字节</div><div class="node"><strong>Transport → Server</strong>发送字节；Server 将 tools/call 路由到原业务工具。</div><figcaption class="muted">沿箭头从上到下读；每个框说明负责的事或当前输入输出。</figcaption></figure><details><summary>展开这张图的逐步文字说明</summary><ol><li><strong>Host</strong>：创建 Transport/Client，调用 Initialize，管理真实连接的生命周期。</li><li><strong>Client</strong>：管理会话顺序、独立请求 ID、能力门禁、JSON 校验与错误分层。</li><li><strong>Transport → Server</strong>：发送字节；Server 将 tools/call 路由到原业务工具。</li></ol></details></section>
+<section id="walkthrough"><h2>沿同一个例子走一遍</h2><h3>图 2 · 一次完整过程</h3><figure class="flow" aria-label="图 2 · 一次完整过程"><div class="node"><strong>① initialize 请求 #1</strong>版本 2025-06-18；服务返回 ServerInfo 和 tools 能力。</div><div class="arrow">↓ 合法初始化响应</div><div class="node"><strong>② initialized 通知</strong>无 id，必须没有响应；此后 ready。</div><div class="arrow">↓ ready 会话，目录描述</div><div class="node"><strong>③ tools/list 请求 #2</strong>cursor 为空，收到 get_document 的描述；本次只返回一页。</div><div class="arrow">↓ 工具名与业务参数</div><div class="node"><strong>④ tools/call 请求 #3</strong>name=get_document，arguments={&quot;id&quot;:&quot;doc-1&quot;}；Content 保留文本/结构化内容，不套 Agent 结果格式。</div><figcaption class="muted">沿箭头从上到下读；每个框说明负责的事或当前输入输出。</figcaption></figure><details><summary>展开这张图的逐步文字说明</summary><ol><li><strong>① initialize 请求 #1</strong>：版本 2025-06-18；服务返回 ServerInfo 和 tools 能力。</li><li><strong>② initialized 通知</strong>：无 id，必须没有响应；此后 ready。</li><li><strong>③ tools/list 请求 #2</strong>：cursor 为空，收到 get_document 的描述；本次只返回一页。</li><li><strong>④ tools/call 请求 #3</strong>：name=get_document，arguments={&quot;id&quot;:&quot;doc-1&quot;}；Content 保留文本/结构化内容，不套 Agent 结果格式。</li></ol></details><h3>失败时停在哪里？</h3><div class="node branch">服务已经执行读取，却返回错误的请求 ID。Client 不能确定响应属于哪个请求，因此进入 failed；后续 list/call 不再发送。重新 initialize 同一会话也被拒绝。</div></section>
+<section id="design"><h2>这些字段、接口和方法为什么存在？</h2><article class="card"><h3>Transport 与 Client 字段</h3><p>Transport.Send(ctx,bytes) 交换一条完整 JSON 消息，通知返回零字节。</p><p>Client.transport 是通道，gate 串行化会话，state 为 new/ready/failed，nextID 单调分配整数 ID，toolsAvailable 记录协商能力。</p></article><article class="card"><h3>NewClient / enter / leave</h3><p>构造拒绝 nil，建立容量 1 的 gate，不发送消息。</p><p>每个公开操作先 enter，离开时 leave；排队取消不发送请求，不能破坏另一个操作的会话。</p></article><article class="card"><h3>InitializeResult 的字段</h3><p>ProtocolVersion 必须等于固定版本；Capabilities 必须是非 nil 对象，Tools 指针存在表示支持工具；ServerInfo.Name/Version 都非空。</p><p>Implementation 只存名称和版本，不存身份凭据。</p></article><article class="card"><h3>Initialize 为什么是两条消息？</h3><p>先 initialize 请求，带版本、空客户端 capabilities、ClientInfo{name:agent-runtime-examples,version:0.1.0}；成功后发无 ID 的 notifications/initialized。</p><p>两步都完成才 ready，初始化任何不确定失败均不可重试同会话。</p></article><article class="card"><h3>request / response 与 RPCError</h3><p>request 保存 JSONRPC、ID、Method、Params；response 保存原始 ID、Result、Error。</p><p>响应要求 jsonrpc=2.0、整数 ID 精确匹配、result/error 恰有一个；result 必须对象。</p><p>RPCError 必须含整型 Code 和字符串 Message，Data 保留原 JSON；Error() 只显示代码。</p></article><article class="card"><h3>ListTools 与 Descriptor</h3><p>ListTools(ctx,cursor) 只返回一页 ToolsPage{Tools,NextCursor}，不自动翻页。</p><p>Descriptor{Name,Description,InputSchema,Annotations} 是线协议描述，不替代 Day 08 Spec；名称非空、页内不重名、schema 顶层 type=object。</p></article><article class="card"><h3>CallTool 与 ToolResult</h3><p>CallTool(ctx,name,args) 的空参数归一为 {}，其余须为非 null JSON 对象，name 非空白。</p><p>ToolResult 保留 Content 全部原始块、IsError 与 StructuredContent；块至少有非空 type。</p><p>多模态先保留，Day 13 再决定如何给模型。</p></article><article class="card"><h3>错误与资源边界</h3><p>传输、超限或坏协议会置 failed；有效 RPCError 不自动失效，isError 也不产生 Go error。</p><p>1MiB 预算在 Send 返回后检查，不等于网络层内存限制。</p><p>真实 Transport 还负责帧大小、关闭资源和合作取消。</p></article></section>
+<section id="contract"><h2>行为契约：不用猜参考代码</h2><p>按下面规则实现。内部算法可以不同；未约定的错误文本不必逐字一致，错误链用 errors.Is/As 检查。</p><article class="rule"><h3>R1 · 构造与初始化门禁</h3><p>NewClient 不发消息且拒绝 nil；初始化前 list/call 返回 ErrSessionState。初始化顺序、版本、能力和服务器信息校验通过；通知无 ID、无响应；重复初始化拒绝。</p><p class="muted">对应测试：<code>TestDay12Constructor / TestLifecycleAndToolErrors / TestInitializeFailureNeverReplays</code></p></article><article class="rule"><h3>R2 · 工具能力不是权限</h3><p>没有 tools 能力仍正常发 initialized 并进入 ready，但 list/call 返回 ErrToolsUnavailable，不发送工具请求。它不等于无用户权限。</p><p class="muted">对应测试：<code>TestNoToolsCapability</code></p></article><article class="rule"><h3>R3 · 校验响应并阻止重放</h3><p>ID/版本错误、两种字段同时有或都无、null/畸形 error、非对象 result、超过 1MiB、非法列表或内容块均按协议错误处理并 failed。传输失败保留原因并 failed；有效 RPCError 留在 ready。</p><p class="muted">对应测试：<code>TestMalformedResponsesFailSession / TestInvalidDescriptorsAndTransportFailure / TestLifecycleAndToolErrors</code></p></article><article class="rule"><h3>R4 · 一页目录与原始结果</h3><p>原样返回/回传不透明 NextCursor；Tools 必须数组，名称/Schema 合法。Content 必须数组且每块有 type，保留非文本块、structuredContent；isError 返回 Go nil error。</p><p class="muted">对应测试：<code>TestPaginationAndStructuredContentPreserved / TestCallInputAndContentValidation / TestInvalidDescriptorsAndTransportFailure</code></p></article><article class="rule"><h3>R5 · 输入与取消</h3><p>空 args→{}；非法名称、非对象参数不发送。会话串行，排队取消不发请求、不让其他调用失效；已发送后取消按传输不确定处理并 failed，原因可 errors.Is。</p><p class="muted">对应测试：<code>TestCallInputAndContentValidation / TestCancellationAndQueuedCall</code></p></article></section>
+<section id="read"><h2>官方阅读 20 分钟：带着问题找证据</h2><article class="card"><div class="time">12 分钟</div><h3><a href="https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle">MCP 2025-06-18 · Lifecycle</a></h3><p>按 initialize → initialized 顺序画两条消息，标出谁有 id。区分协商版本、声明能力、认证权限。</p></article><article class="card"><div class="time">8 分钟</div><h3><a href="https://github.com/cloudwego/eino-ext/blob/main/components/tool/mcp/mcp.go">eino-ext · components/tool/mcp/mcp.go</a></h3><p>找出框架如何把 MCP 客户端能力提供给工具层。把客户端协议层与下一天的适配职责分开标注。</p></article><p class="muted">外部链接供源码对照；正文独立可读。本次未重新核对所有远端 main 符号，阅读时记录 commit，名称变化时按职责定位；不把框架默认策略直接视为本课约定。</p></section>
+<section id="continuity"><h2>承接前序设计与本日增量</h2><p>复用工具业务夹具与 context；新增/修改 internal/mcp/client.go。types.go 提供带 JSON 标签的协议结构，fake.go 提供完整 DemoServer/reply，均在本页可展开，不要求自己补夹具。今天不修改 Agent 或 Tool 接口。</p><p><strong>路径约定：</strong>练习使用 internal；参考使用 examples/internal。两套包只映射路径前缀，不能混用 model.Message。共用原仓库 go.mod，Go ≥ 1.22.2；没有每日独立 module。</p><p>新增或修改：internal/mcp/client.go；已有实现先保留，不把同名定义重复追加。</p><div class="note"><strong>安全开始：</strong>下面命令只新建仓库外的临时练习副本，复制同一累计模块的前置依赖，再把当天目标换成 TODO。不会修改你当前的 internal/cmd，也不根据你的代码判断进度。</div><pre><code>python3 docs/learning/exercises/prepare.py 12</code></pre><p>在原仓库根运行。脚本打印新副本的绝对路径；进入该目录后再编辑和测试。需要 Python 3.9+ 和 Go 工具链，不需要 API Key。</p><p>副本内包含为兼容累计版本提供的组件；当天任务只编辑上面列出的目标。已经实现过时，也可以只把完整测试应用到自己的版本，无需挖空重做。</p><details><summary>手工应用文件与保留旧实现</summary><p>先备份或在独立工作区操作。按本页路径保存骨架与测试；前序依赖使用同一套累计类型。当天测试文件若已存在，比较后更新，不与旧版重复定义。不要自动覆盖当前项目；参考基线仅用于准备依赖。</p><p>prepare.py 把参考依赖映射到副本 internal；当天方法始终使用未实现骨架。装配脚本不运行用户任务，也不证明你的原实现通过测试。</p></details><h3 class="file-label">已提供的依赖：internal/mcp/types.go</h3><p class="download"><a href="exercises/day12/support/internal/mcp/types.go.txt" download="types.go">下载 types.go</a></p><details class="code-file" data-kind="support" data-source="day12/support/internal/mcp/types.go.txt"><summary>展开完整文件：types.go</summary><pre id="day12-support-internal-mcp-types-go"><code>// Package mcp demonstrates the pinned MCP 2025-06-18 tool protocol.
+// It is an offline teaching client, not a complete MCP transport or SDK.
+package mcp
 
-今天实际运行：
-Host 创建 Client(Transport) 和离线 DemoServer(GetDocument)
- → initialize(协议版本、客户端信息、客户端能力)
- ← 初始化结果(服务器版本、信息、服务器能力)
- → notifications/initialized（通知，无ID，无响应）
- → tools/list(cursor) ← 描述列表与可选nextCursor
- → tools/call(name,arguments) ← content、isError、可选structuredContent</code></pre>
-<p>装配阶段建立连接和协商，并发现元信息；运行阶段执行具体工具请求。初始化前不能查询工具。服务器声明 tools 能力后才能使用相关方法；发现到工具仍不等于当前用户获得权限。</p>
-<p><strong>先预测：</strong>服务端接收到了调用，但响应丢失。这时客户端不能简单重发：原操作可能已经发生。本课将传输或协议不确定后的会话标为 failed，不自动重放；真正重连、会话恢复和业务幂等需另行设计。</p></section>
-<section><h2>三个容易混淆的“版本/ID”</h2><table><thead><tr><th>字段</th><th>用途</th><th>本课约定</th></tr></thead><tbody>
-<tr><td>jsonrpc = 2.0</td><td>消息信封格式</td><td>请求和响应均检查；不是MCP版本</td></tr>
-<tr><td>protocolVersion = 2025-06-18</td><td>MCP协议版本协商</td><td>固定教学版本；服务器返回其他版本则拒绝，不声称使用最新版</td></tr>
-<tr><td>JSON-RPC request ID</td><td>协议请求/响应配对</td><td>Client分配递增整数；通知没有ID</td></tr>
-<tr><td>model.ToolCall.ID</td><td>模型请求与tool消息配对</td><td>保持原课程结构；不能拿协议ID替换它，Day13负责跨边界关联</td></tr>
-</tbody></table>
-<p>示意请求均对应本日实现的真实字段。以下 tools/call 信封可在传输测试中观察：</p><pre><code>{"jsonrpc":"2.0","id":3,"method":"tools/call",
- "params":{"name":"get_document","arguments":{"id":"doc-1"}}}
+import (
+	&quot;context&quot;
+	&quot;encoding/json&quot;
+	&quot;errors&quot;
+	&quot;fmt&quot;
+)
 
-{"jsonrpc":"2.0","id":3,"result":{
- "content":[{"type":"text","text":"工具返回的文档内容"}],
- "isError":false}}</code></pre><p>result 与 error 只能有一个。工具执行失败可以是合法 result，带 isError=true；它与 JSON-RPC error 不同。不要把所有失败都压成一个字符串再决定重试。</p></section>
-<section><h2>承接前序设计与本日增量</h2><table><thead><tr><th>操作</th><th>文件</th><th>职责/兼容关系</th></tr></thead><tbody>
-<tr><td>新增</td><td>examples/internal/mcp/types.go</td><td>固定版本、JSON-RPC与MCP线协议数据，不替换Runtime消息或tool.Spec</td></tr>
-<tr><td>新增</td><td>examples/internal/mcp/client.go</td><td>串行会话、协商、能力检查、ID检查、发现和调用</td></tr>
-<tr><td>新增</td><td>examples/internal/mcp/fake.go、client_test.go</td><td>内存JSON对端与成功/反例测试，复用既有Invokable</td></tr>
-<tr><td>新增</td><td>examples/cmd/mcp/main.go</td><td>启动离线协议演示，复用knowledge.GetDocument与FakeStore</td></tr>
-<tr><td>复用</td><td>examples/internal/model、agent、tool</td><td>ToolCall/Message、Meta/Invoke、Registry、Policy、Authorizer均保持不变</td></tr>
-<tr><td>更新</td><td>examples/README.md、CONTRACTS.md</td><td>记录协议子集、错误语义、真实验收及Day13适配边界</td></tr>
-</tbody></table><p>所有示例共享根 go.mod，不建立每日Module、不增加SDK依赖。Descriptor 是带 JSON 标签的远端数据，Runtime 仍使用原 Spec；Day13会显式映射它们，不让线协议结构侵入模型消息和业务工具。</p></section>
-<section><h2>四个设计选择及代价</h2><table><thead><tr><th>选择</th><th>为什么这样做</th><th>还没有解决什么</th></tr></thead><tbody>
-<tr><td>先协商再操作</td><td>避免在未知版本/能力下发送调用；initialized通知完成后才ready</td><td>没有完整服务端主动消息、动态能力刷新和版本降级</td></tr>
-<tr><td>工具能力与权限分开</td><td>tools表示协议功能；本地调用者权限仍由Day11检查</td><td>本课不是OAuth或资源ACL实现；远端readOnlyHint也不是安全重试证明</td></tr>
-<tr><td>保留结果内容块</td><td>避免把image/resource等内容静默丢掉；保留structuredContent供后续适配</td><td>只检查基本形状，不做完整多模态/schema校验；Day13需明确支持或拒绝哪些类型</td></tr>
-<tr><td>固定内存传输、会话内串行</td><td>先验证消息和状态，不把端口、进程和SDK配置混进协议学习</td><td>没有真实stdio/Streamable HTTP、并发多路复用、HTTP会话头或传输资源管理</td></tr>
-</tbody></table>
-<p>stdio 与 Streamable HTTP 是传输方案，报文方法相同但分帧、生命周期与鉴权不同。本课 Transport.Send 接收完整JSON并返回完整响应；它不是完整网络协议栈。真实工程优先使用成熟SDK。</p><p class="note">内存示例没有要关闭的进程或连接；真实连接结束由传输资源清理完成，不要从其他协议照搬一个不存在的 MCP shutdown RPC。固定1MiB响应预算在Send返回后检查，只限制后续解析，真实传输仍需独立的缓冲区/帧大小限制。</p></section>
-<section><div class="time">20 MIN · READ</div><h2>带着问题读规范和 Eino 扩展</h2>
-<h3>12分钟 · MCP官方生命周期与工具协议</h3><p>阅读固定版本的 <a href="https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle">Lifecycle</a> 与 <a href="https://modelcontextprotocol.io/specification/2025-06-18/server/tools">Tools</a>，查找 initialize、notifications/initialized、tools/list、nextCursor、tools/call、content、isError；传输概念参照 <a href="https://modelcontextprotocol.io/specification/2025-06-18/basic/transports">Transports</a>。</p><p><strong>问题与产出：</strong>画出第一条消息和ready之前的通知；解释为什么通知无ID、能力缺失时为什么不能直接调用工具、分页游标为什么要原样往返。给出工具执行失败与协议错误各一个例子。</p>
-<h3>8分钟 · Eino如何接收已经初始化的客户端？</h3><p>阅读 <a href="https://github.com/cloudwego/eino-ext/blob/main/components/tool/mcp/mcp.go">eino-ext/components/tool/mcp/mcp.go</a>，定位 Config.Cli、GetTools、toolHelper.Info、toolHelper.InvokableRun。沿 ListTools → ToolInfo → CallTool 的路径找出协议到工具接口的转换点。</p><p><strong>问题与产出：</strong>为什么源码要求Cli先初始化？哪些代码负责发现，哪些负责执行，返回结构在哪里整形？将这条适配路径映射到课程的Spec/Meta/Invoke。阅读只做对照，今天不照抄SDK依赖；旧README的SSE例子也不是本课Streamable HTTP实现。</p><p>上述规范及Eino源码路径已核对；main会变化，阅读时记录版本。课程固定2025-06-18，不将其称为当前最新版本。</p></section>
-<section><div class="time">80 MIN · BUILD</div><h2>四项连续演进练习：先设计，再对照参考</h2>
-<h3>任务一 · 20分钟：定义Host/Client/Server与协议端口</h3><p><strong>为什么做：</strong>避免把“模型调用工具”和“网络发送协议”混成一个接口。<strong>操作与观察：</strong>5分钟手画完整Agent路径；10分钟阅读types.go并标出哪些是线协议、哪些继续复用Runtime；5分钟区分以下方法和前序Invoke。以下是参考接口摘录，不是独立程序：</p><pre><code>type Transport interface {
-    Send(context.Context, []byte) ([]byte, error)
+const ProtocolVersion = &quot;2025-06-18&quot;
+const MaxResponseBytes = 1 &lt;&lt; 20
+
+var (
+	ErrSessionState     = errors.New(&quot;mcp: invalid session state&quot;)
+	ErrToolsUnavailable = errors.New(&quot;mcp: server did not advertise tools&quot;)
+	ErrProtocol         = errors.New(&quot;mcp: invalid protocol response&quot;)
+)
+
+// Send receives one serialized JSON-RPC message. Requests return one response;
+// notifications return no bytes. The transport must cooperate with context.
+// An actual stdio/HTTP transport would also own framing, routing and cleanup.
+type Transport interface {
+	Send(context.Context, []byte) ([]byte, error)
 }
-func NewClient(t Transport) (*Client, error)
-func (c *Client) Initialize(ctx context.Context) (InitializeResult, error)
-func (c *Client) ListTools(ctx context.Context, cursor string) (ToolsPage, error)
-func (c *Client) CallTool(ctx context.Context, name string,
-    args json.RawMessage) (ToolResult, error)</code></pre><p><strong>完成证据：</strong>能解释为什么保留一套线协议Descriptor并不意味着替换原tool.Spec；指出ModelToolCallID和JSON-RPC ID分别在哪里生成、消费。</p>
-<h3>任务二 · 25分钟：跟踪初始化和会话失效</h3><p><strong>为什么做：</strong>一个可用连接不等于一个完成协商的会话。<strong>操作与观察：</strong>10分钟预测未初始化list、版本不匹配、初始化通知失败；10分钟沿client.go中的new → ready/failed与请求门控追踪；5分钟解释错误后为什么不自动重试。初始化result需要版本、能力与ServerInfo，initialized通知不能收到响应。</p><p><strong>完成证据：</strong>生命周期测试观察到initialize、无ID通知、list、call的顺序；版本/通知失败后不重放初始化；排队取消不发送请求。传输忽略context时，本层也不能强制终止它。</p>
-<h3>任务三 · 20分钟：发现一页工具，区分三种失败</h3><p><strong>为什么做：</strong>协议边界必须保留足够信息，后续Agent才能选择恢复还是终止。<strong>操作与观察：</strong>10分钟跟踪ListTools的tools和nextCursor、CallTool的content/structuredContent/isError；10分钟先预测再运行未知工具、缺失文档、响应ID错误和响应丢失的测试。</p><table><thead><tr><th>情况</th><th>本课返回与会话</th></tr></thead><tbody>
-<tr><td>缺失文档等业务失败</td><td>ToolResult.IsError=true，Go error为nil，保留内容块，待Day13安全映射</td></tr>
-<tr><td>有效JSON-RPC error</td><td>返回*RPCError，可errors.As识别；会话仍可用，Error()不直接输出远端Message/Data</td></tr>
-<tr><td>传输/取消或畸形协议响应</td><td>保留错误链；已发送请求可能被执行，会话failed，不自动重放</td></tr>
-</tbody></table><p><strong>完成证据：</strong>游标是不透明字符串；客户端只请求一页，不会隐式反复翻页。非文本内容未丢失；descriptor和result shape被检查，但完整schema与业务校验仍由服务端/成熟SDK负责。</p>
-<h3>任务四 · 15分钟：运行既有知识工具的协议往返</h3><p><strong>为什么做：</strong>用同一业务能力验证新边界，避免重写测试工具掩盖架构变化。<strong>操作与观察：</strong>5分钟看fake.go如何读取GetDocument.Meta、执行Invoke；5分钟运行cmd/mcp；5分钟对照Eino的GetTools/InvokableRun，画出Day13适配器应接在哪一层。</p><pre><code># 从仓库根执行；不新建go.mod
-go run ./examples/cmd/mcp</code></pre><p><strong>完成证据：</strong>观察到版本2025-06-18、工具数量1、doc-1正文JSON。能解释今天没有运行Agent Loop，直接协议夹具也没有自动套用Day11授权；公开Server仍需独立认证与资源权限。</p></section>
-<section><div class="time">20 MIN · TEST &amp; REVIEW</div><h2>用协议反例验收理解</h2><p><strong>12分钟实作：</strong>先预测每类错误，再从仓库根执行：</p><pre><code>go test ./examples/...
-go test -race ./examples/...
-go run ./examples/cmd/mcp</code></pre><table><thead><tr><th>测试</th><th>对应设计不变量</th></tr></thead><tbody>
-<tr><td>TestLifecycleAndToolErrors</td><td>协商/通知先于工具操作；请求ID递增；业务isError、RPCerror分离；有效RPC错误不杀会话</td></tr>
-<tr><td>TestInitializeFailureNeverReplays / NoToolsCapability</td><td>版本/通知失败不重放；缺失tools能力时不发送工具操作</td></tr>
-<tr><td>TestMalformedResponsesFailSession</td><td>ID/版本不匹配、result/error冲突、空结果和超限响应被拒绝</td></tr>
-<tr><td>TestPaginationAndStructuredContentPreserved</td><td>游标原样往返；内容块与structuredContent不被扁平化丢失</td></tr>
-<tr><td>TestCancellationAndQueuedCall</td><td>排队取消不发消息；传输取消保留context错误；不重用不确定会话</td></tr>
-<tr><td>TestCallInputAndContentValidation / InvalidDescriptorsAndTransportFailure</td><td>本地非法输入不发出；坏描述/内容被拒绝；丢失响应不自动重试</td></tr>
-</tbody></table>
-<p class="info"><strong>本次真实验证：</strong>官方Go1.22.2 linux/amd64下，两条累计examples测试命令均退出码0，cmd/mcp实际运行成功。覆盖内存JSON-RPC、FakeStore和已有Runtime回归；没有连接真实MCP网络服务、没有验证真实模型选择或生产认证。</p>
-<p><strong>8分钟理解验收：</strong></p><ol><li>不看代码，讲出Host、Client、Server、Model各负责什么，以及ready之前发生哪些消息。</li><li>新增一个远端文档Server时，业务工具实现、线协议客户端和AgentLoop分别需要改什么？</li><li>如果Server的annotations声明readOnlyHint=true，为什么不能自动给Day10配置安全重试或给Day11授予权限？</li><li>请求已发出但响应丢失，与result.isError=true有何区别？哪种情况下重发写操作可能重复生效？</li></ol>
-<h3>学习清单</h3><div class="meta"><span>保存浏览器自评进度，不替代验收证据</span><span id="count">0 / 8</span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div><div id="checks"></div></section>
-<section><h2>Definition of Done 与 Day 13 衔接</h2><p>理解上：能手画会话生命周期、区分能力和权限、区分三个错误层次，并说明两个ID域为何不能混用。实现上：初始化顺序、ID匹配、拒绝畸形消息、取消与内容保留有测试，累计examples与race通过。本次参考示例已完成这些验证；完整网络SDK不属于本日交付。</p><p>Day13将Descriptor映射到既有Spec，将CallTool接到Invoke，再经过Registry、WithPolicy、WithAuthorizer接回模型工具往返。重点是复用前序契约、处理名称冲突与错误/内容映射，不复制业务工具；发现到远端能力仍不意味着获得执行授权。</p></section>
-<footer>Agent Runtime · Day12 / 56 · 离线内容可读 · <a href="../../index.html">返回学习首页</a></footer></main>
+
+type Implementation struct {
+	Name    string `json:&quot;name&quot;`
+	Version string `json:&quot;version&quot;`
+}
+type ToolsCapability struct {
+	ListChanged bool `json:&quot;listChanged,omitempty&quot;`
+}
+type ServerCapabilities struct {
+	Tools *ToolsCapability `json:&quot;tools,omitempty&quot;`
+}
+type InitializeResult struct {
+	ProtocolVersion string              `json:&quot;protocolVersion&quot;`
+	Capabilities    *ServerCapabilities `json:&quot;capabilities&quot;`
+	ServerInfo      Implementation      `json:&quot;serverInfo&quot;`
+}
+
+// Descriptor is a wire format, not a replacement for tool.Spec.
+// Day13 will map this data to the existing Runtime tool contract.
+type Descriptor struct {
+	Name        string          `json:&quot;name&quot;`
+	Description string          `json:&quot;description,omitempty&quot;`
+	InputSchema json.RawMessage `json:&quot;inputSchema&quot;`
+	Annotations json.RawMessage `json:&quot;annotations,omitempty&quot;`
+}
+type ToolsPage struct {
+	Tools      []Descriptor `json:&quot;tools&quot;`
+	NextCursor string       `json:&quot;nextCursor,omitempty&quot;`
+}
+type ToolResult struct {
+	// Preserve every content block, including image/resource content.
+	// Do not flatten non-text blocks or treat remote text as trusted instructions.
+	Content           []json.RawMessage `json:&quot;content&quot;`
+	IsError           bool              `json:&quot;isError,omitempty&quot;`
+	StructuredContent json.RawMessage   `json:&quot;structuredContent,omitempty&quot;`
+}
+type RPCError struct {
+	Code    int             `json:&quot;code&quot;`
+	Message string          `json:&quot;message&quot;`
+	Data    json.RawMessage `json:&quot;data,omitempty&quot;`
+}
+
+func (e *RPCError) Error() string { return fmt.Sprintf(&quot;mcp: JSON-RPC error %d&quot;, e.Code) }
+
+type request struct {
+	JSONRPC string          `json:&quot;jsonrpc&quot;`
+	ID      uint64          `json:&quot;id,omitempty&quot;`
+	Method  string          `json:&quot;method&quot;`
+	Params  json.RawMessage `json:&quot;params,omitempty&quot;`
+}
+type response struct {
+	JSONRPC string          `json:&quot;jsonrpc&quot;`
+	ID      json.RawMessage `json:&quot;id&quot;`
+	Result  json.RawMessage `json:&quot;result,omitempty&quot;`
+	Error   json.RawMessage `json:&quot;error,omitempty&quot;`
+}
+</code></pre><button type="button" data-copy="day12-support-internal-mcp-types-go">复制本文件</button></details><h3 class="file-label">已提供的依赖：internal/mcp/fake.go</h3><p class="download"><a href="exercises/day12/support/internal/mcp/fake.go.txt" download="fake.go">下载 fake.go</a></p><details class="code-file" data-kind="support" data-source="day12/support/internal/mcp/fake.go.txt"><summary>展开完整文件：fake.go</summary><pre id="day12-support-internal-mcp-fake-go"><code>package mcp
+
+import (
+	&quot;context&quot;
+	&quot;encoding/json&quot;
+	&quot;fmt&quot;
+	&quot;strconv&quot;
+	&quot;sync&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool&quot;
+)
+
+// DemoServer exposes one existing Invokable through an in-memory JSON transport.
+// It is a single-session test peer, not an authenticated network MCP server.
+type DemoServer struct {
+	mu     sync.Mutex
+	state  string
+	spec   tool.Spec
+	target tool.Invokable
+}
+
+func NewDemoServer(ctx context.Context, target tool.Invokable) (*DemoServer, error) {
+	if target == nil {
+		return nil, fmt.Errorf(&quot;mcp demo: nil target&quot;)
+	}
+	spec, err := target.Meta(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var schema map[string]any
+	if spec.Name == &quot;&quot; || json.Unmarshal(spec.InputSchema, &amp;schema) != nil || schema[&quot;type&quot;] != &quot;object&quot; {
+		return nil, fmt.Errorf(&quot;mcp demo: invalid descriptor&quot;)
+	}
+	spec.InputSchema = append(json.RawMessage(nil), spec.InputSchema...)
+	return &amp;DemoServer{state: &quot;new&quot;, spec: spec, target: target}, nil
+}
+func reply(id uint64, result any, rpcErr *RPCError) ([]byte, error) {
+	r := response{JSONRPC: &quot;2.0&quot;, ID: json.RawMessage(strconv.FormatUint(id, 10))}
+	var err error
+	if rpcErr != nil {
+		r.Error, err = json.Marshal(rpcErr)
+	} else {
+		r.Result, err = json.Marshal(result)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(r)
+}
+func textBlock(s string) json.RawMessage {
+	raw, _ := json.Marshal(struct {
+		Type string `json:&quot;type&quot;`
+		Text string `json:&quot;text&quot;`
+	}{&quot;text&quot;, s})
+	return raw
+}
+func (s *DemoServer) Send(ctx context.Context, payload []byte) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	var r request
+	if err := json.Unmarshal(payload, &amp;r); err != nil {
+		return nil, err
+	}
+	if r.JSONRPC != &quot;2.0&quot; {
+		return nil, fmt.Errorf(&quot;mcp demo: invalid envelope&quot;)
+	}
+	if r.Method == &quot;notifications/initialized&quot; {
+		if r.ID != 0 || s.state != &quot;initialized&quot; {
+			return nil, fmt.Errorf(&quot;mcp demo: unexpected initialized notification&quot;)
+		}
+		s.state = &quot;ready&quot;
+		return nil, nil
+	}
+	if r.ID == 0 {
+		return nil, fmt.Errorf(&quot;mcp demo: request ID required&quot;)
+	}
+	if r.Method == &quot;initialize&quot; {
+		if s.state != &quot;new&quot; {
+			return reply(r.ID, nil, &amp;RPCError{Code: -32600, Message: &quot;already initialized&quot;})
+		}
+		var p struct {
+			ProtocolVersion string `json:&quot;protocolVersion&quot;`
+		}
+		if json.Unmarshal(r.Params, &amp;p) != nil || p.ProtocolVersion == &quot;&quot; {
+			return reply(r.ID, nil, &amp;RPCError{Code: -32602, Message: &quot;protocolVersion required&quot;})
+		}
+		s.state = &quot;initialized&quot;
+		return reply(r.ID, InitializeResult{ProtocolVersion: ProtocolVersion, Capabilities: &amp;ServerCapabilities{Tools: &amp;ToolsCapability{}}, ServerInfo: Implementation{Name: &quot;offline-knowledge&quot;, Version: &quot;0.1.0&quot;}}, nil)
+	}
+	if s.state != &quot;ready&quot; {
+		return reply(r.ID, nil, &amp;RPCError{Code: -32600, Message: &quot;not initialized&quot;})
+	}
+	switch r.Method {
+	case &quot;tools/list&quot;:
+		// One page only; this fixture&#x27;s server declares no pagination.
+		return reply(r.ID, ToolsPage{Tools: []Descriptor{{Name: s.spec.Name, Description: s.spec.Description, InputSchema: s.spec.InputSchema}}}, nil)
+	case &quot;tools/call&quot;:
+		var p struct {
+			Name      string          `json:&quot;name&quot;`
+			Arguments json.RawMessage `json:&quot;arguments&quot;`
+		}
+		if json.Unmarshal(r.Params, &amp;p) != nil || p.Name != s.spec.Name {
+			return reply(r.ID, nil, &amp;RPCError{Code: -32602, Message: &quot;unknown tool or invalid parameters&quot;})
+		}
+		if len(p.Arguments) == 0 {
+			p.Arguments = json.RawMessage(&quot;{}&quot;)
+		}
+		output, err := s.target.Invoke(ctx, p.Arguments)
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if err != nil {
+			// Controlled generic result; do not expose internal backend error text.
+			return reply(r.ID, ToolResult{Content: []json.RawMessage{textBlock(&quot;document tool failed&quot;)}, IsError: true}, nil)
+		}
+		return reply(r.ID, ToolResult{Content: []json.RawMessage{textBlock(output)}}, nil)
+	default:
+		return reply(r.ID, nil, &amp;RPCError{Code: -32601, Message: &quot;method not found&quot;})
+	}
+}
+</code></pre><button type="button" data-copy="day12-support-internal-mcp-fake-go">复制本文件</button></details></section>
+<section id="skeleton"><h2>完整骨架：方法体留给你</h2><p>每个文件的 package、import、类型和签名齐全。panic("TODO: ...") 表示尚未实现；它不是最终错误处理方式。按文件名保存，不只复制某个方法。</p><h3 class="file-label">待实现骨架：internal/mcp/client.go</h3><p class="download"><a href="exercises/day12/skeleton/internal/mcp/client.go.txt" download="client.go">下载 client.go</a></p><details class="code-file" data-kind="skeleton" data-source="day12/skeleton/internal/mcp/client.go.txt"><summary>展开完整文件：client.go</summary><pre id="day12-skeleton-internal-mcp-client-go"><code>package mcp
+
+import (
+	&quot;context&quot;
+	&quot;encoding/json&quot;
+)
+
+type Client struct {
+	transport      Transport
+	gate           chan struct{}
+	state          string
+	nextID         uint64
+	toolsAvailable bool
+}
+
+func NewClient(t Transport) (*Client, error) { panic(&quot;TODO: NewClient&quot;) }
+
+// A session serializes requests. Cancellation while queued sends no message.
+func (c *Client) enter(ctx context.Context) error { panic(&quot;TODO: enter&quot;) }
+
+func (c *Client) leave()                        { panic(&quot;TODO: leave&quot;) }
+func (c *Client) protocol(message string) error { panic(&quot;TODO: protocol&quot;) }
+
+// rpc is called with the session gate held. Transport/protocol failures mark
+// the session failed because the peer may already have executed the request.
+// A valid JSON-RPC error does not automatically invalidate the session.
+func (c *Client) rpc(ctx context.Context, method string, params any) (json.RawMessage, error) {
+	panic(&quot;TODO: rpc&quot;)
+}
+
+func (c *Client) Initialize(ctx context.Context) (InitializeResult, error) { panic(&quot;TODO: Initialize&quot;) }
+
+func (c *Client) ListTools(ctx context.Context, cursor string) (ToolsPage, error) {
+	panic(&quot;TODO: ListTools&quot;)
+}
+
+func (c *Client) CallTool(ctx context.Context, name string, args json.RawMessage) (ToolResult, error) {
+	panic(&quot;TODO: CallTool&quot;)
+}
+</code></pre><button type="button" data-copy="day12-skeleton-internal-mcp-client-go">复制本文件</button></details></section>
+<section id="tests"><h2>完整测试：夹具和断言都已提供</h2><p>下面是全部测试文件，不需要补 fake、fixture 或断言。测试调用练习的 internal 包，不是已完成的 examples 答案。</p><h3 class="file-label">完整测试：internal/mcp/client_test.go</h3><p class="download"><a href="exercises/day12/tests/internal/mcp/client_test.go.txt" download="client_test.go">下载 client_test.go</a></p><details class="code-file" data-kind="tests" data-source="day12/tests/internal/mcp/client_test.go.txt"><summary>展开完整文件：client_test.go</summary><pre id="day12-tests-internal-mcp-client-test-go"><code>package mcp
+
+import (
+	&quot;context&quot;
+	&quot;encoding/json&quot;
+	&quot;errors&quot;
+	&quot;strings&quot;
+	&quot;sync/atomic&quot;
+	&quot;testing&quot;
+	&quot;time&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool/knowledge&quot;
+)
+
+type transportFunc func(context.Context, []byte) ([]byte, error)
+
+func (f transportFunc) Send(ctx context.Context, b []byte) ([]byte, error) { return f(ctx, b) }
+func fixture(t *testing.T) *DemoServer {
+	t.Helper()
+	store := knowledge.NewFakeStore([]knowledge.Document{{ID: &quot;doc-1&quot;, Summary: &quot;MCP&quot;, Content: &quot;existing knowledge body&quot;}})
+	s, err := NewDemoServer(context.Background(), &amp;knowledge.GetDocument{Store: store})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+func ready(t *testing.T, transport Transport) *Client {
+	t.Helper()
+	c, err := NewClient(transport)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = c.Initialize(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+func decodeRequest(t *testing.T, b []byte) request {
+	t.Helper()
+	var r request
+	if err := json.Unmarshal(b, &amp;r); err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+func TestLifecycleAndToolErrors(t *testing.T) {
+	ctx := context.Background()
+	server := fixture(t)
+	var methods []string
+	var ids []uint64
+	transport := transportFunc(func(ctx context.Context, b []byte) ([]byte, error) {
+		req := decodeRequest(t, b)
+		methods = append(methods, req.Method)
+		ids = append(ids, req.ID)
+		if req.Method == &quot;notifications/initialized&quot; {
+			var fields map[string]json.RawMessage
+			_ = json.Unmarshal(b, &amp;fields)
+			if _, ok := fields[&quot;id&quot;]; ok {
+				t.Fatal(&quot;notification has an ID&quot;)
+			}
+		}
+		return server.Send(ctx, b)
+	})
+	c, _ := NewClient(transport)
+	if _, err := c.ListTools(ctx, &quot;&quot;); !errors.Is(err, ErrSessionState) || len(methods) != 0 {
+		t.Fatalf(&quot;preinit: %v %v&quot;, err, methods)
+	}
+	init, err := c.Initialize(ctx)
+	if err != nil || init.ProtocolVersion != ProtocolVersion || init.Capabilities.Tools == nil {
+		t.Fatalf(&quot;%+v %v&quot;, init, err)
+	}
+	page, err := c.ListTools(ctx, &quot;&quot;)
+	if err != nil || len(page.Tools) != 1 || page.Tools[0].Name != &quot;get_document&quot; {
+		t.Fatalf(&quot;%+v %v&quot;, page, err)
+	}
+	result, err := c.CallTool(ctx, &quot;get_document&quot;, json.RawMessage(`{&quot;id&quot;:&quot;doc-1&quot;}`))
+	if err != nil || result.IsError || len(result.Content) != 1 || !strings.Contains(string(result.Content[0]), &quot;existing knowledge body&quot;) {
+		t.Fatalf(&quot;%+v %v&quot;, result, err)
+	}
+	result, err = c.CallTool(ctx, &quot;get_document&quot;, json.RawMessage(`{&quot;id&quot;:&quot;missing&quot;}`))
+	if err != nil || !result.IsError {
+		t.Fatalf(&quot;business error: %+v %v&quot;, result, err)
+	}
+	_, err = c.CallTool(ctx, &quot;unknown&quot;, nil)
+	var rpc *RPCError
+	if !errors.As(err, &amp;rpc) || rpc.Code != -32602 {
+		t.Fatalf(&quot;RPC error: %v&quot;, err)
+	}
+	if _, err = c.ListTools(ctx, &quot;&quot;); err != nil {
+		t.Fatalf(&quot;valid RPC error killed session: %v&quot;, err)
+	}
+	if _, err = c.Initialize(ctx); !errors.Is(err, ErrSessionState) {
+		t.Fatal(&quot;reinitialized session&quot;)
+	}
+	if strings.Join(methods[:4], &quot;,&quot;) != &quot;initialize,notifications/initialized,tools/list,tools/call&quot; || ids[0] != 1 || ids[1] != 0 || ids[2] != 2 || ids[3] != 3 {
+		t.Fatalf(&quot;methods=%v IDs=%v&quot;, methods, ids)
+	}
+}
+
+func TestInitializeFailureNeverReplays(t *testing.T) {
+	failure := errors.New(&quot;notification transport failed&quot;)
+	for _, mode := range []string{&quot;version&quot;, &quot;capabilities&quot;, &quot;server&quot;, &quot;notification-fails&quot;, &quot;notification-response&quot;} {
+		t.Run(mode, func(t *testing.T) {
+			server := fixture(t)
+			sends := 0
+			c, _ := NewClient(transportFunc(func(ctx context.Context, b []byte) ([]byte, error) {
+				sends++
+				req := decodeRequest(t, b)
+				if req.Method == &quot;notifications/initialized&quot; {
+					if mode == &quot;notification-fails&quot; {
+						return nil, failure
+					}
+					if mode == &quot;notification-response&quot; {
+						return []byte(&quot;{}&quot;), nil
+					}
+				}
+				data, err := server.Send(ctx, b)
+				if err != nil || req.Method != &quot;initialize&quot; {
+					return data, err
+				}
+				var r response
+				_ = json.Unmarshal(data, &amp;r)
+				var result InitializeResult
+				_ = json.Unmarshal(r.Result, &amp;result)
+				switch mode {
+				case &quot;version&quot;:
+					result.ProtocolVersion = &quot;unsupported&quot;
+				case &quot;capabilities&quot;:
+					result.Capabilities = nil
+				case &quot;server&quot;:
+					result.ServerInfo.Name = &quot;&quot;
+				}
+				return reply(req.ID, result, nil)
+			}))
+			_, err := c.Initialize(context.Background())
+			if mode == &quot;notification-fails&quot; {
+				if !errors.Is(err, failure) {
+					t.Fatal(err)
+				}
+			} else if !errors.Is(err, ErrProtocol) {
+				t.Fatal(err)
+			}
+			before := sends
+			if _, err = c.Initialize(context.Background()); !errors.Is(err, ErrSessionState) {
+				t.Fatal(err)
+			}
+			if _, err = c.ListTools(context.Background(), &quot;&quot;); !errors.Is(err, ErrSessionState) || sends != before {
+				t.Fatalf(&quot;replay: %v sends=%d&quot;, err, sends)
+			}
+		})
+	}
+}
+
+func TestNoToolsCapability(t *testing.T) {
+	server := fixture(t)
+	sends := 0
+	c := ready(t, transportFunc(func(ctx context.Context, b []byte) ([]byte, error) {
+		sends++
+		req := decodeRequest(t, b)
+		if req.Method == &quot;initialize&quot; {
+			return reply(req.ID, InitializeResult{ProtocolVersion: ProtocolVersion, Capabilities: &amp;ServerCapabilities{}, ServerInfo: Implementation{Name: &quot;no-tools&quot;, Version: &quot;1&quot;}}, nil)
+		}
+		// Notification still must be sent, even when tools are not advertised.
+		if req.Method == &quot;notifications/initialized&quot; {
+			return nil, nil
+		}
+		return server.Send(ctx, b)
+	}))
+	if _, err := c.ListTools(context.Background(), &quot;&quot;); !errors.Is(err, ErrToolsUnavailable) {
+		t.Fatal(err)
+	}
+	if _, err := c.CallTool(context.Background(), &quot;x&quot;, nil); !errors.Is(err, ErrToolsUnavailable) || sends != 2 {
+		t.Fatalf(&quot;%v sends=%d&quot;, err, sends)
+	}
+}
+
+func TestMalformedResponsesFailSession(t *testing.T) {
+	for _, mode := range []string{&quot;id&quot;, &quot;version&quot;, &quot;both&quot;, &quot;neither&quot;, &quot;null-error&quot;, &quot;null-result&quot;, &quot;missing-tools&quot;, &quot;bad-json&quot;, &quot;oversize&quot;, &quot;null-code&quot;} {
+		t.Run(mode, func(t *testing.T) {
+			server := fixture(t)
+			lists := 0
+			c := ready(t, transportFunc(func(ctx context.Context, b []byte) ([]byte, error) {
+				req := decodeRequest(t, b)
+				if req.Method != &quot;tools/list&quot; {
+					return server.Send(ctx, b)
+				}
+				lists++
+				switch mode {
+				case &quot;bad-json&quot;:
+					return []byte(&quot;{&quot;), nil
+				case &quot;oversize&quot;:
+					return []byte(strings.Repeat(&quot; &quot;, MaxResponseBytes+1)), nil
+				}
+				var r response
+				r.JSONRPC = &quot;2.0&quot;
+				r.ID = json.RawMessage(&quot;2&quot;)
+				r.Result = json.RawMessage(`{&quot;tools&quot;:[]}`)
+				switch mode {
+				case &quot;id&quot;:
+					r.ID = json.RawMessage(&quot;99&quot;)
+				case &quot;version&quot;:
+					r.JSONRPC = &quot;1.0&quot;
+				case &quot;both&quot;:
+					r.Error = json.RawMessage(`{&quot;code&quot;:-1,&quot;message&quot;:&quot;error&quot;}`)
+				case &quot;neither&quot;:
+					r.Result = nil
+				case &quot;null-error&quot;:
+					r.Result = nil
+					r.Error = json.RawMessage(&quot;null&quot;)
+				case &quot;null-result&quot;:
+					r.Result = json.RawMessage(&quot;null&quot;)
+				case &quot;missing-tools&quot;:
+					r.Result = json.RawMessage(&quot;{}&quot;)
+				case &quot;null-code&quot;:
+					r.Result = nil
+					r.Error = json.RawMessage(`{&quot;code&quot;:null,&quot;message&quot;:&quot;bad&quot;}`)
+				}
+				return json.Marshal(r)
+			}))
+			if _, err := c.ListTools(context.Background(), &quot;&quot;); !errors.Is(err, ErrProtocol) {
+				t.Fatal(err)
+			}
+			if _, err := c.ListTools(context.Background(), &quot;&quot;); !errors.Is(err, ErrSessionState) || lists != 1 {
+				t.Fatalf(&quot;%v lists=%d&quot;, err, lists)
+			}
+		})
+	}
+}
+
+func TestPaginationAndStructuredContentPreserved(t *testing.T) {
+	server := fixture(t)
+	lists := 0
+	c := ready(t, transportFunc(func(ctx context.Context, b []byte) ([]byte, error) {
+		req := decodeRequest(t, b)
+		switch req.Method {
+		case &quot;tools/list&quot;:
+			var p struct {
+				Cursor string `json:&quot;cursor&quot;`
+			}
+			_ = json.Unmarshal(req.Params, &amp;p)
+			lists++
+			if lists == 1 {
+				if p.Cursor != &quot;&quot; {
+					t.Fatal(&quot;first cursor&quot;)
+				}
+				return reply(req.ID, ToolsPage{Tools: []Descriptor{}, NextCursor: &quot;opaque/next&quot;}, nil)
+			}
+			if p.Cursor != &quot;opaque/next&quot; {
+				t.Fatalf(&quot;cursor %q&quot;, p.Cursor)
+			}
+			return reply(req.ID, ToolsPage{Tools: []Descriptor{}}, nil)
+		case &quot;tools/call&quot;:
+			return reply(req.ID, ToolResult{Content: []json.RawMessage{json.RawMessage(`{&quot;type&quot;:&quot;image&quot;,&quot;data&quot;:&quot;AA==&quot;,&quot;mimeType&quot;:&quot;image/png&quot;}`)}, StructuredContent: json.RawMessage(`{&quot;document&quot;:&quot;doc-1&quot;}`)}, nil)
+		}
+		return server.Send(ctx, b)
+	}))
+	page, err := c.ListTools(context.Background(), &quot;&quot;)
+	if err != nil || page.NextCursor != &quot;opaque/next&quot; || lists != 1 {
+		t.Fatalf(&quot;%+v %v&quot;, page, err)
+	}
+	page, err = c.ListTools(context.Background(), page.NextCursor)
+	if err != nil || page.NextCursor != &quot;&quot; || lists != 2 {
+		t.Fatalf(&quot;%+v %v&quot;, page, err)
+	}
+	r, err := c.CallTool(context.Background(), &quot;get_document&quot;, nil)
+	if err != nil || !strings.Contains(string(r.Content[0]), &quot;image/png&quot;) || string(r.StructuredContent) != `{&quot;document&quot;:&quot;doc-1&quot;}` {
+		t.Fatalf(&quot;%+v %v&quot;, r, err)
+	}
+}
+
+func TestCancellationAndQueuedCall(t *testing.T) {
+	server := fixture(t)
+	var calls atomic.Int32
+	started := make(chan struct{})
+	c := ready(t, transportFunc(func(ctx context.Context, b []byte) ([]byte, error) {
+		req := decodeRequest(t, b)
+		if req.Method != &quot;tools/call&quot; {
+			return server.Send(ctx, b)
+		}
+		calls.Add(1)
+		close(started)
+		&lt;-ctx.Done()
+		return nil, ctx.Err()
+	}))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { _, err := c.CallTool(ctx, &quot;get_document&quot;, nil); done &lt;- err }()
+	select {
+	case &lt;-started:
+	case &lt;-time.After(time.Second):
+		t.Fatal(&quot;call did not start&quot;)
+	}
+	queued, stop := context.WithCancel(context.Background())
+	defer stop()
+	queuedDone := make(chan error, 1)
+	queuedStarted := make(chan struct{})
+	go func() { close(queuedStarted); _, err := c.ListTools(queued, &quot;&quot;); queuedDone &lt;- err }()
+	&lt;-queuedStarted
+	select {
+	case err := &lt;-queuedDone:
+		t.Fatalf(&quot;queued request returned before cancellation: %v&quot;, err)
+	case &lt;-time.After(5 * time.Millisecond):
+	}
+	stop()
+	select {
+	case err := &lt;-queuedDone:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatal(err)
+		}
+	case &lt;-time.After(time.Second):
+		t.Fatal(&quot;queued cancellation blocked&quot;)
+	}
+	cancel()
+	select {
+	case err := &lt;-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatal(err)
+		}
+	case &lt;-time.After(time.Second):
+		t.Fatal(&quot;cancel blocked&quot;)
+	}
+	if calls.Load() != 1 {
+		t.Fatal(&quot;cancelled request sent&quot;)
+	}
+	if _, err := c.ListTools(context.Background(), &quot;&quot;); !errors.Is(err, ErrSessionState) {
+		t.Fatal(&quot;ambiguous cancelled session reused&quot;)
+	}
+}
+
+func TestCallInputAndContentValidation(t *testing.T) {
+	server := fixture(t)
+	calls := 0
+	c := ready(t, transportFunc(func(ctx context.Context, b []byte) ([]byte, error) {
+		if decodeRequest(t, b).Method == &quot;tools/call&quot; {
+			calls++
+		}
+		return server.Send(ctx, b)
+	}))
+	for _, args := range []string{&quot;null&quot;, &quot;[]&quot;, &quot;{&quot;} {
+		if _, err := c.CallTool(context.Background(), &quot;get_document&quot;, json.RawMessage(args)); err == nil {
+			t.Fatalf(&quot;accepted %s&quot;, args)
+		}
+	}
+	if _, err := c.CallTool(context.Background(), &quot;&quot;, nil); err == nil || calls != 0 {
+		t.Fatal(&quot;invalid local call was sent&quot;)
+	}
+	for _, raw := range []string{`{}`, `{&quot;content&quot;:null}`, `{&quot;content&quot;:[{}]}`, `{&quot;content&quot;:[null]}`} {
+		t.Run(raw, func(t *testing.T) {
+			peer := fixture(t)
+			client := ready(t, transportFunc(func(ctx context.Context, b []byte) ([]byte, error) {
+				req := decodeRequest(t, b)
+				if req.Method == &quot;tools/call&quot; {
+					return reply(req.ID, json.RawMessage(raw), nil)
+				}
+				return peer.Send(ctx, b)
+			}))
+			if _, err := client.CallTool(context.Background(), &quot;get_document&quot;, nil); !errors.Is(err, ErrProtocol) {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestInvalidDescriptorsAndTransportFailure(t *testing.T) {
+	for _, raw := range []string{
+		`{&quot;tools&quot;:[{&quot;name&quot;:&quot;x&quot;,&quot;inputSchema&quot;:{&quot;type&quot;:&quot;string&quot;}}]}`,
+		`{&quot;tools&quot;:[{&quot;name&quot;:&quot;&quot;,&quot;inputSchema&quot;:{&quot;type&quot;:&quot;object&quot;}}]}`,
+		`{&quot;tools&quot;:[{&quot;name&quot;:&quot;x&quot;,&quot;inputSchema&quot;:{&quot;type&quot;:&quot;object&quot;}},{&quot;name&quot;:&quot;x&quot;,&quot;inputSchema&quot;:{&quot;type&quot;:&quot;object&quot;}}]}`,
+	} {
+		peer := fixture(t)
+		c := ready(t, transportFunc(func(ctx context.Context, b []byte) ([]byte, error) {
+			req := decodeRequest(t, b)
+			if req.Method == &quot;tools/list&quot; {
+				return reply(req.ID, json.RawMessage(raw), nil)
+			}
+			return peer.Send(ctx, b)
+		}))
+		if _, err := c.ListTools(context.Background(), &quot;&quot;); !errors.Is(err, ErrProtocol) {
+			t.Fatal(err)
+		}
+	}
+	failure := errors.New(&quot;transport lost response&quot;)
+	peer := fixture(t)
+	c := ready(t, transportFunc(func(ctx context.Context, b []byte) ([]byte, error) {
+		if decodeRequest(t, b).Method == &quot;tools/call&quot; {
+			return nil, failure
+		}
+		return peer.Send(ctx, b)
+	}))
+	if _, err := c.CallTool(context.Background(), &quot;get_document&quot;, nil); !errors.Is(err, failure) {
+		t.Fatal(err)
+	}
+	if _, err := c.ListTools(context.Background(), &quot;&quot;); !errors.Is(err, ErrSessionState) {
+		t.Fatal(&quot;lost response session reused&quot;)
+	}
+}
+
+func TestDay12Constructor(t *testing.T) {
+	if _, err := NewClient(nil); err == nil {
+		t.Fatal(&quot;nil transport accepted&quot;)
+	}
+	calls := 0
+	c, err := NewClient(transportFunc(func(context.Context, []byte) ([]byte, error) { calls++; return nil, nil }))
+	if err != nil || c == nil || calls != 0 {
+		t.Fatalf(&quot;constructor performed I/O: %v %d&quot;, err, calls)
+	}
+}
+</code></pre><button type="button" data-copy="day12-tests-internal-mcp-client-test-go">复制本文件</button></details><h3>先编译，再看到明确红灯</h3><pre><code>go test ./internal/mcp -run &#x27;^$&#x27; -timeout 20s
+go test ./internal/mcp -run &#x27;^(TestLifecycle|TestInitialize|TestNoTools|TestMalformed|TestPagination|TestCancellationAndQueued|TestCallInput|TestInvalidDescriptors|TestDay12)&#x27; -count=1 -v -timeout 20s</code></pre><p>编译命令预期退出码 0，“no tests to run”在这一步是正常的。第二条必须实际运行用例，并在当天方法的 TODO 处失败；缺包、语法错误、命令未匹配到测试都不算行为红灯。</p><p>已有实现可能直接全绿。保留这些结果，再用契约检查设计；不要为了制造红灯破坏已完成代码。</p></section>
+<section id="tasks"><h2>分步实现：一次只改变一组行为</h2><div class="time">编码 80 分钟 · 每次只看当前任务卡</div><article class="step"><h3>1 · 15 分钟</h3><p><strong>为什么做：</strong>先建立无网络副作用的会话对象。</p><p><strong>位置：</strong>NewClient 与 Client 字段</p><p><strong>动作：</strong>建立未初始化的串行会话，构造时不发送消息；先读提供的协议类型。</p><pre><code>go test ./internal/mcp -run &#x27;^TestDay12Constructor$&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>非 nil Transport 创建 Client；nil 被拒绝，发送次数仍为 0。</p><details><summary>卡住时再看提示</summary><p>gate 用于整个会话操作，不只是 nextID 递增。</p></details></article><article class="step"><h3>2 · 30 分钟</h3><p><strong>为什么做：</strong>先走通一条合法消息链，区分通知、请求和业务结果。</p><p><strong>位置：</strong>enter/leave、rpc、Initialize、list/call 主路径</p><p><strong>动作：</strong>先实现消息封装与配对，再实现握手、基本发现和调用；让一个 doc-1 正常往返。</p><pre><code>go test ./internal/mcp -run &#x27;^(TestLifecycleAndToolErrors|TestNoToolsCapability)$&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>方法顺序和 ID 为 initialize#1、通知、list#2、call#3；业务失败与 RPC 错误分开。</p><details><summary>卡住时再看提示</summary><p>先画消息，再写编码；通知没有请求 ID，也不会占用下一次请求编号。</p></details></article><article class="step"><h3>3 · 20 分钟</h3><p><strong>为什么做：</strong>坏协议可能意味着结果不确定，不能自动重放。</p><p><strong>位置：</strong>协议失败与输入校验</p><p><strong>动作：</strong>补齐版本、ID、result/error、能力、目录、内容和字节预算检查；明确何时 failed。</p><pre><code>go test ./internal/mcp -run &#x27;^(TestInitializeFailureNeverReplays|TestMalformedResponsesFailSession|TestInvalidDescriptorsAndTransportFailure|TestCallInputAndContentValidation)$&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>坏响应不会触发自动重放；非法本地输入不会发送。</p><details><summary>卡住时再看提示</summary><p>有效 RPCError 仍是合法响应；不能与坏 JSON 一起全部置 failed。</p></details></article><article class="step"><h3>4 · 15 分钟</h3><p><strong>为什么做：</strong>分页不应丢数据，排队取消不应影响别的请求。</p><p><strong>位置：</strong>分页数据与取消排队</p><p><strong>动作：</strong>只返回一页和不透明游标；保留原始块；排队取消不影响当前持有 gate 的请求。</p><pre><code>go test ./internal/mcp -run &#x27;^(TestPaginationAndStructuredContentPreserved|TestCancellationAndQueuedCall)$&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>取消不多发请求，结构化与非文本数据没有被悄悄丢弃。</p><details><summary>卡住时再看提示</summary><p>进入 gate 前后都检查取消；只有真正发出的不确定请求才使会话失效。</p></details></article></section>
+<section id="review"><h2>测试与复盘 20 分钟</h2><div class="time">12 分钟 · 从目标到累计回归</div><pre><code>go test ./internal/mcp -run &#x27;^(TestLifecycle|TestInitialize|TestNoTools|TestMalformed|TestPagination|TestCancellationAndQueued|TestCallInput|TestInvalidDescriptors|TestDay12)&#x27; -count=1 -v -timeout 20s
+go test -race ./internal/mcp -run &#x27;^(TestLifecycle|TestInitialize|TestNoTools|TestMalformed|TestPagination|TestCancellationAndQueued|TestCallInput|TestInvalidDescriptors|TestDay12)&#x27; -count=1 -timeout 30s
+go test ./internal/... -timeout 60s
+go test ./examples/... -timeout 60s
+go test -race ./examples/... -timeout 60s</code></pre><p>先让当天目标全绿，再运行累计回归。examples 验证参考基线，不能替代对 internal 练习的测试。若前序练习接口不同，先按迁移说明对齐，不通过修改测试 import 绕到答案。</p><p>重构时保持同一套断言，整理重复逻辑后再运行；不要通过删测试、跳过用例或改预期来“变绿”。</p><div class="time">8 分钟 · 合上代码回答</div><ol><li>isError=true 是否要返回 Go error？</li><li>为什么 MCP ID 不直接使用模型调用 ID？</li><li>取消超时能证明远端没执行吗？</li></ol><details><summary>完成回答后，再看参考思路</summary><article class="card"><h3>isError=true 是否要返回 Go error？</h3><p>不是；它是合法工具业务结果。</p><p>RPCError、传输失败、协议错误是另外的层。</p></article><article class="card"><h3>为什么 MCP ID 不直接使用模型调用 ID？</h3><p>它标识协议请求，还包含初始化和列目录；两个 ID 域不同。</p></article><article class="card"><h3>取消超时能证明远端没执行吗？</h3><p>不能；请求可能已经到达，不能隐式重放。</p></article></details><h3>完成定义</h3><p><strong>实现验收：</strong>当天完整目标用例与 race 通过，记录累计回归的实际结果；失败时记录阶段、原因与未验证范围。</p><p><strong>理解验收：</strong>不看代码，用本日例子讲清输入、职责、结果和失败出口；再说出一个需求变化应该修改哪一层。</p><h3>本次发布验证</h3><div class="note"><p>Go 1.22.2 linux/amd64：原样骨架编译通过；目标测试在 TODO 处按预期失败；同一套测试对兼容参考实现通过（含 race）。</p><p>目标包含 9 个顶层通过测试及其子场景；完整输出见验证记录。</p><p>验证在临时副本中完成，不代表你的当前实现已通过。真实网络、模型或崩溃恢复不在本次验证范围。</p><p><a href="exercises/README.md">查看准备方法与验证范围</a> · <a href="exercises/verification.json">查看原始红绿测试记录</a></p></div><h3>学习清单</h3><div class="meta"><span>本浏览器自评进度；新版清单单独保存</span><span id="count">0 / 8</span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="fill" class="fill"></div></div><div id="checks"></div><noscript><p>未启用脚本仍可展开全文和手动复制；清单不自动保存。</p></noscript></section>
+<section id="answer"><h2>最后再看参考答案</h2><p>这些实现与骨架签名一致，保留相同契约。内部写法可以不同；先按规则和测试独立完成，再对照取舍。</p><h3 class="file-label">参考实现：internal/mcp/client.go</h3><p class="download"><a href="exercises/day12/reference/internal/mcp/client.go.txt" download="client.go">下载 client.go</a></p><details class="code-file" data-kind="reference" data-source="day12/reference/internal/mcp/client.go.txt"><summary>展开完整文件：client.go</summary><pre id="day12-reference-internal-mcp-client-go"><code>package mcp
+
+import (
+	&quot;bytes&quot;
+	&quot;context&quot;
+	&quot;encoding/json&quot;
+	&quot;fmt&quot;
+	&quot;strconv&quot;
+	&quot;strings&quot;
+)
+
+type Client struct {
+	transport      Transport
+	gate           chan struct{}
+	state          string
+	nextID         uint64
+	toolsAvailable bool
+}
+
+func NewClient(t Transport) (*Client, error) {
+	if t == nil {
+		return nil, fmt.Errorf(&quot;mcp: nil transport&quot;)
+	}
+	return &amp;Client{transport: t, gate: make(chan struct{}, 1), state: &quot;new&quot;}, nil
+}
+
+// A session serializes requests. Cancellation while queued sends no message.
+func (c *Client) enter(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	select {
+	case c.gate &lt;- struct{}{}:
+		if err := ctx.Err(); err != nil {
+			&lt;-c.gate
+			return err
+		}
+		return nil
+	case &lt;-ctx.Done():
+		return ctx.Err()
+	}
+}
+func (c *Client) leave() { &lt;-c.gate }
+func (c *Client) protocol(message string) error {
+	c.state = &quot;failed&quot;
+	return fmt.Errorf(&quot;%w: %s&quot;, ErrProtocol, message)
+}
+
+// rpc is called with the session gate held. Transport/protocol failures mark
+// the session failed because the peer may already have executed the request.
+// A valid JSON-RPC error does not automatically invalidate the session.
+func (c *Client) rpc(ctx context.Context, method string, params any) (json.RawMessage, error) {
+	raw, err := json.Marshal(params)
+	if err != nil {
+		return nil, err
+	}
+	c.nextID++
+	id := c.nextID
+	message, err := json.Marshal(request{JSONRPC: &quot;2.0&quot;, ID: id, Method: method, Params: raw})
+	if err != nil {
+		return nil, err
+	}
+	payload, err := c.transport.Send(ctx, message)
+	if ctx.Err() != nil {
+		err = ctx.Err()
+	}
+	if err != nil {
+		c.state = &quot;failed&quot;
+		return nil, fmt.Errorf(&quot;mcp transport: %w&quot;, err)
+	}
+	if len(payload) &gt; MaxResponseBytes {
+		return nil, c.protocol(&quot;response exceeds byte budget&quot;)
+	}
+	var r response
+	if err = json.Unmarshal(payload, &amp;r); err != nil {
+		return nil, c.protocol(&quot;malformed JSON&quot;)
+	}
+	if r.JSONRPC != &quot;2.0&quot; || string(r.ID) != strconv.FormatUint(id, 10) {
+		return nil, c.protocol(&quot;version or request ID mismatch&quot;)
+	}
+	if (len(r.Result) == 0) == (len(r.Error) == 0) {
+		return nil, c.protocol(&quot;expected exactly one of result/error&quot;)
+	}
+	if len(r.Error) &gt; 0 {
+		var e RPCError
+		if bytes.Equal(bytes.TrimSpace(r.Error), []byte(&quot;null&quot;)) || json.Unmarshal(r.Error, &amp;e) != nil {
+			return nil, c.protocol(&quot;invalid RPC error&quot;)
+		}
+		// Required error fields must actually exist, not merely decode as zero values.
+		var fields struct {
+			Code    *int    `json:&quot;code&quot;`
+			Message *string `json:&quot;message&quot;`
+		}
+		if json.Unmarshal(r.Error, &amp;fields) != nil || fields.Code == nil || fields.Message == nil {
+			return nil, c.protocol(&quot;missing/invalid RPC error fields&quot;)
+		}
+		return nil, &amp;e
+	}
+	var object map[string]json.RawMessage
+	if json.Unmarshal(r.Result, &amp;object) != nil || object == nil {
+		return nil, c.protocol(&quot;expected object result&quot;)
+	}
+	return r.Result, nil
+}
+
+func (c *Client) Initialize(ctx context.Context) (InitializeResult, error) {
+	var result InitializeResult
+	if err := c.enter(ctx); err != nil {
+		return result, err
+	}
+	defer c.leave()
+	if c.state != &quot;new&quot; {
+		return result, ErrSessionState
+	}
+	// Never replay initialization on an ambiguous, possibly initialized transport.
+	c.state = &quot;failed&quot;
+	raw, err := c.rpc(ctx, &quot;initialize&quot;, struct {
+		ProtocolVersion string         `json:&quot;protocolVersion&quot;`
+		Capabilities    struct{}       `json:&quot;capabilities&quot;`
+		ClientInfo      Implementation `json:&quot;clientInfo&quot;`
+	}{ProtocolVersion: ProtocolVersion, ClientInfo: Implementation{Name: &quot;agent-runtime-examples&quot;, Version: &quot;0.1.0&quot;}})
+	if err != nil {
+		return result, err
+	}
+	if json.Unmarshal(raw, &amp;result) != nil || result.ProtocolVersion != ProtocolVersion || result.Capabilities == nil || result.ServerInfo.Name == &quot;&quot; || result.ServerInfo.Version == &quot;&quot; {
+		return result, c.protocol(&quot;unsupported version or invalid initialize result&quot;)
+	}
+	notification, _ := json.Marshal(request{JSONRPC: &quot;2.0&quot;, Method: &quot;notifications/initialized&quot;})
+	reply, err := c.transport.Send(ctx, notification)
+	if ctx.Err() != nil {
+		err = ctx.Err()
+	}
+	if err != nil {
+		return result, fmt.Errorf(&quot;mcp initialized notification: %w&quot;, err)
+	}
+	if len(bytes.TrimSpace(reply)) != 0 {
+		return result, c.protocol(&quot;notification must not receive a response&quot;)
+	}
+	c.toolsAvailable = result.Capabilities.Tools != nil
+	c.state = &quot;ready&quot;
+	return result, nil
+}
+
+func (c *Client) ListTools(ctx context.Context, cursor string) (ToolsPage, error) {
+	var page ToolsPage
+	if err := c.enter(ctx); err != nil {
+		return page, err
+	}
+	defer c.leave()
+	if c.state != &quot;ready&quot; {
+		return page, ErrSessionState
+	}
+	if !c.toolsAvailable {
+		return page, ErrToolsUnavailable
+	}
+	raw, err := c.rpc(ctx, &quot;tools/list&quot;, struct {
+		Cursor string `json:&quot;cursor,omitempty&quot;`
+	}{cursor})
+	if err != nil {
+		return page, err
+	}
+	if json.Unmarshal(raw, &amp;page) != nil || page.Tools == nil {
+		return page, c.protocol(&quot;tools must be an array&quot;)
+	}
+	seen := map[string]bool{}
+	for _, d := range page.Tools {
+		var schema map[string]any
+		if strings.TrimSpace(d.Name) == &quot;&quot; || seen[d.Name] || json.Unmarshal(d.InputSchema, &amp;schema) != nil || schema[&quot;type&quot;] != &quot;object&quot; {
+			return page, c.protocol(&quot;invalid/duplicate tool descriptor&quot;)
+		}
+		seen[d.Name] = true
+	}
+	return page, nil
+}
+
+func (c *Client) CallTool(ctx context.Context, name string, args json.RawMessage) (ToolResult, error) {
+	var result ToolResult
+	if err := c.enter(ctx); err != nil {
+		return result, err
+	}
+	defer c.leave()
+	if c.state != &quot;ready&quot; {
+		return result, ErrSessionState
+	}
+	if !c.toolsAvailable {
+		return result, ErrToolsUnavailable
+	}
+	if len(args) == 0 {
+		args = json.RawMessage(&quot;{}&quot;)
+	}
+	var object map[string]json.RawMessage
+	if strings.TrimSpace(name) == &quot;&quot; || json.Unmarshal(args, &amp;object) != nil || object == nil {
+		return result, fmt.Errorf(&quot;mcp: nonempty tool name and object arguments required&quot;)
+	}
+	raw, err := c.rpc(ctx, &quot;tools/call&quot;, struct {
+		Name      string          `json:&quot;name&quot;`
+		Arguments json.RawMessage `json:&quot;arguments&quot;`
+	}{name, args})
+	if err != nil {
+		return result, err
+	}
+	if json.Unmarshal(raw, &amp;result) != nil || result.Content == nil {
+		return result, c.protocol(&quot;content must be an array&quot;)
+	}
+	for _, block := range result.Content {
+		var header struct {
+			Type string `json:&quot;type&quot;`
+		}
+		if json.Unmarshal(block, &amp;header) != nil || header.Type == &quot;&quot; {
+			return result, c.protocol(&quot;invalid content block&quot;)
+		}
+	}
+	// IsError is a tool execution result, not a JSON-RPC/transport error.
+	return result, nil
+}
+</code></pre><button type="button" data-copy="day12-reference-internal-mcp-client-go">复制本文件</button></details><h3>为什么接着学下一天？</h3><p>今天能正确访问远端协议，但 Agent 仍使用本地 Tool 契约。Day 13 用适配层把两者连接起来。</p></section>
+<footer><a href="agent-runtime-day-11.html">前一天 Day 11</a> · <a href="agent-runtime-day-13.html">下一天 Day 13</a> · <a href="../../index.html">返回学习首页</a><p>Day 12 / 56 · 正文、图示、骨架与测试离线可读</p></footer></main>
 <script>
-const items=["解释Host、Client、Server和Model的分工","手画initialize到tools/call的消息顺序","区分协议版本、JSON-RPC ID和模型ToolCallID","对照Eino初始化客户端与GetTools适配边界","观察分页与原始内容块保留","预测协议/传输失败和isError的不同处理","运行累计examples与race并记录结果","推演Day13适配及权限边界"];
-const key="agent-runtime-day12-v1";let saved=[];try{const v=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(v))saved=v}catch(_){}const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const p=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=p+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(p))}items.forEach((s,i)=>{const r=document.createElement("div");r.className="check";const c=document.createElement("input");c.type="checkbox";c.id="task-"+i;c.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=c.id;label.textContent=s;r.append(c,label);box.append(r);c.onchange=()=>{saved[i]=c.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+const items=["用自己的话解释当天三个概念", "根据两张图讲清输入、职责和返回", "完成官方阅读并写下问题答案", "确认骨架可编译且目标出现预期红灯", "按任务卡逐步完成当天实现", "完整目标与 race 测试通过", "记录累计回归实际结果和未验证项", "合上代码完成需求变化与失败边界复盘"];const key="mini-agent-runtime-day-12-tdd-v3";
+let saved=[];try{const value=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(value))saved=value}catch(_){}
+const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const percent=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=percent+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(percent))}
+items.forEach((s,i)=>{const row=document.createElement("div");row.className="check";const input=document.createElement("input");input.type="checkbox";input.id="task-"+i;input.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=input.id;label.textContent=s;row.append(input,label);box.append(row);input.onchange=()=>{saved[i]=input.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+document.querySelectorAll("button[data-copy]").forEach(button=>button.addEventListener("click",async()=>{const target=document.getElementById(button.dataset.copy);try{await navigator.clipboard.writeText(target.textContent);button.textContent="已复制"}catch(_){const range=document.createRange();range.selectNodeContents(target);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);button.textContent="已选中，请手动复制"}}));
 </script></body></html>

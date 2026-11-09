@@ -1,0 +1,13 @@
+package mcptool
+
+import (
+	"context"
+
+	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
+)
+
+// Discover returns all candidate adapters or nil on any failure. It never
+// mutates a registry; the host assembles a new registry after discovery succeeds.
+func Discover(ctx context.Context, caller Caller, prefix string, maxPages int) ([]tool.Invokable, error) {
+	panic("TODO: Discover")
+}

@@ -1,0 +1,32 @@
+package tool
+
+import (
+	"context"
+	"sync"
+
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+)
+
+// spec 是描述快照；target 是真正可执行的工具。
+type registration struct {
+	spec   Spec
+	target Invokable
+}
+type Registry struct {
+	mu      sync.RWMutex
+	entries map[string]registration
+}
+
+func NewRegistry() *Registry    { panic("TODO: NewRegistry") }
+func validateSpec(s Spec) error { panic("TODO: validateSpec") }
+func (r *Registry) Register(ctx context.Context, t Invokable) error {
+	panic("TODO: Register")
+}
+func (r *Registry) Lookup(name string) (Invokable, bool) {
+	panic("TODO: Lookup")
+}
+func (r *Registry) Specs(visible []string) ([]Spec, error) {
+	panic("TODO: Specs")
+}
+func (r *Registry) Tools() map[string]Tool            { panic("TODO: Tools") }
+func Definitions(specs []Spec) []model.ToolDefinition { panic("TODO: Definitions") }

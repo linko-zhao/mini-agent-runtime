@@ -1,0 +1,14 @@
+package agent
+
+import (
+	"context"
+
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+)
+
+// executeBatch validates the entire batch before executing any tool.
+// Business arguments remain the tool's responsibility. Results preserve input
+// order and call IDs; cancellation or timeout terminates the batch with an error.
+func (a *Agent) executeBatch(ctx context.Context, calls []model.ToolCall, step int) ([]model.Message, error) {
+	panic("TODO: executeBatch")
+}

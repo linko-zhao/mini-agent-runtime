@@ -1,101 +1,665 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Day 08 · Agent 工具抽象与 Eino 接口设计</title><style>
-:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#58667b;--line:#e0e6ee;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:920px;margin:auto;padding:32px 22px 70px}.hero{background:#183561;color:#fff;border-radius:18px;padding:29px 30px}.hero small{opacity:.8;letter-spacing:1px}.hero h1{margin:7px 0;font-size:30px;line-height:1.3}.hero p{margin:0;color:#e6eefa}.chips{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}.chip{border:1px solid #8ea4c8;border-radius:20px;padding:3px 10px;font-size:12px}section{background:var(--paper);border:1px solid var(--line);border-radius:14px;margin-top:18px;padding:22px 26px}h2{font-size:19px;margin:0 0 13px}h3{font-size:16px;margin:18px 0 6px}.time{font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.4px}p{margin:8px 0}a{color:var(--accent)}li{margin:6px 0}code{background:#f0f3f8;padding:2px 5px;border-radius:4px}pre{overflow:auto;background:#142136;color:#e7f3ff;padding:17px;border-radius:10px;font-size:13px;line-height:1.65}pre code{background:transparent;padding:0}.goal{background:var(--pale);border-left:3px solid var(--accent);padding:12px 15px;border-radius:4px}.note{background:#fff8e9;border:1px solid #f2deb2;border-radius:9px;padding:11px 14px;color:#644b18}.info{background:#eff6ff;border:1px solid #d5e4fc;border-radius:9px;padding:11px 14px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.grid>div{padding:12px;background:#f6f8fc;border-radius:9px}.grid strong{display:block;font-size:19px}.grid span{font-size:12px;color:var(--sub)}.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0}.check input{margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer;flex:1}.check.done label{text-decoration:line-through;color:var(--sub)}.progress{height:8px;background:#e3e9f2;border-radius:99px;overflow:hidden}.fill{height:100%;background:var(--accent);width:0%;transition:width .2s}.meta{display:flex;justify-content:space-between;font-size:13px;color:var(--sub);margin-bottom:9px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px;vertical-align:top}th{background:#f4f7fc}.tag{display:inline-block;background:#eaf0fc;color:#2459bd;border-radius:5px;font-size:12px;padding:2px 7px;margin-right:6px}.muted{color:var(--sub);font-size:13px}footer{text-align:center;color:var(--sub);font-size:12px;margin:24px}@media(max-width:600px){main{padding:14px 12px 40px}.hero{padding:22px}.hero h1{font-size:24px}section{padding:18px}.grid{grid-template-columns:1fr}table{font-size:12px}th,td{padding:8px}pre{font-size:12px}}
-</style></head><body><main><header class="hero"><small>MINI AGENT RUNTIME · WEEK 02 · EINO 源码对照</small><h1>Day 08 / 56 · Agent 工具抽象与 Eino 接口设计</h1><p>把 Tool 视为 Agent 访问外部能力的契约：元信息供模型选择，执行接口供 Runtime 调度，业务实现负责实际访问。</p><div class="chips"><span class="chip">阅读 20 分钟</span><span class="chip">编码 80 分钟</span><span class="chip">测试复盘 20 分钟</span></div></header>
-<section><h2>先理解今天要解决什么问题</h2>
-<div class="goal">今天要能独立回答：一个已经会与模型对话的 Agent，怎样接入新的外部能力，而不用每加一个工具就改一次 Agent Loop？</div>
-<p>第一周建立了“调用模型 → 判断是否有 ToolCall → 执行工具 → 把结果交回模型”的循环。现在用户要求“查找并阅读 Runtime 工具契约”：模型只有已有知识，无法直接读取你的资料库；你需要把检索和读取变成它可选择、Runtime 可执行的能力。</p>
-<p>最直接的实现是在 Loop 里写 <code>switch call.Name</code>，逐个调用搜索、数据库、HTTP。少量工具时可行，但工具增加后，Loop 会混入参数解析、后端连接和业务逻辑。今天通过工具契约把这些变化放到各自的层：<strong>模型提出调用意图，Runtime 组织执行，工具适配业务能力，Store 访问后端。</strong></p>
-<p><strong>学习顺序：</strong>先看下面的一次完整往返，再带着问题读 Eino，最后沿参考示例完成四项增量练习。页面能独立解释设计；代码用于验证理解。若已有累计示例，先遮住实现写出自己的接口草图，再比较差异，无需重新建工程。</p>
-<p class="note">概念前置：<code>Model.Generate</code>、消息历史、assistant/tool 角色、context。它们分别表示“请求一次模型”“保留往返上下文”“区分调用与结果”“传递取消和超时”。课程按路线推进，前序编码未完成时可使用 examples 参考基线继续理解。</p>
-</section>
-<section><h2>把 Agent 的一次工具往返走通</h2>
-<p>用户输入：“查找并阅读 Runtime 工具契约”。先区分两个阶段：启动时装配能力；运行时由消息推动循环。</p>
-<pre aria-label="Agent 工具接入与执行数据流"><code>装配：Store → SearchKnowledge / GetDocument → Registry.Register
-      → Registry.Tools() → Agent.New → ToolDefinition → Model.ToolBinder
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light"><meta name="description" content="Day08易读TDD样板：先理解工具设计，再根据骨架与完整测试独立实现注册表。">
+<title>Day 08 · 图解工具设计，自己实现注册表</title><style>
+:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#52617a;--line:#dce4ef;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.85 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:820px;padding:28px 22px 64px;margin:auto}.hero{background:#183561;color:white;border-radius:18px;padding:30px}.hero h1{font-size:30px;line-height:1.45;margin:12px 0}.hero p{color:#e6eefa}.eyebrow,.time{font-size:14px;font-weight:700}.chips{display:flex;flex-wrap:wrap;gap:8px}.chips span{font-size:14px;border:1px solid #9cb5d9;border-radius:20px;padding:3px 12px}section,nav{background:white;border:1px solid var(--line);border-radius:14px;padding:26px;margin-top:20px}h2{font-size:24px;line-height:1.5;margin:0 0 20px}h3{font-size:20px;line-height:1.5;margin:24px 0 10px}p{margin:12px 0}a{color:var(--accent);text-underline-offset:3px}li{margin:10px 0}code{font-size:.88em;background:#edf1f7;padding:2px 4px;border-radius:4px;overflow-wrap:anywhere}pre{background:#142136;color:#e7f3ff;border-radius:10px;padding:18px;overflow:auto;font-size:14px;line-height:1.7;tab-size:4}pre code{background:none;padding:0;font-size:inherit;overflow-wrap:normal}.note,.goal{border-left:4px solid var(--accent);background:var(--pale);padding:14px 18px;border-radius:4px}.warn{border-left-color:#9b6500;background:#fff6e3}.card,.rule,.step{border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:18px 0}.card h3,.step h3{margin-top:0}.muted{color:var(--sub);font-size:15px}.flow{display:flex;flex-direction:column;gap:10px;margin:20px 0}.node{border:2px solid #9eb6db;border-radius:10px;padding:15px;background:#f4f8ff}.node strong{display:block}.arrow{text-align:center;color:#345276;font-size:16px}.branch{border:2px dashed #9b6500;background:#fff7e8}.time{color:var(--accent)}details{border:1px solid var(--line);border-radius:9px;padding:12px 16px;margin:16px 0}summary{cursor:pointer;font-weight:650}summary:focus-visible,a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid #c67800;outline-offset:4px}button{font:inherit;font-size:15px;background:#edf3ff;color:#183561;border:1px solid #9eb6db;border-radius:7px;padding:7px 12px;cursor:pointer}.check{display:flex;gap:12px;margin:14px 0}.check input{width:20px;height:20px;flex-shrink:0;margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer}.done label{color:var(--sub);text-decoration:line-through}.progress{background:#e3e9f2;height:12px;border-radius:8px;overflow:hidden}.fill{background:var(--accent);height:100%;width:0}.meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:15px}footer{font-size:15px;text-align:center;padding:24px}.toplinks{display:flex;flex-wrap:wrap;gap:10px 22px}.download{font-size:15px}.code-actions{display:flex;gap:12px;align-items:center;margin-top:12px}.copy-state{font-size:14px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@media(max-width:600px){main{padding:12px 10px 36px}section,nav{padding:20px 16px}.hero{padding:23px 20px}.hero h1{font-size:26px}h2{font-size:22px}pre{padding:14px;font-size:13px}.card,.rule,.step{padding:14px}body{font-size:18px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style></head><body><main>
+<header class="hero"><div class="eyebrow">DAY 08 / 56 · 第 2 周 · 易读 TDD 样板</div>
+<h1>工具怎样接进 Agent？<br>自己实现一个注册表</h1><p>先看懂设计，再根据骨架与测试写实现。一次只完成一个小步骤。</p>
+<div class="chips"><span>阅读 20 分钟</span><span>实现 80 分钟</span><span>测试复盘 20 分钟</span></div></header>
+<nav aria-label="本页学习路线"><strong>按顺序读，代码可以稍后展开</strong><div class="toplinks"><a href="#goal">① 今天做什么</a><a href="#concepts">② 概念与图解</a><a href="#design">③ 设计理由</a><a href="#contract">④ 行为规则</a><a href="#skeleton">⑤ 骨架</a><a href="#tests">⑥ 完整测试</a><a href="#tasks">⑦ 动手步骤</a><a href="#review">⑧ 验收</a></div></nav>
 
-运行：用户问题 → Model.Generate(消息历史)
-      → assistant ToolCall → Loop 查注册表 → Tool.Execute
-      → 适配层 Invoke → Store → 工具结果
-      → tool 消息（ToolCallID 对齐）→ Model.Generate → 调用下一工具或回答</code></pre>
-<p><code>Registry.Specs(可见名称)</code> 可以单独查看描述快照；当前 Agent 构造路径通过 <code>Registry.Tools()</code> 适配为旧接口，再由 <code>Definition()</code> 取描述并按 <code>WithVisibleTools</code> 过滤。两者说明同一条边界：给模型的是描述，本地保留的是执行对象。</p>
-<ol>
-<li><strong>装配：</strong>注册 <code>search_knowledge</code> 和 <code>get_document</code>。描述告诉模型“什么时候用、参数是什么”；此时不搜索、不读取资料。</li>
-<li><strong>第一轮：</strong>模型返回 <code>{ID: "search-1", Name: "search_knowledge", Arguments: {"query":"Runtime"}}</code>。这是一份调用请求，尚未访问后端。</li>
-<li><strong>执行与回填：</strong>Runtime 查本地工具，传入参数和本次 context；Store 返回 <code>doc-1</code> 及摘要。Loop 保留 assistant 原始调用，并追加 <code>Role=tool, ToolCallID="search-1"</code> 的结果消息。</li>
-<li><strong>第二轮：</strong>模型获得检索结果后，才能请求 <code>get_document({"id":"doc-1"})</code>，调用 ID 为 <code>read-1</code>。该结果用 <code>ToolCallID="read-1"</code> 回填。</li>
-<li><strong>第三轮：</strong>模型读到正文后返回最终文本；无 ToolCall 时 Loop 结束。检索和读取有数据依赖，不能假定同一批调用自动传递 ID。</li>
-</ol>
-<p class="info"><strong>理解检查：</strong>工具名称用来找到能力，调用 ID 用来找到“这一次调用”的结果。同一个工具可以被调用多次，所以只用名称关联结果会产生歧义。</p>
-<p><strong>示例的观察范围：</strong><code>examples/cmd/knowledge/main.go</code> 使用脚本 Mock 预设上述三轮响应，验证 Runtime 能接好线路；它不证明真实模型会选择正确工具。接真实模型还需要支持 ToolBinder 的适配器，以及清晰的描述与参数协议。</p>
-</section>
-<section><h2>为什么要拆成这些层</h2>
-<table><thead><tr><th>设计</th><th>解决的问题与取舍</th><th>如何验证理解</th></tr></thead><tbody>
-<tr><td>Spec / Meta：描述能力</td><td>模型需要名称、用途和输入格式。将描述与执行分开，枚举能力时就不会访问业务后端，也不需要把 Go 函数或凭据发给模型。代价是必须维持描述与实际参数校验一致。</td><td>调用 Meta / Specs 后，Store 调用次数仍为 0。InputSchema 是输入约定，不能替代 Invoke 的实际校验。</td></tr>
-<tr><td>Invokable.Invoke：执行能力</td><td>Runtime 只依赖统一入口，可调度检索、HTTP 等不同工具。工具自己解析业务参数；Runtime 保留调用 ID、消息和控制流职责。</td><td>把 Store 换成另一个实现，Loop 和 ToolCall 结构不变。</td></tr>
-<tr><td>Registry：名称到实现</td><td>把名称解析从 Loop 的业务分支移到注册表。重名若被覆盖，同一调用可能执行错误实现，因此入口拒绝重复；schema 仅做基本结构检查。</td><td>重复名注册失败；Specs 顺序稳定，修改返回值不会改写内部描述。</td></tr>
-<tr><td>Store：业务后端端口</td><td>Search/Get 定义工具需要的后端能力。Fake 与真实后端可替换，网络和凭据配置留在适配层；代价是多一层接口，但离线测试更容易。</td><td>FakeStore 能完成检索与读取；换后端只需适配 Store，不改 Agent 协议。</td></tr>
-<tr><td>Adapt：兼容已有 Loop</td><td>Day 01 的 Execute 和 Day 03 的 Definition 已被使用。把 Meta/Invoke 转成旧接口，可增量演进，无需同时重写调用方。</td><td>追踪 Execute → Invoke，执行 context 原样传递；构造时的 context 不替代运行时 context。</td></tr>
-</tbody></table>
-<p><strong>今天的边界：</strong>只建立同步工具接入。流式输出、批次执行器、执行授权、重试和 MCP 分别在后续增量加入。模型可见过滤用于提供选择范围，当前执行表仍保留隐藏工具；真正的权限检查必须在执行前另行实现。</p>
-</section>
-<section><div class="time">20 MIN · READ</div><h2>带着设计问题阅读 Eino</h2>
-<h3>12 分钟 · 模型需要知道什么，Runtime 需要执行什么？</h3>
-<p>阅读 <a href="https://github.com/cloudwego/eino/blob/main/components/tool/interface.go">components/tool/interface.go</a>，定位 <code>BaseTool.Info</code>、<code>InvokableTool.InvokableRun</code>、<code>StreamableTool.StreamableRun</code>。先看接口输入输出，回答：为什么 Info 不直接返回业务结果？普通调用与流式调用的消费者有何差别？流式关闭责任在哪里？今天仅理解流式差异。</p>
-<p><strong>产出：</strong>写出 <code>BaseTool.Info → Meta</code>、<code>InvokableRun → Invoke</code> 的职责映射；说明接口形状并不相同，课程使用适配思路而非直接依赖 Eino。</p>
-<h3>8 分钟 · 工具为什么需要 Loop 来连接？</h3>
-<p>阅读 <a href="https://github.com/cloudwego/eino/blob/main/compose/tool_node.go">compose/tool_node.go</a> 的 ToolsNode 输入输出注释与 <code>ToolsNodeConfig.Tools</code>。只找“注册的工具从哪里来、调用请求是什么、结果交给谁”，批次执行细节留到 Day 09。</p>
-<p><strong>产出：</strong>在上面的运行链路标出描述、调用、结果三个位置，各写一句谁产生、谁消费。阅读 main 分支时记录 commit 或依赖版本，便于后续复查。</p>
-</section>
-<section><div class="time">80 MIN · BUILD</div><h2>用四项练习验证搭建思路</h2>
-<p class="info"><strong>承接前序设计：</strong>复用 <code>examples/internal/model/model.go</code> 的 ToolDefinition / ToolCall，<code>examples/internal/tool/tool.go</code> 的 Tool / DescribedTool，以及现有 Agent Loop。共用根 go.mod。<strong>本日增量：</strong>描述/执行分离、注册表、Store 适配和知识工具入口；这些文件在累计参考基线中已提供，以下是自行实现或对照完善的练习，不表示需要再次创建同名文件。</p>
-<h3>任务一 · 20 分钟：先设计工具契约</h3>
-<p><strong>为什么做：</strong>让模型选择能力和 Runtime 执行能力共用工具身份，同时保持不同职责。先写下“模型应看到哪些字段”，再看 <code>examples/internal/tool/contract.go</code>：</p>
-<pre><code>// 接口摘录，非独立可运行文件；完整定义见 contract.go。
+<section id="goal"><h2>今天只解决一个问题</h2><div class="goal"><strong>实现 Registry（工具注册表）：</strong>让 Runtime 根据工具名称，找到可以执行的工具；同时向模型提供工具说明。</div>
+<p>用户问：“查找并阅读 Runtime 工具契约。”模型无法直接访问你的资料库，需要借助搜索工具和读取工具。</p>
+<p>如果每增加一个工具，就往 Loop 中增加一个业务分支，循环很快会混入搜索、数据库和 HTTP 细节。</p>
+<p><strong>今天的设计：</strong>Loop 只按名称查表；每个工具自己处理业务。增加工具时，实现统一接口，再注册即可。</p>
+<div class="note"><strong>本日实现范围：</strong>描述与执行接口、注册表、接回旧接口的适配层。Store 和三轮对话用于理解整条线路，复用已有参考夹具，不另写搜索算法。</div>
+<p class="muted">前置概念：Model.Generate 是“请求一次模型”；Loop 是“反复请求模型并处理工具调用”；context 用来传递本次请求的取消和超时。Day 01–07 的消息与旧 Tool 接口继续使用。</p></section>
+<section id="concepts"><h2>先分清三个概念</h2><div class="card"><h3>工具说明 Spec：给模型看的“使用说明书”</h3><p>它写明工具叫什么、什么时候用、接收什么参数。</p><p>例如：get_document，按文档 ID 读取正文，参数为 <code>{"id":"doc-1"}</code>。说明本身不包含正文。</p></div>
+<div class="card"><h3>可调用工具 Invokable：真正做事的对象</h3><p><code>Meta</code> 返回说明；<code>Invoke</code> 才执行一次业务。</p><p>读取说明时不访问资料库。运行 Invoke 时，才把参数和 context 交给后端。</p></div>
+<div class="card"><h3>注册表 Registry：按名字找工具的容器</h3><p>保存“get_document → 读取工具对象”这样的对应关系。</p><p>模型给出名称后，Runtime 查询容器，不需要知道底层使用数据库还是 HTTP。</p></div>
+<h3>图 1 · 谁负责什么？</h3>
+<figure aria-label="模块职责关系图" class="flow">
+<div class="node"><strong>Model：选择能力</strong>收到名称、用途、参数格式；产出工具调用请求。</div>
+<div class="arrow">↓ Name + Arguments + 调用 ID</div>
+<div class="node"><strong>Loop：组织一次往返</strong>保存消息，按名称查询 Registry，执行工具，关联结果。</div>
+<div class="arrow">↓ Lookup(Name) 返回 Invokable</div>
+<div class="node"><strong>Registry：查名字、提供说明</strong>保存工具对象与描述快照；不处理文档业务。</div>
+<div class="arrow">↓ 工具对象收到 Invoke(ctx, Arguments)</div>
+<div class="node"><strong>Tool → Store：执行业务</strong>Tool 解析参数；Store 访问资料库并返回正文。</div>
+<figcaption class="muted">文字等价说明：模型提出意图；Loop 控制执行；Registry 解析名称；Tool 和 Store 完成后端访问。结果回到 Loop，再成为模型输入。</figcaption></figure>
+<p><strong>Store 是什么？</strong>工具需要的后端接口，例如 Search 和 Get。测试用 FakeStore，线上换成真实实现，Loop 不变。</p>
+<p><strong>为什么同时有 Spec 和工具对象？</strong>模型需要的是说明，Runtime 需要的是对象。把 Go 对象或凭据塞进模型输入没有用，也会混淆职责。</p></section>
+<section id="walkthrough"><h2>用一个输入走完运行过程</h2><p>先装配，再运行。装配是启动前接好线路；运行是处理用户的一次请求。</p>
+<div class="card"><h3>装配：只准备能力</h3><p>① Host 创建 SearchKnowledge 和 GetDocument，注入 Store。</p><p>② Register 读取每个工具的 Meta，保存描述快照与执行对象。</p><p>③ Tools 把新接口转换成旧 Tool 接口，交给 Agent.New；模型得到描述。</p><p><strong>到这里，资料库访问次数仍应是 0。</strong></p></div>
+<h3>图 2 · 从检索到回答</h3><figure class="flow" aria-label="编号运行数据流">
+<div class="node"><strong>① 用户输入</strong>“查找并阅读 Runtime 工具契约”</div>
+<div class="arrow">↓ Model.Generate(历史)</div>
+<div class="node"><strong>② 模型请求搜索</strong>ID = search-1<br>Name = search_knowledge<br>Arguments = {"query":"Runtime"}</div>
+<div class="arrow">↓ Loop 查表并执行搜索工具</div>
+<div class="node"><strong>③ 搜索结果回到模型</strong>tool 消息：ToolCallID = search-1<br>结果：doc-1 和摘要</div>
+<div class="arrow">↓ 再调用 Model.Generate(已追加结果的历史)</div>
+<div class="node"><strong>④ 模型请求读取</strong>ID = read-1<br>Name = get_document<br>Arguments = {"id":"doc-1"}</div>
+<div class="arrow">↓ Loop 查表并读取；结果关联 read-1</div>
+<div class="node"><strong>⑤ 模型收到正文后回答</strong>第三次 Generate 返回最终文本，Loop 结束。</div>
+<figcaption class="muted">文字等价说明：搜索先产生 doc-1；读取再消费 doc-1。两个调用有数据依赖，要经过模型下一轮决定，不能假定同批自动传递结果。</figcaption></figure>
+<div class="note"><strong>名称与调用 ID 不一样：</strong>名称找到哪种能力；调用 ID 对应哪一次请求。两次调用同一个工具时，结果仍须各自关联。</div>
+<h3>一个失败反例</h3><div class="node branch"><strong>请求名称是 missing_tool</strong>Lookup 返回 nil,false。Loop 按既有协议处理未知工具，不会因此去执行 get_document。</div>
+<p class="muted">脚本 Mock 能验证消息线路接对了，不能证明真实模型会选择正确工具。真实模型效果要另外验证。</p></section>
+<section id="design"><h2>字段和方法为什么这样设计？</h2><div class="card"><h3>Spec 的三个字段</h3><p><code>Name</code> 是查表键，例如 get_document；注册后保持原样，不自动修剪或更名。</p><p><code>Description</code> 说明用途，供模型选择；本课允许空字符串，但实际应写清楚。</p><p><code>InputSchema</code> 是 JSON 格式的参数说明。它是字节切片，必须复制，才能避免外部修改影响已注册描述。</p><p>本课只检查 JSON 是对象且顶层 type 为 object，不实现完整 JSON Schema 校验。实际参数仍由 Invoke 校验。</p></div>
+<div class="card"><h3>registration：一份说明，一份执行对象</h3><p><code>spec</code> 保存注册时的说明快照；<code>target</code> 保存原工具对象。</p><p>说明不再反复请求 Meta；执行时仍调用原对象。对象自身的业务状态不会被深拷贝。</p></div>
+<div class="card"><h3>Registry 的两个字段</h3><p><code>entries</code> 按名称保存 registration。重复名必须拒绝，否则同一名称可能悄悄执行另一种实现。</p><p><code>mu</code> 保护 entries 的并发读写。不要在持锁时调用外部 Meta：慢后端会阻塞所有查表操作。</p><p>锁只保护注册表，不保证注入工具的 Invoke 并发安全。Registry 使用指针传递，使用后不要复制含锁的结构体。</p></div>
+<div class="card"><h3>Register(ctx, t)：接入一个工具</h3><p>输入是本次 context 和工具对象；成功返回 nil，状态新增一项。</p><p>先检查已取消，再读取 Meta、校验说明，最后在锁内检查重名并保存。Meta 失败保留错误原因，不注册半成品。</p></div>
+<div class="card"><h3>Lookup(name) 与 Specs(visible)：两种查询</h3><p>Lookup 返回原执行对象和是否找到；不改变状态。</p><p>Specs 返回排序后的说明副本。nil 表示全部，非 nil 空切片表示一个也不展示。</p><p>例如注册 a、b，只展示 a 后，Lookup("b") 仍能找到 b。可见性不等于执行权限，授权留到 Day 11。</p></div>
+<div class="card"><h3>Adapt 与 Tools：兼容已有 Loop</h3><p>旧接口使用 Name / Definition / Execute；新接口使用 Meta / Invoke。</p><p>适配层让 Definition 返回保存的描述，让 Execute 调用 Invoke。因而 Agent.New 和 Run 无须改签名。</p><p>Tools 为全部注册对象生成一份独立 map；调用方删除其中一项，不会删除注册表里的项。</p></div>
+<div class="card"><h3>Definitions(specs)：只做字段映射</h3><p>Name → Name，Description → Description，InputSchema → Parameters。</p><p>复制 Parameters 的字节；它只生成模型描述，不调用工具，也不改变注册表。</p></div></section>
+<section id="contract"><h2>行为契约：你的实现要满足什么？</h2><p>按这些规则实现即可；测试不能额外要求隐藏算法。未约定的错误文本不必与参考代码相同。</p><div class="rule"><h3>R1 · 注册与查找</h3><p>NewRegistry 返回可用指针；Registry 零值也能查询与注册。成功注册只调用 Meta 一次，不调用 Invoke。Lookup 找不到时返回 nil,false。</p><p class="muted">验证：<code>TestDay08RegisterLookup / TestDay08ZeroValue</code></p></div><div class="rule"><h3>R2 · 注册失败不污染状态</h3><p>拒绝 nil 接口、空/纯空白名称、非法 JSON、非对象 JSON、缺少或非 object 的 type。重复名称报错并保留原对象。名称有效后原样保存；不自动修剪。Description 可为空；不承诺识别含 nil 指针的非 nil 接口。</p><p class="muted">验证：<code>TestDay08RejectInvalid / TestDay08RegisterLookup</code></p></div><div class="rule"><h3>R3 · 依赖错误与取消</h3><p>Meta 失败保留 errors.Is 可识别的原因。Register 入场时 ctx 已取消，直接返回 context.Canceled，不调用 Meta。Meta 收到原 context，负责期间的合作取消；本课不保证调用开始后的取消能回滚注册。没有独立超时配置。</p><p class="muted">验证：<code>TestDay08RejectInvalid / TestDay08CancelledRegistration</code></p></div><div class="rule"><h3>R4 · 可见集合</h3><p>Specs(nil) 全部；Specs([]string{}) 零个；选择项去重后按名称升序。未知名称报错且不返回部分结果。不修改 visible，不删除注册，不再调用 Meta 或 Invoke。</p><p class="muted">验证：<code>TestDay08Visibility</code></p></div><div class="rule"><h3>R5 · 描述快照</h3><p>注册输入、Specs 输出、Definitions 输出的 schema 字节互不共享。字段映射准确；空输入产生零个模型描述。工具对象保持原身份，修改业务状态不会得到隔离。</p><p class="muted">验证：<code>TestDay08Snapshots</code></p></div><div class="rule"><h3>R6 · 兼容桥接</h3><p>Adapt 拒绝非法输入并保存一次 Meta 快照；Name/Definition 对应原说明，Definition 返回副本。Execute 将本次 ctx、参数交给 Invoke，返回结果/错误原因。不额外重试或吞掉取消。Tools 复用注册快照、返回独立 map，并提供 DescribedTool。</p><p class="muted">验证：<code>TestDay08LegacyBridge</code></p></div><div class="rule"><h3>R7 · 并发边界</h3><p>允许不同 goroutine 注册不同工具并查询 Registry；集合不丢项且 race 检查通过。锁不覆盖业务 Invoke；fake 各自独立。</p><p class="muted">验证：<code>TestDay08ConcurrentRegistry</code></p></div></section>
+<section id="read"><h2>阅读 20 分钟 · 只找两个答案</h2><div class="time">12 分钟 · Eino 工具接口</div><p>打开 <a href="https://github.com/cloudwego/eino/blob/main/components/tool/interface.go">components/tool/interface.go</a>，定位 BaseTool.Info、InvokableTool.InvokableRun。</p><p><strong>问题：</strong>哪一个方法返回说明，哪一个真正执行？写下 Info → Meta、InvokableRun → Invoke 的职责对应。</p><p>再看 StreamableTool.StreamableRun：它返回一串结果。本课只实现单次同步调用，不加流式接口。</p><div class="time">8 分钟 · 工具节点入口</div><p>打开 <a href="https://github.com/cloudwego/eino/blob/main/compose/tool_node.go">compose/tool_node.go</a>，定位 ToolsNodeConfig.Tools 与 ToolsNode。</p><p><strong>问题：</strong>工具从哪里装配，调用与结果由谁连接？在图 1 中标出对应位置。</p><p class="muted">Eino 是对照资料，不是本课依赖。main 会变化，记录你阅读时的 commit；本文不声称本次重新核对了远端版本。</p></section>
+<section id="continuity"><h2>承接哪些文件？这次改哪些？</h2><div class="card"><h3>复用：前序稳定契约</h3><p><code>internal/model/model.go</code> 中的 ToolCall 和 ToolDefinition；<code>internal/tool/tool.go</code> 中的 Tool、DescribedTool。</p><p>共享仓库根 go.mod：<code>github.com/linko-zhao/mini-agent-runtime</code>，Go ≥ 1.22.2。测试只用标准库，不需要 API Key。</p></div>
+<div class="card"><h3>练习目标：两个实现文件，一个测试文件</h3><p><code>internal/tool/contract.go</code>：Meta/Invoke 与兼容适配。</p><p><code>internal/tool/registry.go</code>：注册、查询和说明映射。</p><p><code>internal/tool/day08_contract_test.go</code>：本页提供的新测试。</p></div>
+<p>文件已存在时，先保留你的实现。直接应用本页测试即可检查行为；已经全绿的部分无需挖空重做。</p>
+<p>想从骨架重新练习，可以使用下方的独立工作树。它仍使用同一仓库和累计模块，不覆盖当前工作区。</p>
+<div class="note"><strong>接口衔接：</strong>Meta/Invoke 新增，旧 Execute/Definition 保留。Call 复用 model.ToolCall；Tools 适配给现有 Agent.New。后续 Day 09–14 不需要更换消息类型。</div>
+<p class="muted">参考路径为 examples/internal/tool；练习路径为 internal/tool。两者各自使用对应 model 包，不能混用 Message。本文答案已将 import 前缀映射为练习路径。</p></section>
+<section id="skeleton"><h2>骨架：先有形状，再填行为</h2><p>下面是完整文件。先读字段说明；展开代码后只补 TODO。骨架中的 panic 表示“尚未实现”，不是最终错误策略。</p><h3>修改 / 新建：internal/tool/contract.go</h3><p class="download"><a download="contract.go" href="exercises/day08/contract.go.txt">下载 contract.go</a></p><details><summary>展开完整骨架：contract.go</summary><pre id="skeleton-contract-go"><code>package tool
+
+import (
+	&quot;context&quot;
+	&quot;encoding/json&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+)
+
+// Spec 是工具的说明，不保存业务数据或执行结果。
 type Spec struct {
-    Name, Description string
-    InputSchema json.RawMessage
+	Name, Description string
+	InputSchema       json.RawMessage
 }
-type Described interface { Meta(context.Context) (Spec, error) }
+type Described interface {
+	Meta(context.Context) (Spec, error)
+}
 type Invokable interface {
-    Described
-    Invoke(context.Context, json.RawMessage) (string, error)
+	Described
+	Invoke(context.Context, json.RawMessage) (string, error)
 }
-// Call 沿用 model.ToolCall；Adapt 将 Meta/Invoke 接为 Definition/Execute。</code></pre>
-<p><strong>操作与观察：</strong>用 5 分钟画接口、10 分钟实现或对照 Meta/Invoke 与 Adapt、5 分钟追踪新工具如何接进旧 Loop。复用 ToolCall，不再定义第二套 ID/Name/Arguments。</p>
-<p><strong>完成证据：</strong>能够说明 Spec 中为什么没有执行函数和凭据，以及调用 ID 为什么属于调用消息而非业务输入 schema；在适配器中找到本次 Execute context 进入 Invoke 的位置。</p>
-<h3>任务二 · 20 分钟：把能力接到注册表</h3>
-<p><strong>为什么做：</strong>模型返回的是名称；本地必须有确定的名称到对象映射，同时注册集合与模型可见集合可能不同。</p>
-<p><strong>操作与观察：</strong>用 10 分钟实现或对照 <code>examples/internal/tool/registry.go</code> 的 Register / Specs / Tools，5 分钟查看 <code>examples/internal/agent/options.go</code> 的 WithVisibleTools，5 分钟手算“注册 A、B，只展示 A”时两份集合的内容。Specs(nil) 枚举全部，非 nil 空集合枚举零个。</p>
-<p><strong>完成证据：</strong>能解释重名为何拒绝、枚举为何不执行工具、描述为何返回副本；隐藏 B 后仍能在完整注册表找到 B，因此可见过滤不能承担授权。</p>
-<h3>任务三 · 25 分钟：接入检索与读取，并走通三轮对话</h3>
-<p><strong>为什么做：</strong>检索返回文档 ID，读取消费该 ID，可直观看到“工具结果改变下一轮模型输入”。拆成两个工具是今天的教学选择，便于观察依赖；若业务总是同时需要全文，也可设计组合工具，但需重新权衡成本与灵活性。</p>
-<p><strong>操作与观察：</strong>用 10 分钟实现或对照 <code>examples/internal/tool/knowledge/tools.go</code> 的 Store / SearchKnowledge / GetDocument，10 分钟沿 <code>examples/cmd/knowledge/main.go</code> 追踪注册和三轮 Mock，5 分钟写出每次调用与结果的 ID。FakeStore 用于离线验证，实际后端接入只需实现 Store。</p>
-<p><strong>完成证据：</strong>画出 search-1 → doc-1 → read-1 的关系；指出工具返回的字符串如何成为 tool 消息，最终回答为什么还需要再调用一次模型。凭据不进入 Spec；取消 context 沿 Runtime → 工具 → Store 传递。</p>
-<h3>任务四 · 15 分钟：写出自己的设计说明</h3>
-<p><strong>为什么做：</strong>能按步骤写代码还不足以说明理解了搭建方法，需要能预测需求变化会影响哪里。</p>
-<p><strong>操作与观察：</strong>用 10 分钟在 <code>examples/internal/tool/design.md</code> 对照 Eino 映射，并补写“问题 → 分层选择 → 数据流 → 取舍”；5 分钟回答：增加一个 HTTP 工具、替换检索后端、增加执行授权，分别应该改哪一层？</p>
-<p><strong>完成证据：</strong>新工具实现 Meta/Invoke 并注册；替换后端适配 Store；授权在 Runtime 的执行入口新增检查，不能只从描述中隐藏。新增超时/重试策略时，业务工具无需承担整个执行调度。</p>
-</section>
-<section><div class="time">20 MIN · TEST &amp; REVIEW</div><h2>验证设计判断，而不仅是运行成功</h2>
-<p><strong>12 分钟：</strong>从仓库根运行下列命令，先记录预期，再核对实际结果。页面命令是学习者待执行的建议验收，不声明已经通过。</p>
-<pre><code>go test ./examples/...
+type Call = model.ToolCall
+
+func cloneSpec(s Spec) Spec { panic(&quot;TODO: cloneSpec&quot;) }
+func Adapt(ctx context.Context, t Invokable) (DescribedTool, error) {
+	panic(&quot;TODO: Adapt&quot;)
+}
+
+type legacyAdapter struct {
+	spec   Spec
+	target Invokable
+}
+
+func (t *legacyAdapter) Name() string { panic(&quot;TODO: Name&quot;) }
+func (t *legacyAdapter) Definition() model.ToolDefinition {
+	panic(&quot;TODO: Definition&quot;)
+}
+func (t *legacyAdapter) Execute(ctx context.Context, args json.RawMessage) (string, error) {
+	panic(&quot;TODO: Execute&quot;)
+}
+</code></pre><button type="button" data-copy="skeleton-contract-go">复制本文件</button></details><h3>修改 / 新建：internal/tool/registry.go</h3><p class="download"><a download="registry.go" href="exercises/day08/registry.go.txt">下载 registry.go</a></p><details><summary>展开完整骨架：registry.go</summary><pre id="skeleton-registry-go"><code>package tool
+
+import (
+	&quot;context&quot;
+	&quot;sync&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+)
+
+// spec 是描述快照；target 是真正可执行的工具。
+type registration struct {
+	spec   Spec
+	target Invokable
+}
+type Registry struct {
+	mu      sync.RWMutex
+	entries map[string]registration
+}
+
+func NewRegistry() *Registry    { panic(&quot;TODO: NewRegistry&quot;) }
+func validateSpec(s Spec) error { panic(&quot;TODO: validateSpec&quot;) }
+func (r *Registry) Register(ctx context.Context, t Invokable) error {
+	panic(&quot;TODO: Register&quot;)
+}
+func (r *Registry) Lookup(name string) (Invokable, bool) {
+	panic(&quot;TODO: Lookup&quot;)
+}
+func (r *Registry) Specs(visible []string) ([]Spec, error) {
+	panic(&quot;TODO: Specs&quot;)
+}
+func (r *Registry) Tools() map[string]Tool            { panic(&quot;TODO: Tools&quot;) }
+func Definitions(specs []Spec) []model.ToolDefinition { panic(&quot;TODO: Definitions&quot;) }
+</code></pre><button type="button" data-copy="skeleton-registry-go">复制本文件</button></details><details><summary>可选：用独立工作树从空骨架练习</summary><p>在原仓库根执行。目录名须尚不存在；这会新增练习工作树。</p><pre><code>git worktree add --detach ../mini-agent-runtime-day08-study HEAD
+cp docs/learning/exercises/day08/contract.go.txt ../mini-agent-runtime-day08-study/internal/tool/contract.go
+cp docs/learning/exercises/day08/registry.go.txt ../mini-agent-runtime-day08-study/internal/tool/registry.go
+cp docs/learning/exercises/day08/day08_contract_test.go.txt ../mini-agent-runtime-day08-study/internal/tool/day08_contract_test.go
+cd ../mini-agent-runtime-day08-study
+</code></pre><p>后续所有测试和编辑都在新工作树完成。旧包中的其余文件沿用前序基线；不要把新骨架重复粘贴到旧定义末尾。</p><p>练习完成后自行对照迁回需要的改动；当前仓库的学习者代码始终保留。</p></details></section>
+<section id="tests"><h2>完整测试：直接复制即可运行</h2><p>新增 <code>internal/tool/day08_contract_test.go</code>。不要改 import 去测试 examples；这些测试调用的就是你实现的 internal/tool。</p>
+<p>8 个顶层测试，包含非法输入和可见集合子用例。fake 在文件内完整提供；不会联网或调用真实资料库。</p>
+<p class="download"><a download="day08_contract_test.go" href="exercises/day08/day08_contract_test.go.txt">下载完整测试文件</a></p>
+<details><summary>展开完整测试文件（无需自行补充夹具）</summary><pre id="day08-tests"><code>package tool_test
+
+import (
+	&quot;context&quot;
+	&quot;encoding/json&quot;
+	&quot;errors&quot;
+	&quot;fmt&quot;
+	&quot;reflect&quot;
+	&quot;sync&quot;
+	&quot;testing&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool&quot;
+)
+
+// fake 只记录行为，不连接模型、资料库或网络。
+type day08Fake struct {
+	spec               tool.Spec
+	metaErr, invokeErr error
+	metas, invokes     int
+	gotCtx, metaCtx    context.Context
+	gotArgs            json.RawMessage
+}
+
+func day08New(name string) *day08Fake {
+	return &amp;day08Fake{spec: tool.Spec{
+		Name: name, Description: &quot;读取资料&quot;,
+		InputSchema: json.RawMessage(`{&quot;type&quot;:&quot;object&quot;}`),
+	}}
+}
+func (f *day08Fake) Meta(ctx context.Context) (tool.Spec, error) {
+	f.metas++
+	f.metaCtx = ctx
+	return f.spec, f.metaErr
+}
+func (f *day08Fake) Invoke(ctx context.Context, args json.RawMessage) (string, error) {
+	f.invokes++
+	f.gotCtx, f.gotArgs = ctx, append(json.RawMessage(nil), args...)
+	return &quot;doc-1&quot;, f.invokeErr
+}
+func day08Register(t *testing.T, r *tool.Registry, f *day08Fake) {
+	t.Helper()
+	if err := r.Register(context.Background(), f); err != nil {
+		t.Fatal(err)
+	}
+}
+func day08Names(specs []tool.Spec) []string {
+	names := make([]string, len(specs))
+	for i, s := range specs {
+		names[i] = s.Name
+	}
+	return names
+}
+
+func TestDay08RegisterLookup(t *testing.T) {
+	r := tool.NewRegistry()
+	if r == nil {
+		t.Fatal(&quot;构造函数返回 nil&quot;)
+	}
+	f := day08New(&quot;get_document&quot;)
+	type key struct{}
+	ctx := context.WithValue(context.Background(), key{}, &quot;register-1&quot;)
+	if err := r.Register(ctx, f); err != nil {
+		t.Fatal(err)
+	}
+	if f.metaCtx != ctx {
+		t.Fatal(&quot;Meta 必须收到本次注册 context&quot;)
+	}
+	if f.metas != 1 || f.invokes != 0 {
+		t.Fatal(&quot;注册只读一次说明，不执行业务&quot;)
+	}
+	got, ok := r.Lookup(&quot;get_document&quot;)
+	if !ok || got != f {
+		t.Fatal(&quot;名称应查到原工具对象&quot;)
+	}
+	if got, ok := r.Lookup(&quot;missing&quot;); ok || got != nil {
+		t.Fatal(&quot;未知工具应为 nil,false&quot;)
+	}
+	if err := r.Register(context.Background(), day08New(&quot;get_document&quot;)); err == nil {
+		t.Fatal(&quot;重复名称必须报错&quot;)
+	}
+	if got, _ := r.Lookup(&quot;get_document&quot;); got != f {
+		t.Fatal(&quot;重复注册不能覆盖原对象&quot;)
+	}
+	if f.metas != 1 || f.invokes != 0 {
+		t.Fatal(&quot;查询不得重新 Meta 或 Invoke&quot;)
+	}
+	raw := day08New(&quot; a &quot;)
+	raw.spec.Description = &quot;&quot;
+	day08Register(t, r, raw)
+	if got, ok := r.Lookup(&quot; a &quot;); !ok || got != raw {
+		t.Fatal(&quot;合法名称应保持原样，说明允许为空&quot;)
+	}
+}
+
+func TestDay08RejectInvalid(t *testing.T) {
+	for _, tc := range []struct{ name, toolName, schema string }{
+		{&quot;empty-name&quot;, &quot;&quot;, `{&quot;type&quot;:&quot;object&quot;}`},
+		{&quot;blank-name&quot;, &quot; \t&quot;, `{&quot;type&quot;:&quot;object&quot;}`},
+		{&quot;bad-json&quot;, &quot;x&quot;, `{`},
+		{&quot;null-schema&quot;, &quot;x&quot;, `null`},
+		{&quot;array-schema&quot;, &quot;x&quot;, `[]`},
+		{&quot;wrong-type&quot;, &quot;x&quot;, `{&quot;type&quot;:&quot;string&quot;}`},
+		{&quot;missing-type&quot;, &quot;x&quot;, `{}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := tool.NewRegistry()
+			f := day08New(tc.toolName)
+			f.spec.InputSchema = json.RawMessage(tc.schema)
+			if err := r.Register(context.Background(), f); err == nil {
+				t.Fatal(&quot;非法说明被接受&quot;)
+			}
+			specs, err := r.Specs(nil)
+			if err != nil || len(specs) != 0 || f.invokes != 0 {
+				t.Fatal(&quot;失败注册污染了状态&quot;)
+			}
+			if _, err := tool.Adapt(context.Background(), f); err == nil {
+				t.Fatal(&quot;Adapt 也应校验说明&quot;)
+			}
+		})
+	}
+	r := tool.NewRegistry()
+	if err := r.Register(context.Background(), nil); err == nil {
+		t.Fatal(&quot;应拒绝 nil 接口&quot;)
+	}
+	if _, err := tool.Adapt(context.Background(), nil); err == nil {
+		t.Fatal(&quot;Adapt 应拒绝 nil 接口&quot;)
+	}
+	sentinel := errors.New(&quot;metadata unavailable&quot;)
+	f := day08New(&quot;x&quot;)
+	f.metaErr = sentinel
+	if err := r.Register(context.Background(), f); !errors.Is(err, sentinel) {
+		t.Fatalf(&quot;丢失原因: %v&quot;, err)
+	}
+	if _, err := tool.Adapt(context.Background(), f); !errors.Is(err, sentinel) {
+		t.Fatalf(&quot;丢失原因: %v&quot;, err)
+	}
+	specs, err := r.Specs(nil)
+	if err != nil || len(specs) != 0 {
+		t.Fatal(&quot;Meta 失败不得注册&quot;)
+	}
+}
+
+func TestDay08CancelledRegistration(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	r, f := tool.NewRegistry(), day08New(&quot;x&quot;)
+	if err := r.Register(ctx, f); !errors.Is(err, context.Canceled) {
+		t.Fatalf(&quot;取消原因错误: %v&quot;, err)
+	}
+	if f.metas != 0 || f.invokes != 0 {
+		t.Fatal(&quot;已取消时不得调用工具&quot;)
+	}
+	if _, ok := r.Lookup(&quot;x&quot;); ok {
+		t.Fatal(&quot;已取消调用不应注册&quot;)
+	}
+}
+
+func TestDay08Visibility(t *testing.T) {
+	r := tool.NewRegistry()
+	a, b := day08New(&quot;a&quot;), day08New(&quot;b&quot;)
+	day08Register(t, r, b)
+	day08Register(t, r, a)
+	for _, tc := range []struct {
+		name          string
+		visible, want []string
+	}{
+		{&quot;all&quot;, nil, []string{&quot;a&quot;, &quot;b&quot;}},
+		{&quot;none&quot;, []string{}, []string{}},
+		{&quot;one&quot;, []string{&quot;b&quot;}, []string{&quot;b&quot;}},
+		{&quot;sorted-deduplicated&quot;, []string{&quot;b&quot;, &quot;a&quot;, &quot;b&quot;}, []string{&quot;a&quot;, &quot;b&quot;}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			before := append([]string(nil), tc.visible...)
+			got, err := r.Specs(tc.visible)
+			if err != nil || !reflect.DeepEqual(day08Names(got), tc.want) {
+				t.Fatalf(&quot;got %v, %v&quot;, day08Names(got), err)
+			}
+			if len(before) &gt; 0 &amp;&amp; !reflect.DeepEqual(before, tc.visible) {
+				t.Fatal(&quot;修改了调用方 visible&quot;)
+			}
+		})
+	}
+	if got, err := r.Specs([]string{&quot;a&quot;, &quot;missing&quot;}); err == nil || len(got) != 0 {
+		t.Fatal(&quot;未知名称应报错且不返回部分结果&quot;)
+	}
+	if got, ok := r.Lookup(&quot;a&quot;); !ok || got != a {
+		t.Fatal(&quot;可见性筛选不能删除执行对象&quot;)
+	}
+	if a.invokes+b.invokes != 0 || a.metas+b.metas != 2 {
+		t.Fatal(&quot;列说明应只使用快照&quot;)
+	}
+}
+
+func TestDay08Snapshots(t *testing.T) {
+	r, f := tool.NewRegistry(), day08New(&quot;a&quot;)
+	day08Register(t, r, f)
+	f.spec.Name, f.spec.Description = &quot;changed&quot;, &quot;changed&quot;
+	f.spec.InputSchema[0] = &#x27;x&#x27;
+	specs, err := r.Specs(nil)
+	if err != nil || len(specs) != 1 || specs[0].Name != &quot;a&quot; || specs[0].Description != &quot;读取资料&quot; || !json.Valid(specs[0].InputSchema) {
+		t.Fatalf(&quot;未复制注册输入: %+v, %v&quot;, specs, err)
+	}
+	specs[0].Name, specs[0].Description, specs[0].InputSchema[0] = &quot;bad&quot;, &quot;bad&quot;, &#x27;x&#x27;
+	again, err := r.Specs(nil)
+	if err != nil || again[0].Name != &quot;a&quot; || again[0].Description != &quot;读取资料&quot; || !json.Valid(again[0].InputSchema) {
+		t.Fatal(&quot;Specs 未深拷贝&quot;)
+	}
+	defs := tool.Definitions(again)
+	if len(defs) != 1 || defs[0].Name != &quot;a&quot; || defs[0].Description != &quot;读取资料&quot; || string(defs[0].Parameters) != string(again[0].InputSchema) {
+		t.Fatal(&quot;Definitions 字段映射错误&quot;)
+	}
+	defs[0].Parameters[0] = &#x27;x&#x27;
+	if !json.Valid(again[0].InputSchema) {
+		t.Fatal(&quot;Definitions 共享了 schema&quot;)
+	}
+	empty := tool.Definitions(nil)
+	if len(empty) != 0 {
+		t.Fatal(&quot;空输入应生成零个描述&quot;)
+	}
+}
+
+func TestDay08LegacyBridge(t *testing.T) {
+	ctx := context.Background()
+	f := day08New(&quot;a&quot;)
+	adapted, err := tool.Adapt(ctx, f)
+	if err != nil || adapted == nil {
+		t.Fatalf(&quot;Adapt: %v&quot;, err)
+	}
+	if f.metas != 1 || f.invokes != 0 {
+		t.Fatal(&quot;适配只读取说明&quot;)
+	}
+	f.spec.InputSchema[0] = &#x27;x&#x27;
+	if adapted.Name() != &quot;a&quot; {
+		t.Fatal(&quot;Name 映射错误&quot;)
+	}
+	def := adapted.Definition()
+	if def.Name != &quot;a&quot; || def.Description != &quot;读取资料&quot; || !json.Valid(def.Parameters) {
+		t.Fatal(&quot;适配时未保存描述快照&quot;)
+	}
+	def.Parameters[0] = &#x27;x&#x27;
+	if !json.Valid(adapted.Definition().Parameters) {
+		t.Fatal(&quot;Definition 未深拷贝&quot;)
+	}
+	type requestKey struct{}
+	runCtx := context.WithValue(ctx, requestKey{}, &quot;run-1&quot;)
+	args := json.RawMessage(`{&quot;id&quot;:&quot;doc-1&quot;}`)
+	got, err := adapted.Execute(runCtx, args)
+	if err != nil || got != &quot;doc-1&quot; || f.gotCtx != runCtx || string(f.gotArgs) != string(args) || f.invokes != 1 {
+		t.Fatal(&quot;Execute 必须把本次 context/参数传给 Invoke，并返回其结果&quot;)
+	}
+	sentinel := errors.New(&quot;backend failure&quot;)
+	f.invokeErr = sentinel
+	if _, err := adapted.Execute(runCtx, args); !errors.Is(err, sentinel) {
+		t.Fatal(&quot;Execute 丢失错误原因&quot;)
+	}
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	_, _ = adapted.Execute(cancelled, args)
+	if f.gotCtx != cancelled {
+		t.Fatal(&quot;适配器必须保留取消的 context，下游负责合作取消&quot;)
+	}
+
+	r, g := tool.NewRegistry(), day08New(&quot;b&quot;)
+	day08Register(t, r, g)
+	tools := r.Tools()
+	if len(tools) != 1 || tools[&quot;b&quot;] == nil || tools[&quot;b&quot;].Name() != &quot;b&quot; {
+		t.Fatal(&quot;Tools 应提供完整旧接口映射&quot;)
+	}
+	described, ok := tools[&quot;b&quot;].(tool.DescribedTool)
+	if !ok || described.Definition().Name != &quot;b&quot; {
+		t.Fatal(&quot;旧接口仍须提供描述&quot;)
+	}
+	if g.metas != 1 || g.invokes != 0 {
+		t.Fatal(&quot;Tools 不得再次读取 Meta 或执行&quot;)
+	}
+	out, err := tools[&quot;b&quot;].Execute(runCtx, args)
+	if err != nil || out != &quot;doc-1&quot; || g.gotCtx != runCtx || string(g.gotArgs) != string(args) {
+		t.Fatal(&quot;Tools 适配丢失执行输入/输出&quot;)
+	}
+	delete(tools, &quot;b&quot;)
+	day08Register(t, r, day08New(&quot;c&quot;))
+	if len(tools) != 0 || len(r.Tools()) != 2 {
+		t.Fatal(&quot;Tools 应返回独立 map 快照&quot;)
+	}
+}
+
+func TestDay08ZeroValue(t *testing.T) {
+	var r tool.Registry
+	specs, err := r.Specs(nil)
+	if err != nil || len(specs) != 0 || len(r.Tools()) != 0 {
+		t.Fatal(&quot;零值应可查询&quot;)
+	}
+	day08Register(t, &amp;r, day08New(&quot;a&quot;))
+	if _, ok := r.Lookup(&quot;a&quot;); !ok {
+		t.Fatal(&quot;零值应可注册&quot;)
+	}
+}
+
+func TestDay08ConcurrentRegistry(t *testing.T) {
+	r := tool.NewRegistry()
+	var wg sync.WaitGroup
+	for i := 0; i &lt; 12; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			// 每个 goroutine 有独立 fake；不并发执行同一个 fake。
+			name := fmt.Sprintf(&quot;tool-%02d&quot;, i)
+			if err := r.Register(context.Background(), day08New(name)); err != nil {
+				t.Error(err)
+				return
+			}
+			if _, ok := r.Lookup(name); !ok {
+				t.Errorf(&quot;丢失 %s&quot;, name)
+			}
+			if _, err := r.Specs(nil); err != nil {
+				t.Error(err)
+			}
+			_ = r.Tools()
+		}(i)
+	}
+	wg.Wait()
+	specs, err := r.Specs(nil)
+	if err != nil || len(specs) != 12 {
+		t.Fatalf(&quot;并发注册丢失数据: %d, %v&quot;, len(specs), err)
+	}
+}
+</code></pre><button type="button" data-copy="day08-tests">复制完整测试</button></details>
+<div class="note"><strong>先确认骨架可编译：</strong>下一条命令不运行测试，只检查 package 和签名是否一致。</div><pre><code>go test ./internal/tool -run &#x27;^$&#x27;
+go test ./internal/tool -run &#x27;^TestDay08&#x27; -count=1 -v</code></pre><p><strong>预期红灯：</strong>第一条退出码 0；第二条运行 TestDay08RegisterLookup，并在 NewRegistry 的 TODO 处失败。补完构造函数后，会继续暴露下一个待实现行为。</p>
+<p>如果出现“找不到包”、语法错误或“no tests to run”，先修环境、路径和文件名；这些不算行为红灯。已有实现可能直接全绿，这是已有能力的证据。</p></section>
+<section id="tasks"><h2>按测试一步步实现</h2><div class="time">编码 80 分钟 · 一次只做一张任务卡</div><p>下面每条命令均从练习仓库根执行。失败时只看本步规则与断言，再按需展开提示。</p><article class="step"><h3>1 · 15 分钟：先能保存与找到一个工具</h3><p><strong>位置：</strong><code>cloneSpec、NewRegistry、Register、Lookup、validateSpec</code>。</p><p><strong>动作：</strong>从 get_document 注册成功 → Lookup 返回同一个对象开始；再补重复名、非法说明和已取消入口。先实现描述的字节复制；零值注册时按需初始化 map。非法说明的完整测试在第 4 步与适配层一起验收。</p><pre><code>go test ./internal/tool -run &#x27;^TestDay08(RegisterLookup|CancelledRegistration)$&#x27; -count=1 -v</code></pre><p><strong>完成证据：</strong>注册只读一次 Meta，失败不污染状态。</p><details><summary>卡住时再看提示</summary><p>先收集输入与校验结果，再进入临界区；锁内必须同时完成重名检查与写入。</p></details></article><article class="step"><h3>2 · 20 分钟：把“能执行”与“给模型看”分开</h3><p><strong>位置：</strong><code>Specs</code>。</p><p><strong>动作：</strong>注册 b、a；nil 返回 a、b，空集合返回零项；选 b 只返回 b。未知名称报错且无部分结果，不能改输入切片。</p><pre><code>go test ./internal/tool -run &#x27;^TestDay08(Visibility)$&#x27; -count=1 -v</code></pre><p><strong>完成证据：</strong>筛选后 Lookup("a") 仍能找到对象；Specs 不重新 Meta，不执行 Invoke。</p><details><summary>卡住时再看提示</summary><p>先确定要看的名称，再去重排序和查表；不要直接排序调用方的切片。</p></details></article><article class="step"><h3>3 · 15 分钟：保护描述快照</h3><p><strong>位置：</strong><code>cloneSpec、Register、Specs、Definitions</code>。</p><p><strong>动作：</strong>修改原 schema 或返回的 schema，下一次查询仍得到合法 JSON；Name/Description 也保留注册时值。</p><pre><code>go test ./internal/tool -run &#x27;^TestDay08(Snapshots)$&#x27; -count=1 -v</code></pre><p><strong>完成证据：</strong>注册输入、查询结果和模型 Parameters 的字节互不共享。</p><details><summary>卡住时再看提示</summary><p>复制结构体还不够：json.RawMessage 是切片，需要独立底层字节。</p></details></article><article class="step"><h3>4 · 20 分钟：接回第一周接口</h3><p><strong>位置：</strong><code>Adapt、legacyAdapter 的三个方法、Tools</code>。</p><p><strong>动作：</strong>构造时只读取 Meta；执行时传入当前 ctx 和 {"id":"doc-1"}，得到 doc-1。错误原因原样可识别。</p><pre><code>go test ./internal/tool -run &#x27;^TestDay08(RejectInvalid|LegacyBridge)$&#x27; -count=1 -v</code></pre><p><strong>完成证据：</strong>新工具通过旧 Tool/DescribedTool 接口可用；改返回 map 不改 Registry。</p><details><summary>卡住时再看提示</summary><p>Name/Definition 读取快照；Execute 是一层转发。Tools 不要重复调用 Meta。</p></details></article><article class="step"><h3>5 · 10 分钟：检查并发并整理代码</h3><p><strong>位置：</strong><code>Registry 锁的范围、错误分支、辅助函数</code>。</p><p><strong>动作：</strong>并发注册 12 个不同名称，最后得到 12 项；读写没有数据竞争。然后整理重复校验和复制逻辑。</p><pre><code>go test ./internal/tool -run &#x27;^TestDay08(ZeroValue|ConcurrentRegistry)$&#x27; -count=1 -v</code></pre><p><strong>完成证据：</strong>目标并发测试和全部 Day08 测试通过；尚未实现前不要先运行整个包要求全绿。</p><details><summary>卡住时再看提示</summary><p>读路径用读锁，写路径用写锁。不要把外部 Meta/Invoke 包进注册表锁。</p></details></article><p>第 5 步另外运行：</p><pre><code>go test -race ./internal/tool -run &#x27;^TestDay08ConcurrentRegistry$&#x27; -count=1</code></pre></section>
+<section id="review"><h2>测试与复盘 20 分钟</h2><div class="time">12 分钟 · 从目标测试到累计回归</div><pre><code>go test ./internal/tool -run &#x27;^TestDay08&#x27; -count=1 -v
+go test -race ./internal/tool -run &#x27;^TestDay08&#x27; -count=1
+go test ./...
 go test -race ./examples/...
-go run ./examples/cmd/knowledge</code></pre>
-<p>离线 Demo 预期打印“本轮模型可见工具： 2”和“工具描述供模型选择，调用由 Runtime 执行。”；这证明预设消息能走通 Loop，不能代替真实模型的工具选择评估。race 检查也仅覆盖实际运行到的路径。</p>
-<table><thead><tr><th>检查位置</th><th>观察行为</th><th>说明的设计</th></tr></thead><tbody>
-<tr><td>tool/registry_test.go</td><td>TestRegistryContract 拒绝空名/重名、稳定枚举、返回副本、枚举不执行</td><td>能力发现与执行解耦，名称映射不能被静默覆盖</td></tr>
-<tr><td>同文件</td><td>TestAdaptPreservesInvocationContext 保留本次执行 context</td><td>适配接口不应切断取消与超时传播</td></tr>
-<tr><td>tool/knowledge/tools_test.go</td><td>TestStoreAdapters 检查 Meta 不访问 Store，非法参数和已取消调用不访问后端</td><td>描述阶段无业务访问，执行入口维护参数边界</td></tr>
-</tbody></table>
-<p class="muted">表中路径均相对 examples/internal。断言通过说明对应边界有验证证据，不等于权限、生产后端或真实模型效果已得到验证。</p>
-<p><strong>8 分钟复盘：</strong>先自己回答，再展开参考思路。</p>
-<details><summary>为什么模型返回 ToolCall 后，还需要 Runtime？</summary><p>ToolCall 只表达名称、参数与 ID；Runtime 找到本地实现、执行并关联结果，把 assistant/tool 消息保留到下一轮历史。后端调用不会因为模型生成了名称而自动发生。</p></details>
-<details><summary>换检索后端和增加一种工具，分别改哪里？</summary><p>换后端实现 Store；新能力实现 Meta/Invoke 并注册，必要时调整模型可见配置。两者都不应要求在 Loop 中新增业务 switch。</p></details>
-<details><summary>隐藏工具为什么不能保证它不会被执行？</summary><p>当前过滤只改变发给模型的描述，完整执行表没有删除该能力。脚本模型或异常请求仍可能返回其名称；执行授权需在调用前检查，留到 Day 11。</p></details>
-<h3>交互清单</h3><div class="meta"><span>进度保存在本浏览器 localStorage</span><span id="count"></span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div><div id="checks"></div>
-</section>
-<section><h2>完成定义与下一步</h2>
-<p><strong>理解验收：</strong>合上代码，用自己的话画出“描述 → 模型调用 → 本地执行 → 结果回填 → 下一轮模型”，说明每层为何存在；面对“接入一个 HTTP 工具”能指出新增与复用位置，并解释一个取舍。</p>
-<p><strong>实作验收：</strong>沿累计示例完成或对照接口、注册、Store 与三轮 Mock 往返，记录测试实际结果和仍不理解的环节。只运行 Demo 尚不足以完成理解验收；尚未完成编码也不阻止学习后续设计。</p>
-<p><strong>Day 09 为什么接着学执行器：</strong>今天解决“单个能力如何被发现和调用”；当模型一次返回多条调用时，还需统一检查调用 ID、安排执行、处理失败并组装结果。下一天将研究类似 ToolsNode 的批次执行边界，复用今天的工具契约。</p>
-</section><footer>Agent Runtime · 56 天课程 · 离线内容可读，官方源码链接需联网</footer></main><script>const items=["阅读 Eino BaseTool/InvokableTool/StreamableTool","画出工具进入 Agent Loop 的完整数据流","定义描述与执行接口","完成工具注册与本轮可见集合","用 Store 接口适配检索和文档读取","写出与 Eino 接口的对应关系","运行 examples 测试与离线知识工具 Demo 并记录结果","回答复盘问题，准备 Day 09 调度器"],key="mini-agent-runtime-day-08-checklist-v2";let saved=[];try{const v=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(v))saved=v}catch(_){}const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const p=Math.round(n/items.length*100);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=p+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(p))}items.forEach((s,i)=>{const r=document.createElement("div");r.className="check";const c=document.createElement("input");c.type="checkbox";c.id="task-"+i;c.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=c.id;label.textContent=s;r.append(c,label);box.append(r);c.onchange=()=>{saved[i]=c.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();</script></body></html>
+go run ./examples/cmd/knowledge</code></pre><p>先让自己的 Day08 测试全绿，再运行累计回归。examples 的通过结果只说明参考基线可用，不能替代前两条对你实现的检查。</p>
+<p>knowledge 演示预期出现“本轮模型可见工具： 2”，最后返回“工具描述供模型选择，调用由 Runtime 执行。”；它使用脚本模型，不需要真实 API。</p>
+<div class="time">8 分钟 · 合上代码解释</div><ol><li>模型请求 get_document 时，谁查表，谁执行，谁把结果交回模型？</li><li>为什么隐藏一个工具以后，查表仍然能找到它？增加执行权限应该放在哪个边界？</li><li>把资料库换成 HTTP 服务，需要改 Store 实现还是 Loop？为什么？</li></ol>
+<details><summary>完成回答后再看参考思路</summary><p>Loop 查 Registry 并控制往返；Tool 调用 Store 执行业务。名称定位能力，ToolCallID 定位本次结果。</p><p>可见集合只改变模型说明，不删除执行对象。执行授权要在调用前单独检查。</p><p>替换后端适配 Store；Loop 仍处理相同的工具协议，无需增加 HTTP 业务分支。</p></details>
+<h3>完成定义</h3><p><strong>实现：</strong>8 个 Day08 测试及其子用例通过，race 通过；记录累计回归与演示的真实结果。不能只勾清单或运行答案。</p><p><strong>理解：</strong>不看代码讲完一次搜索 → 读取 → 回答，并能说明换后端和加授权时修改哪一层。</p>
+<h3>本次发布验证</h3><div id="verification" class="note"><p>2026-11-09 · Go 1.22.2：骨架编译通过；目标测试在 TODO: NewRegistry 处按预期失败。</p><p>同一套测试对兼容参考实现通过（含 race）；五步任务分别验证通过。兼容参考副本 go test ./...、当前 examples 普通与 race 回归、knowledge 演示均通过。</p><p>Chromium 的 1280px / 390px 离线检查通过；复制、键盘折叠和清单保存正常。<a href="exercises/day08/README.md">查看验证范围与附件说明</a>。</p><p><strong>你的当前实现未被修改或验证。</strong>真实模型与网络后端不在本次验证范围。</p></div>
+<h3>学习清单</h3><p class="muted">新版任务单独保存进度；不会把旧版勾选当成新练习完成。</p><div class="meta"><span>本浏览器自评进度</span><span id="count">0 / 8</span></div><div id="bar" class="progress" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="fill" class="fill"></div></div><div id="checks"></div><noscript><p>JavaScript 未启用：可阅读全部内容、展开代码并手动复制；进度不会自动保存。</p></noscript></section>
+<section id="answer"><h2>最后再看参考答案</h2><p>先自己完成；下面是累计参考基线的完整实现，import 已映射到练习路径。内部写法可不同，只要满足同一行为契约。</p><details><summary>查看参考实现：contract.go 与 registry.go</summary><h3>contract.go</h3><pre><code>package tool
+
+import (
+	&quot;context&quot;
+	&quot;encoding/json&quot;
+	&quot;fmt&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+)
+
+// Spec 只包含供模型选择能力的元信息，不含执行函数或凭据。
+type Spec struct {
+	Name, Description string
+	InputSchema       json.RawMessage
+}
+type Described interface {
+	Meta(context.Context) (Spec, error)
+}
+type Invokable interface {
+	Described
+	Invoke(context.Context, json.RawMessage) (string, error)
+}
+
+// Call 沿用最早建立的 ToolCall 数据结构，避免第二套调用协议。
+type Call = model.ToolCall
+
+func cloneSpec(s Spec) Spec { s.InputSchema = append(json.RawMessage(nil), s.InputSchema...); return s }
+
+// Adapt 将 Day 08 能力接入 Day 01 的 Tool/DescribedTool，元信息在适配时快照。
+// Invoke 仍接收每次执行的 context，而非构造时的 context。
+func Adapt(ctx context.Context, t Invokable) (DescribedTool, error) {
+	if t == nil {
+		return nil, fmt.Errorf(&quot;tool: nil invokable&quot;)
+	}
+	s, err := t.Meta(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err = validateSpec(s); err != nil {
+		return nil, err
+	}
+	return &amp;legacyAdapter{spec: cloneSpec(s), target: t}, nil
+}
+
+type legacyAdapter struct {
+	spec   Spec
+	target Invokable
+}
+
+func (t *legacyAdapter) Name() string { return t.spec.Name }
+func (t *legacyAdapter) Definition() model.ToolDefinition {
+	return model.ToolDefinition{Name: t.spec.Name, Description: t.spec.Description, Parameters: append(json.RawMessage(nil), t.spec.InputSchema...)}
+}
+func (t *legacyAdapter) Execute(ctx context.Context, args json.RawMessage) (string, error) {
+	return t.target.Invoke(ctx, args)
+}
+</code></pre><h3>registry.go</h3><pre><code>package tool
+
+import (
+	&quot;context&quot;
+	&quot;encoding/json&quot;
+	&quot;fmt&quot;
+	&quot;sort&quot;
+	&quot;strings&quot;
+	&quot;sync&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+)
+
+type registration struct {
+	spec   Spec
+	target Invokable
+}
+
+// Registry 保存完整执行集合。Specs 为模型可见集合的独立快照，不授予执行权限。
+type Registry struct {
+	mu      sync.RWMutex
+	entries map[string]registration
+}
+
+func NewRegistry() *Registry { return &amp;Registry{entries: make(map[string]registration)} }
+func validateSpec(s Spec) error {
+	if strings.TrimSpace(s.Name) == &quot;&quot; {
+		return fmt.Errorf(&quot;tool: empty name&quot;)
+	}
+	var schema map[string]any
+	if err := json.Unmarshal(s.InputSchema, &amp;schema); err != nil || schema[&quot;type&quot;] != &quot;object&quot; {
+		return fmt.Errorf(&quot;tool %q: expected object input schema&quot;, s.Name)
+	}
+	return nil
+}
+
+// Register 读取一次元信息；不调用 Invoke。重复名称绝不覆盖。
+func (r *Registry) Register(ctx context.Context, t Invokable) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if t == nil {
+		return fmt.Errorf(&quot;tool: nil invokable&quot;)
+	}
+	s, err := t.Meta(ctx)
+	if err != nil {
+		return err
+	}
+	if err = validateSpec(s); err != nil {
+		return err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.entries == nil {
+		r.entries = make(map[string]registration)
+	}
+	if _, exists := r.entries[s.Name]; exists {
+		return fmt.Errorf(&quot;tool: duplicate name %q&quot;, s.Name)
+	}
+	r.entries[s.Name] = registration{spec: cloneSpec(s), target: t}
+	return nil
+}
+func (r *Registry) Lookup(name string) (Invokable, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	entry, ok := r.entries[name]
+	return entry.target, ok
+}
+
+// Specs(nil) 枚举全部；非 nil 空切片返回空集合。未知名称返回错误。
+// 返回值按名称排序且深拷贝 Schema；调用方修改不会改变注册表。
+func (r *Registry) Specs(visible []string) ([]Spec, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	names := append([]string(nil), visible...)
+	if visible == nil {
+		for name := range r.entries {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	out := make([]Spec, 0, len(names))
+	last := &quot;&quot;
+	for _, name := range names {
+		if name == last {
+			continue
+		}
+		last = name
+		e, ok := r.entries[name]
+		if !ok {
+			return nil, fmt.Errorf(&quot;tool: unregistered name %q&quot;, name)
+		}
+		out = append(out, cloneSpec(e.spec))
+	}
+	return out, nil
+}
+
+// Tools 为旧 Agent 构造 API 提供所有已注册工具的适配快照。
+func (r *Registry) Tools() map[string]Tool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make(map[string]Tool, len(r.entries))
+	for name, e := range r.entries {
+		out[name] = &amp;legacyAdapter{spec: cloneSpec(e.spec), target: e.target}
+	}
+	return out
+}
+func Definitions(specs []Spec) []model.ToolDefinition {
+	defs := make([]model.ToolDefinition, 0, len(specs))
+	for _, s := range specs {
+		defs = append(defs, model.ToolDefinition{Name: s.Name, Description: s.Description, Parameters: append(json.RawMessage(nil), s.InputSchema...)})
+	}
+	return defs
+}
+</code></pre></details><h3>接下来为什么学 Day 09？</h3><p>今天解决“单个工具怎样描述、注册、查找与执行”。模型一次返回多个调用后，还需要整批检查调用 ID、组织结果和处理失败。</p><p>Day 09 复用今天的接口，继续设计批次执行边界，不再创建一套工具协议。</p><p><a href="agent-runtime-day-09.html">继续 Day 09</a> · <a href="agent-runtime-day-07.html">回看 Day 07</a></p></section>
+<footer><a href="../../index.html">返回学习首页</a> · Day 08 / 56 · 正文与图示离线可读</footer></main>
+<script>
+const items=["用自己的话解释Spec、Invoke与Registry","根据两张图讲完整工具往返","读Eino并写下接口职责映射","骨架能编译，目标测试出现预期红灯","完成注册、查询、可见集合和快照","完成旧接口适配并保留本次context","运行Day08目标测试、race与累计回归","合上代码回答三个设计问题"];
+const key="mini-agent-runtime-day-08-tdd-v3";let saved=[];try{const v=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(v))saved=v}catch(_){}
+const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const p=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=p+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(p))}
+items.forEach((s,i)=>{const r=document.createElement("div");r.className="check";const c=document.createElement("input");c.type="checkbox";c.id="task-"+i;c.checked=!!saved[i];const l=document.createElement("label");l.htmlFor=c.id;l.textContent=s;r.append(c,l);box.append(r);c.onchange=()=>{saved[i]=c.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+document.querySelectorAll("button[data-copy]").forEach(b=>{b.addEventListener("click",async()=>{const value=document.getElementById(b.dataset.copy).textContent;try{await navigator.clipboard.writeText(value);b.textContent="已复制"}catch(_){const range=document.createRange();range.selectNodeContents(document.getElementById(b.dataset.copy));const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);b.textContent="已选中，请手动复制"}})});
+</script></body></html>

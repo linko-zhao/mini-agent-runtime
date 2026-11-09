@@ -164,3 +164,20 @@ Run 保存 assistant 后先校验整批调用 ID/名称，再做整批授权；�
 授权拒绝矩阵缺少远端能力的宿主规则，而两个描述仍对模型可见，验证默认拒绝。初始化/list属于装配流量，零执行断言只针对业务tools/call。审计允许决策不代表执行承诺。超时夹具在转发前等待，远端Invoke=0仅是该注入点的观测；损坏响应夹具先调用Server，表明协议失败无法回滚调用。本课没有外部写入事务。
 
 官方Go1.22.2下目标矩阵7个子场景与累计 go test ./examples/...、go test -race ./examples/... 均通过。后续Day15起按既定状态机/Checkpoint路线增量设计，复用此矩阵；当前Run局部消息不能提供跨进程恢复，保存状态也不自动解决不确定外部调用或exactly-once。
+
+## 易读与 TDD 教学交付
+
+后续页面同时遵守 [每日教学交付规范](../docs/learning/daily-lesson-standard.md) 和课程计划的“易读讲解与测试先行交付”。参考基线继续累计演进；练习面向学习者根 internal/cmd，测试必须指向实际练习目标。页面先给可编译 TODO 骨架、完整测试及分步命令，参考实现最后默认折叠。自动生成不得覆盖学习者代码。新契约需同步说明两套路径与类型的映射，不混用 model.Message；测试、夹具和前置依赖须一并交付并验证红/绿行为。
+
+Day 08 已提供 [图解与 TDD 样板](../docs/learning/agent-runtime-day-08.html) 和 [完整附件及验证记录](../docs/learning/exercises/day08/README.md)。本次只改教学交付，不更换稳定接口或修改学习者实现；后续页面按这一结构增量演进。
+
+## Day 09–15 易读 TDD 版增量（2026-11-09）
+
+学习页与 `docs/learning/exercises/manifest.json` 定义了当天目标、完整骨架、测试及参考附件。`prepare.py` 仅在仓库外复制同一个累计模块并映射前置依赖；当天目标使用 TODO，不修改原 internal/cmd。`verify.py` 用原样附件验证可编译红灯与兼容参考绿灯，测试指向练习 internal，不绕到 examples。
+
+- **Day 09/11**：原 executeBatch 中授权段提取为私有 `authorizeBatch(ctx,calls,step) error`，仍在整批 ID/名称检查之后、首个 Execute 之前调用；公开 Agent API、事件、错误语义不变。Day 09 提供兼容插槽，Day 11 单独练习 access.go 与该插槽；旧版本迁移时移动授权段，不能同时保留两份授权循环。
+- **Day 10/12/13**：稳定接口与错误策略不变；教学附件补充边界断言，重试等待取消改用可控 context 同步，不依赖 sleep。页面包含完整原样文件和分步命令。
+- **Day 14**：新增 `examples/internal/assembly` 的宿主装配入口，不新增 Runtime 协议。`Build(ctx,Config)(*Runtime,error)` 顺序完成 Client 初始化、完整发现、新 Registry、逐项 Policy、可信 Authorizer 与 Agent.New。Config.Visible 保持 nil=全部、非 nil 空集合=零描述；失败不返回部分 Runtime，但不回滚初始化流量。调用者提供尚未初始化的 Transport 并负责真实资源关闭。原 integration/week02_test.go 的七场景继续保留，新增 Build 的完整集成测试。
+- **Day 15**：新增 `examples/internal/runstate` 的纯内存状态机。`New(runID,input,maxSteps)(State,error)` 与 `Advance(State,Event)(State,error)` 复用 model.Message/ToolCall/Response；阶段为 Ready、ModelRunning、ToolsPending、ToolsRunning、Completed、Failed、Cancelled。只有 StartModel 增加模型轮次；工具结果严格按 Pending ID/顺序配对；所有切片深拷贝，错误返回零 State 且原输入不变。Event 是转换输入，与 agent.Event 观测信号区分。旧 Run 尚未接入此状态机；没有持久化、Checkpoint、重放或恢复承诺。
+
+后续章节继续复用上述状态语义，先明确状态驱动/保存/恢复的边界，不把内存快照当成可靠恢复协议。实际验证范围见 `docs/learning/exercises/README.md` 与 verification.json。

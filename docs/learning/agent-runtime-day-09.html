@@ -1,112 +1,362 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Day 09 · Agent 工具调度与 Eino ToolsNode</title><style>
-:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#58667b;--line:#e0e6ee;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:920px;margin:auto;padding:32px 22px 70px}.hero{background:#183561;color:#fff;border-radius:18px;padding:29px 30px}.hero small{opacity:.8;letter-spacing:1px}.hero h1{margin:7px 0;font-size:30px;line-height:1.3}.hero p{margin:0;color:#e6eefa}.chips{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}.chip{border:1px solid #8ea4c8;border-radius:20px;padding:3px 10px;font-size:12px}section{background:var(--paper);border:1px solid var(--line);border-radius:14px;margin-top:18px;padding:22px 26px}h2{font-size:19px;margin:0 0 13px}h3{font-size:16px;margin:18px 0 6px}.time{font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.4px}p{margin:8px 0}a{color:var(--accent)}li{margin:6px 0}code{background:#f0f3f8;padding:2px 5px;border-radius:4px}pre{overflow:auto;background:#142136;color:#e7f3ff;padding:17px;border-radius:10px;font-size:13px;line-height:1.65}pre code{background:transparent;padding:0}.goal{background:var(--pale);border-left:3px solid var(--accent);padding:12px 15px;border-radius:4px}.note{background:#fff8e9;border:1px solid #f2deb2;border-radius:9px;padding:11px 14px;color:#644b18}.info{background:#eff6ff;border:1px solid #d5e4fc;border-radius:9px;padding:11px 14px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.grid>div{padding:12px;background:#f6f8fc;border-radius:9px}.grid strong{display:block;font-size:19px}.grid span{font-size:12px;color:var(--sub)}.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0}.check input{margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer;flex:1}.check.done label{text-decoration:line-through;color:var(--sub)}.progress{height:8px;background:#e3e9f2;border-radius:99px;overflow:hidden}.fill{height:100%;background:var(--accent);width:0%;transition:width .2s}.meta{display:flex;justify-content:space-between;font-size:13px;color:var(--sub);margin-bottom:9px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px;vertical-align:top}th{background:#f4f7fc}.tag{display:inline-block;background:#eaf0fc;color:#2459bd;border-radius:5px;font-size:12px;padding:2px 7px;margin-right:6px}.muted{color:var(--sub);font-size:13px}footer{text-align:center;color:var(--sub);font-size:12px;margin:24px}@media(max-width:600px){main{padding:14px 12px 40px}.hero{padding:22px}.hero h1{font-size:24px}section{padding:18px}.grid{grid-template-columns:1fr}table{font-size:12px}th,td{padding:8px}pre{font-size:12px}}
-</style></head><body><main><header class="hero"><small>MINI AGENT RUNTIME · WEEK 02 · EINO 源码对照</small><h1>Day 09 / 56 · Agent 工具调度与 Eino ToolsNode</h1><p>围绕 Agent 的工具执行层设计：接收模型调用意图，解析并校验调用，匹配本地能力，应用执行策略，生成关联正确的结果，再交还 Agent Loop。</p><div class="chips"><span class="chip">阅读 20 分钟</span><span class="chip">编码 80 分钟</span><span class="chip">测试复盘 20 分钟</span></div></header>
-<section><h2>为什么工具能调用了，还要学执行器？</h2>
-<div class="goal">今天要能回答：模型一次提出多个工具调用时，Agent 怎样先判断这批请求是否可执行，再逐个执行、关联结果，并正确决定继续还是停止？</div>
-<p>Day 08 解决了“能力如何描述、注册和接入”：模型给出名称与参数，Runtime 找到工具，工具通过 Store 访问后端。接下来用户要求“比较两份已知文档”，模型可能一次返回两个 <code>get_document</code> 调用。这时仅有统一 Invoke 接口还不够：哪个结果对应哪次请求？后一项名称错误时，前一项是否已经执行？某项失败后，还要不要继续？</p>
-<p>最直接的办法是边遍历边执行，但这样会把协议检查、业务调用、超时和消息拼装交织在 Loop 中。今天把<strong>一批调用到一组结果</strong>作为执行边界：Loop 决定何时调用模型、何时结束；执行器组织工具调用；工具只处理自己的业务能力。执行器可以先是同包私有方法，不必立即设计成大型框架。</p>
-<p><strong>学习顺序：</strong>先手算下面的双调用过程，再用反例理解批次检查和错误策略，最后阅读 Eino 并沿累计示例提取执行边界。今天不改变既有公开接口和错误语义。</p>
-<p class="note">概念前置：ToolCall 的 ID/Name/Arguments、assistant/tool 消息、context。前序编码未完成时，可使用 examples 参考基线继续理解，不新建每日 Module。</p>
-</section>
-<section><h2>先把一次批次调用走通</h2>
-<p>场景：用户已经提供 <code>doc-a</code> 与 <code>doc-b</code> 两个 ID，请 Agent 比较正文。它们是独立读取，可以在同一批提出。下列是教学消息示意，示例基线尚未提供这个双文档 Demo；Day 08 的 knowledge 入口仍是三轮“检索 → 读取 → 回答”。</p>
-<pre aria-label="批次执行与 Agent Loop 数据流"><code>Loop → Model.Generate(历史)
-     ← assistant.ToolCalls = [
-          {ID:"read-a", Name:"get_document", Arguments:{"id":"doc-a"}},
-          {ID:"read-b", Name:"get_document", Arguments:{"id":"doc-b"}}
-        ]
-Loop 保存原始 assistant 消息
-     → 执行器：检查整批 ID / 已注册名称
-        → 顺序 Execute(read-a) → Invoke → Store.Get(doc-a)
-        → 顺序 Execute(read-b) → Invoke → Store.Get(doc-b)
-     ← [tool{ToolCallID:"read-a", Content:正文A},
-        tool{ToolCallID:"read-b", Content:正文B}]
-Loop 追加 tool 消息 → Model.Generate(完整历史) → 比较结果，无调用则结束</code></pre>
-<p><strong>三个角色：</strong>Model 产生调用意图；执行器把同批请求变成带原始 ID 的结果；Loop 把结果放进历史并启动下一轮推理。工具名称相同也没关系，<code>read-a</code> 与 <code>read-b</code> 区分两次调用。</p>
-<p><strong>有依赖时怎么办？</strong>若文档 ID 需要先检索才能获得，应像 Day 08 那样先执行检索，将 ID 交给下一轮模型，再请求读取。在同一批里按顺序执行，并不会自动把第一项输出填进第二项参数。</p>
-<p class="info"><strong>先预测：</strong>把第二项工具名改成未注册名称。本课程采用“整批名称/ID 校验失败则终止”的策略，所以第一项也不执行。若先执行第一项再检查第二项，已经产生的外部操作无法靠返回错误撤销。</p>
-</section>
-<section><h2>执行器的设计说明：每道边界解决什么问题</h2>
-<table><thead><tr><th>选择</th><th>为什么这样做与代价</th><th>本日边界</th></tr></thead><tbody>
-<tr><td>先检查整批，再开始执行</td><td>避免可提前发现的协议问题导致部分调用已发生。代价是某一项协议错误会阻止本批其他合法项。</td><td>检查 ID 非空且批内唯一、名称已注册。工具内部校验业务参数，因此不保证所有参数错误都在批次执行前发现。</td></tr>
-<tr><td>先顺序执行</td><td>容易跟踪调用与取消，减少并发策略干扰。代价是独立读取的总耗时更长。</td><td>并发是后续调度策略；顺序执行不等于事务，也不解决参数依赖。</td></tr>
-<tr><td>复用 model.Message 作为结果</td><td>Loop 已经消费 tool 消息，继续使用 Role/Content/ToolCallID，避免另建一套 Result 再转换。</td><td>工具返回内容；执行器填 Role=tool 与原始调用 ID；Loop 管理历史。</td></tr>
-<tr><td>按现有契约分类失败</td><td>参数/业务失败可反馈模型；取消必须阻止后续调用；内部原始错误不能直接暴露。统一行为后才容易演进策略。</td><td>沿用下表，不照搬 Eino 默认行为，也不在本页静默更改错误契约。</td></tr>
-<tr><td>从 Loop 中提取私有方法</td><td>获得清晰边界，同时复用已持有的注册快照、超时与事件配置。暂时仍依赖 Agent，未来需要独立复用时再提取对象。</td><td>agent.New / Run、Tool.Execute、Meta/Invoke 和消息类型保持不变。</td></tr>
-</tbody></table>
-<h3>失败后到底发生什么？</h3>
-<table><thead><tr><th>情况</th><th>本课程的处理</th><th>模型是否继续收到结果</th></tr></thead><tbody>
-<tr><td>缺失/批内重复 ID、未注册名称</td><td>整批预检查阶段终止 Run，工具执行次数为 0</td><td>本轮不继续调用模型</td></tr>
-<tr><td>工具返回受控 tool.Error（参数/业务错误）</td><td>转成受控文本，保留本次 ToolCallID，继续后续工具</td><td>是；模型可据此修正，是否修正仍取决于模型</td></tr>
-<tr><td>工具返回未知内部错误</td><td>回填固定摘要 <code>execution_failed: tool execution failed</code></td><td>是；不传原始错误或凭据</td></tr>
-<tr><td>取消或超时</td><td>通过 errors.Is 识别并终止 Run，不执行后续工具</td><td>不把取消包装成普通工具结果继续推理</td></tr>
-</tbody></table>
-<p><strong>不要混淆：</strong>整批预检查只能拦住此处检查的问题；执行到第二项才发现参数错误时，第一项可能已执行。超时和 Run 失败也不表示外部操作已回滚。本节没有事务、补偿或自动重试。</p>
-<p><strong>可见性与授权：</strong>Day 08 的 WithVisibleTools 过滤描述，不删除执行注册。今天仍按完整注册表检查名称；真正“本轮是否允许执行”的授权检查留给 Day 11，并须在执行前落实，不能拿可见集合代替权限。</p>
-</section>
-<section><div class="time">20 MIN · READ</div><h2>带着边界问题阅读 Eino ToolsNode</h2>
-<h3>15 分钟 · 一条调用怎样成为任务，又怎样成为结果？</h3>
-<p>阅读 <a href="https://github.com/cloudwego/eino/blob/main/compose/tool_node.go">compose/tool_node.go</a>，定位 <code>ToolsNodeConfig</code>、<code>ToolInput</code>、<code>genToolCallTasks</code>、<code>Invoke</code>、<code>ExecuteSequentially</code> 与 <code>UnknownToolsHandler</code>。沿一条 ToolCall 追踪名称解析、任务生成、执行、ToolMessage 组装。</p>
-<p><strong>带着问题：</strong>名称查找发生在哪里？结果如何保留调用 ID 与顺序？选择顺序或并行改变的是哪段流程？未知工具怎样处理？对照本页策略，指出至少一项可配置行为，而非直接认定框架默认值适用于自己的 Agent。</p>
-<p><strong>产出：</strong>把 ToolsNode 映射为本页“批次执行边界”，把工具接口映射为 Day 08 的 Meta/Invoke；画出 Loop 在 ToolsNode 之外还负责什么。</p>
-<h3>5 分钟 · 为什么执行策略适合放在包装层？</h3>
-<p>继续定位 <code>InvokableToolEndpoint</code>、<code>InvokableToolMiddleware</code>、<code>ToolCallMiddlewares</code>。回答：若希望所有工具都记录耗时，应给每个业务 Invoke 写一遍，还是包装统一调用入口？今天只画包装位置，Day 10 再讨论策略细节。记录阅读的 commit 或版本；main 分支符号可能随版本变化。</p>
-</section>
-<section><div class="time">80 MIN · BUILD</div><h2>四项练习：把批次执行边界从 Loop 中提取出来</h2>
-<p class="info"><strong>承接前序设计：</strong>复用 model.ToolCall / Message、Registry.Tools() 提供的旧 Tool 适配快照、既有事件与超时配置。当前累计参考代码的批次检查和执行逻辑仍位于 <code>examples/internal/agent/agent.go</code>。<strong>本日增量：</strong>练习把这段逻辑提取到同包私有方法；下面明确列出拟新增文件，本次学习文档修订未替你实施 Go 重构。</p>
-<table><thead><tr><th>路径</th><th>练习操作</th><th>职责</th></tr></thead><tbody>
-<tr><td>examples/internal/agent/executor.go</td><td>拟新增</td><td>承载整批预检查、顺序调用、结果整形</td></tr>
-<tr><td>examples/internal/agent/agent.go</td><td>修改已有文件</td><td>Run 调用提取方法，保留模型循环和历史管理</td></tr>
-<tr><td>examples/internal/agent/agent_test.go</td><td>复用并补充</td><td>检查消息关联、无效批次、取消和行为保持</td></tr>
-<tr><td>examples/internal/tool/design.md</td><td>补充说明</td><td>记录工具契约与执行器边界、后续策略入口</td></tr>
-<tr><td>examples/internal/model/model.go、examples/internal/tool/tool.go、examples/internal/tool/contract.go</td><td>复用</td><td>保持消息与执行接口不变，共享根 go.mod</td></tr>
-</tbody></table>
-<h3>任务一 · 20 分钟：确定输入输出与整批预检查</h3>
-<p><strong>为什么做：</strong>先说清执行边界的契约，才能提取代码而不改变 Loop 行为。</p>
-<p><strong>操作与观察：</strong>5 分钟手算双读取场景；10 分钟在拟新增 executor.go 中提取整批检查；5 分钟说明 ID、名称、参数分别由谁校验。可采用下面的私有方法形状，它是建议设计签名，尚未在基线实现：</p>
-<pre><code>// 建议设计签名；非独立可运行示例。实现须从 agent.go 增量迁移。
-func (a *Agent) executeBatch(
-    ctx context.Context, calls []model.ToolCall, step int,
-) ([]model.Message, error)
-// 输入：已由 Loop 保存的 assistant 消息中的 ToolCalls。
-// 成功：每条调用产生一条 Role=tool、原 ID 对齐的结果消息。
-// 预检查失败：返回 error，不执行本批任何工具。
-// 取消/超时：返回 error，Loop 终止，不再调用模型。</code></pre>
-<p><strong>完成证据：</strong>给出 [有效 A, 未注册 B] 和 [ID=x, ID=x] 两个反例，工具计数均为 0；同时能解释为何这不保证所有业务参数错误都提前发现。</p>
-<h3>任务二 · 25 分钟：迁移顺序执行与错误整形</h3>
-<p><strong>为什么做：</strong>所有工具需要一致的调用 ID、context 和错误处理，避免每种业务工具自行决定 Agent 是否继续。</p>
-<p><strong>操作与观察：</strong>15 分钟把 agent.go 中的顺序调用、子超时 context、cancel 释放与工具开始/完成事件迁入方法；5 分钟按上表处理错误；5 分钟核对取消后不会执行下一项。保持 Event 的 Step、ToolName、ToolCallID 和终态发布职责不变，避免 Loop 与方法重复发工具事件。</p>
-<p><strong>完成证据：</strong>成功时按输入顺序返回消息；受控错误与未知内部错误分别回填；errors.Is 可识别取消/超时；cancel 在每次调用后释放，超时仍是合作式取消，不声称能强杀工具。</p>
-<h3>任务三 · 20 分钟：把结果接回 Loop，并观察下一轮输入</h3>
-<p><strong>为什么做：</strong>执行成功只有回到模型可见历史，才能帮助 Agent 继续解决用户问题。</p>
-<p><strong>操作与观察：</strong>10 分钟修改 Run：保留原始 assistant 入历史，调用 executeBatch，成功后追加其返回消息；遇到 error 直接按既有失败路径终止。10 分钟在 agent_test.go 用记录输入的脚本模型构造双 get_document 调用，断言第二轮收到原始 assistant 加 read-a/read-b 两条 tool 消息，最后返回文本。</p>
-<p><strong>迁移顺序：</strong>先复制原执行块到新方法并整理局部返回值；再将 Run 原块替换为单次方法调用，删去重复逻辑；最后核对事件与错误行为。agent.New / Run 的签名、各入口调用方和旧工具适配均无需修改。</p>
-<p><strong>完成证据：</strong>模型第二次输入包含完整调用与结果，两个相同名称工具的结果仍按 ID 区分。若第二项取消，Loop 终止；第一项已经发生的外部操作不会撤销。</p>
-<h3>任务四 · 15 分钟：说明未来策略应接在哪里</h3>
-<p><strong>为什么做：</strong>理解搭建思路意味着能面对新增需求定位改动，而不把策略散落进所有业务工具。</p>
-<p><strong>操作与观察：</strong>10 分钟在 design.md 画出“未来执行授权 → 超时包装 → Execute/Invoke → 结果整形”的位置，对照 Eino 中间件；5 分钟说明独立读取可有限并发、依赖读取需后续模型轮次，以及写入调用不能随意重试。今天只保留既有顺序、无自动重试行为。</p>
-<p><strong>完成证据：</strong>能指出新增工具仍走 Day 08 的实现与注册路径；新增策略改执行边界；改变推理终止条件改 Loop。并发和审批留给后续课程，不增加尚未实现的空壳接口。</p>
-</section>
-<section><div class="time">20 MIN · TEST &amp; REVIEW</div><h2>用反例检验设计，而不仅是运行成功</h2>
-<p><strong>12 分钟：</strong>先预测再运行。从仓库根使用累计示例验收命令，不创建 labs 目录或新 go.mod：</p>
-<pre><code>go test ./examples/...
-go test -race ./examples/...
-go test ./examples/internal/agent -run 'TestRoundTrip|TestTimeoutAndBatchValidation|TestTermination|TestVisibleToolsOnlyFiltersDefinitions' -v</code></pre>
-<p class="note">以上是学习者待执行命令，本次文档修订未执行 Go 验收。现有测试可作为回归起点；拟新增的双读取与提取方法需完成后再验证，不能把旧测试通过当作重构已完成。</p>
-<table><thead><tr><th>用例</th><th>预期结果</th><th>验证的搭建判断</th></tr></thead><tbody>
-<tr><td>已有 TestRoundTrip；补充双读取场景</td><td>同名工具的结果保留各自 ID；下一轮模型收到 assistant 和 tool 历史</td><td>调用关联属于执行协议，消息历史属于 Loop</td></tr>
-<tr><td>已有 TestTimeoutAndBatchValidation；补充缺失 ID / 未注册名称</td><td>无效协议批次执行次数为 0；超时终止后续调用</td><td>检查必须在执行前；取消属于控制流</td></tr>
-<tr><td>补充受控错误 / 未知内部错误</td><td>分别回填受控消息 / 固定摘要，保留 ID，不泄漏原始错误</td><td>失败策略统一在执行边界处理</td></tr>
-<tr><td>已有 TestTermination 与可见性测试</td><td>终止行为保持；隐藏描述不等同于撤销注册</td><td>提取职责边界不应悄悄改变已有契约</td></tr>
-</tbody></table>
-<p><strong>8 分钟复盘：</strong>先合上代码作答，再展开参考思路。</p>
-<details><summary>为什么不能边检查边执行？整批检查是否等于事务？</summary><p>后项缺失工具或重复 ID 可提前发现，先执行会造成可避免的部分操作。但检查无法保证后端不失败，业务参数也可能到 Invoke 才发现错误，因此不是事务，也不提供回滚。</p></details>
-<details><summary>同批顺序调用能自动实现“先搜索再用搜索结果读全文”吗？</summary><p>不能。两条调用的参数在模型返回时已确定；若 ID 来自搜索结果，应把搜索结果传给下一轮模型后再产生读取请求，或显式设计组合能力。</p></details>
-<details><summary>明天加超时、重试或授权，应该改哪里？</summary><p>围绕统一执行入口设计策略，不让每个业务工具重复承担调度。超时不代表撤销；写操作重试要先考虑幂等；授权检查必须发生在执行前。Loop 继续负责模型与消息迭代。</p></details>
-<h3>交互清单</h3><div class="meta"><span>进度保存在本浏览器 localStorage</span><span id="count"></span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div><div id="checks"></div>
-</section>
-<section><h2>完成定义与为什么接着学 Day 10</h2>
-<p><strong>理解验收：</strong>不看代码讲清双调用从模型到工具再回到模型的过程；说明执行器、Loop、业务工具各自职责；用一个反例解释整批检查与事务的区别；面对新增工具/策略/终止条件能指出应修改哪层。</p>
-<p><strong>实作验收：</strong>在同一 examples 工程提取私有执行方法，原消息类型与公开接口保持一致；按矩阵补充断言，记录真实运行结果，核对事件、取消和错误回填行为。未完成实作可继续学习后续设计，但应如实登记未验证部分。</p>
-<p><strong>Day 10 的自然衔接：</strong>今天明确了“在哪里统一执行”，下一步才能讨论“执行应遵循哪些策略”：何时超时、什么失败可以重试、如何约束结果大小，以及怎样防止重试重复产生外部副作用。将对照 Eino 中间件继续扩展同一条调用链。</p>
-</section><footer>Agent Runtime · 56 天课程 · 离线内容可读，官方源码链接需联网</footer></main><script>const items=["阅读 Eino ToolsNode 的任务生成与结果组装","设计复用 ToolCall/Message 的批次执行边界","执行前整批检查调用 ID 与已注册名称","实现顺序执行及可解释的错误策略","处理取消和调用超时","用脚本模型验证双读取及下一轮完整历史","对照 Eino 中间件设计执行策略链","运行练习测试并写复盘"],key="mini-agent-runtime-day-09-checklist-v2";let saved=[];try{const v=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(v))saved=v}catch(_){}const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const p=Math.round(n/items.length*100);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=p+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(p))}items.forEach((s,i)=>{const r=document.createElement("div");r.className="check";const c=document.createElement("input");c.type="checkbox";c.id="task-"+i;c.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=c.id;label.textContent=s;r.append(c,label);box.append(r);c.onchange=()=>{saved[i]=c.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();</script></body></html>
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="description" content="Day 09 图解设计与测试先行学习文档"><title>Day 09 · 一次多个工具请求，怎样安全执行？</title><style>
+:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#52617a;--line:#dce4ef;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.85 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:820px;padding:28px 22px 64px;margin:auto}.hero{background:#183561;color:white;border-radius:18px;padding:30px}.hero h1{font-size:30px;line-height:1.45;margin:12px 0}.hero p{color:#e6eefa}.eyebrow,.time{font-size:14px;font-weight:700}.chips{display:flex;flex-wrap:wrap;gap:8px}.chips span{font-size:14px;border:1px solid #9cb5d9;border-radius:20px;padding:3px 12px}section,nav{background:white;border:1px solid var(--line);border-radius:14px;padding:26px;margin-top:20px}h2{font-size:24px;line-height:1.5;margin:0 0 20px}h3{font-size:20px;line-height:1.5;margin:24px 0 10px}p{margin:12px 0}a{color:var(--accent);text-underline-offset:3px}li{margin:10px 0}code{font-size:.88em;background:#edf1f7;padding:2px 4px;border-radius:4px;overflow-wrap:anywhere}pre{background:#142136;color:#e7f3ff;border-radius:10px;padding:18px;overflow:auto;font-size:14px;line-height:1.7;tab-size:4}pre code{background:none;padding:0;font-size:inherit;overflow-wrap:normal}.note,.goal{border-left:4px solid var(--accent);background:var(--pale);padding:14px 18px;border-radius:4px}.warn{border-left-color:#9b6500;background:#fff6e3}.card,.rule,.step{border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:18px 0}.card h3,.step h3{margin-top:0}.muted{color:var(--sub);font-size:15px}.flow{display:flex;flex-direction:column;gap:10px;margin:20px 0}.node{border:2px solid #9eb6db;border-radius:10px;padding:15px;background:#f4f8ff}.node strong{display:block}.arrow{text-align:center;color:#345276;font-size:16px}.branch{border:2px dashed #9b6500;background:#fff7e8}.time{color:var(--accent)}details{border:1px solid var(--line);border-radius:9px;padding:12px 16px;margin:16px 0}summary{cursor:pointer;font-weight:650}summary:focus-visible,a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid #c67800;outline-offset:4px}button{font:inherit;font-size:15px;background:#edf3ff;color:#183561;border:1px solid #9eb6db;border-radius:7px;padding:7px 12px;cursor:pointer}.check{display:flex;gap:12px;margin:14px 0}.check input{width:20px;height:20px;flex-shrink:0;margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer}.done label{color:var(--sub);text-decoration:line-through}.progress{background:#e3e9f2;height:12px;border-radius:8px;overflow:hidden}.fill{background:var(--accent);height:100%;width:0}.meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:15px}footer{font-size:15px;text-align:center;padding:24px}.toplinks{display:flex;flex-wrap:wrap;gap:10px 22px}.download{font-size:15px}.code-actions{display:flex;gap:12px;align-items:center;margin-top:12px}.copy-state{font-size:14px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@media(max-width:600px){main{padding:12px 10px 36px}section,nav{padding:20px 16px}.hero{padding:23px 20px}.hero h1{font-size:26px}h2{font-size:22px}pre{padding:14px;font-size:13px}.card,.rule,.step{padding:14px}body{font-size:18px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+
+figure{margin-inline:0}p,.node,figcaption{overflow-wrap:anywhere}.file-label{overflow-wrap:anywhere}.phase{font-weight:700;color:#183561}.copy-status{font-size:14px;color:#52617a}details>pre{margin-bottom:12px}
+</style></head><body><main>
+<header class="hero"><div class="eyebrow">DAY 09 / 56 · 第 2 周 · 图解与 TDD</div><h1>一次多个工具请求，怎样安全执行？</h1><p>先检查整批，再按顺序执行，把每个结果送回正确的调用。</p><div class="chips"><span>阅读 20 分钟</span><span>实现 80 分钟</span><span>测试复盘 20 分钟</span></div></header>
+<nav aria-label="本页学习路线"><strong>一次只做一小步，答案最后看</strong><div class="toplinks"><a href="#goal">① 今天做什么</a><a href="#concepts">② 概念与图解</a><a href="#design">③ 设计理由</a><a href="#contract">④ 行为契约</a><a href="#skeleton">⑤ 骨架</a><a href="#tests">⑥ 完整测试</a><a href="#tasks">⑦ 动手步骤</a><a href="#review">⑧ 验收</a></div></nav>
+<section id="goal"><h2>今天只解决什么？</h2><div class="goal">实现 Agent.executeBatch，让模型一次提出的多个工具调用，得到可预测的执行顺序和结果关联。</div><p>用户已经知道文档 a、b 的 ID，希望同时读取两份正文。模型返回两条 ToolCall，第一条合法，第二条却可能写错名称。</p><p>如果检查一条就执行一条，发现第二条有错时，第一条已经执行。把“整批检查”与“真正执行”分开，才能在协议错误时做到本批零执行。</p><div class="note">今天实现批次边界，不解析业务参数，不增加并行、重试或事务。复用前序事件、超时和消息；为 Day 11 保留预检查插槽。</div></section>
+<section id="concepts"><h2>先把概念说清楚</h2><article class="card"><h3>批次：模型一次返回的调用列表</h3><p>同一条 assistant 消息可以携带多个 ToolCall。</p><p>本例是 read-1 读取 a，read-2 读取 b；不是两次模型请求。</p></article><article class="card"><h3>预检查：先确认整批能被识别</h3><p>检查每个 ID 非空且批内唯一、每个工具名都已注册。</p><p>只检查名称和 ID；文档 id 是否有效由工具判断。</p></article><article class="card"><h3>结果关联：按调用 ID 回填</h3><p>结果消息 Role=tool，ToolCallID 等于原请求 ID。</p><p>工具名可以相同，调用 ID 必须区分这两次读取。</p></article><h3>图 1 · 模块职责与数据去向</h3><figure class="flow" aria-label="图 1 · 模块职责与数据去向"><div class="node"><strong>Loop</strong>保存 assistant；将 calls、当前 ctx 和 step 交给批次边界。</div><div class="arrow">↓ calls / ctx / step</div><div class="node"><strong>executeBatch</strong>先检查并调用预检查插槽；顺序执行，产出 tool 消息。</div><div class="arrow">↓ ctx / Arguments</div><div class="node"><strong>Tool.Execute</strong>解析文档参数并访问 Store；返回结果或业务错误。</div><figcaption class="muted">沿箭头从上到下读；每个框说明负责的事或当前输入输出。</figcaption></figure><details><summary>展开这张图的逐步文字说明</summary><ol><li><strong>Loop</strong>：保存 assistant；将 calls、当前 ctx 和 step 交给批次边界。</li><li><strong>executeBatch</strong>：先检查并调用预检查插槽；顺序执行，产出 tool 消息。</li><li><strong>Tool.Execute</strong>：解析文档参数并访问 Store；返回结果或业务错误。</li></ol></details></section>
+<section id="walkthrough"><h2>沿同一个例子走一遍</h2><h3>图 2 · 一次完整过程</h3><figure class="flow" aria-label="图 2 · 一次完整过程"><div class="node"><strong>① Model 返回两个请求</strong>read-1 → read({&quot;id&quot;:&quot;a&quot;})；read-2 → read({&quot;id&quot;:&quot;b&quot;})。</div><div class="arrow">↓ 整批 ToolCalls</div><div class="node"><strong>② 整批检查与插槽</strong>两个 ID 不同且非空；read 存在；预检查通过。此时执行次数仍是 0。</div><div class="arrow">↓ 合法批次与本次 context</div><div class="node"><strong>③ 顺序 Execute</strong>先读取 a，再读取 b；每次收到本次工具 context。</div><div class="arrow">↓ 带原调用 ID 的结果消息</div><div class="node"><strong>④ 结果回到 Loop</strong>两条 tool 消息按原顺序回填 read-1、read-2；下一轮模型看到 user、assistant、tool、tool。</div><figcaption class="muted">沿箭头从上到下读；每个框说明负责的事或当前输入输出。</figcaption></figure><details><summary>展开这张图的逐步文字说明</summary><ol><li><strong>① Model 返回两个请求</strong>：read-1 → read({&quot;id&quot;:&quot;a&quot;})；read-2 → read({&quot;id&quot;:&quot;b&quot;})。</li><li><strong>② 整批检查与插槽</strong>：两个 ID 不同且非空；read 存在；预检查通过。此时执行次数仍是 0。</li><li><strong>③ 顺序 Execute</strong>：先读取 a，再读取 b；每次收到本次工具 context。</li><li><strong>④ 结果回到 Loop</strong>：两条 tool 消息按原顺序回填 read-1、read-2；下一轮模型看到 user、assistant、tool、tool。</li></ol></details><h3>失败时停在哪里？</h3><div class="node branch">第二条请求名称为 missing 时，整批报错，第一条也不执行。若第一条已经实际执行、第二条发生运行时取消，第一条的副作用不会因此撤销。</div></section>
+<section id="design"><h2>这些字段、接口和方法为什么存在？</h2><article class="card"><h3>为什么方法属于 Agent？</h3><p>executeBatch(ctx, calls, step) 使用 Agent 的工具表、超时和事件配置，返回 []model.Message 或终止错误。</p><p>它不增加第二套 Call/Result 协议。</p></article><article class="card"><h3>calls 与 step 各是什么？</h3><p>calls 是当前 assistant 的 ToolCalls，按输入顺序执行；step 是模型轮次，从 1 开始，只用于事件。</p><p>不要把内部尝试计入 step。</p></article><article class="card"><h3>为什么分两个循环？</h3><p>第一个循环检查整批 ID/名称；成功后，第二个循环才执行。</p><p>结构错误返回 nil,error，不把已经生成的一部分结果交回模型。</p></article><article class="card"><h3>预留 authorizeBatch 插槽</h3><p>协议检查成功后、首个 Execute 前，调用提供的 authorizeBatch(ctx,calls,step)。</p><p>它无配置时直接放行；今天复用，Day 11 再实现可信授权。</p></article><article class="card"><h3>为什么要单独检查 context？</h3><p>每个工具执行前检查父 ctx；有 toolTimeout 时派生工具 ctx，执行后检查它是否已取消，再释放计时器。</p><p>工具即使误报成功，取消仍优先。</p></article><article class="card"><h3>为什么错误不能全按一种方式处理？</h3><p>参数/业务错误回填安全提示；取消和超时终止 Run。</p><p>未知内部错误使用固定摘要，不把后端令牌或堆栈送进模型。</p></article><article class="card"><h3>事件怎样配对？</h3><p>每个已开始的调用发布 started 和 completed，包含 Step、ToolName、ToolCallID、耗时与状态。</p><p>预检查失败不发布 tool started；Run 的唯一终态由既有 Run 方法管理。</p></article></section>
+<section id="contract"><h2>行为契约：不用猜参考代码</h2><p>按下面规则实现。内部算法可以不同；未约定的错误文本不必逐字一致，错误链用 errors.Is/As 检查。</p><article class="rule"><h3>R1 · 顺序与历史</h3><p>保留输入顺序、Role=tool 和原 ToolCallID；不重建 assistant 请求，不将名称充当 ID。</p><p class="muted">对应测试：<code>TestDay09BatchRoundTrip</code></p></article><article class="rule"><h3>R2 · 整批协议检查</h3><p>空 ID、重复 ID、未知名称，均在首个 Execute 前拒绝；不追加部分结果、不再请求模型。</p><p class="muted">对应测试：<code>TestDay09BatchPreflight</code></p></article><article class="rule"><h3>R3 · 错误投影</h3><p>tool.Error 回填其受控 Error()；其他非取消错误统一为 execution_failed: tool execution failed。失败调用的原始返回结果不进入消息。</p><p class="muted">对应测试：<code>TestDay09ErrorsBecomeSafeMessages</code></p></article><article class="rule"><h3>R4 · 取消与超时</h3><p>执行前检查 ctx，执行后以 tool ctx 的取消为准；errors.Is 保留 Canceled/DeadlineExceeded，后续调用与模型轮次停止。零超时禁用，负值由既有 New 拒绝；不强杀工具。</p><p class="muted">对应测试：<code>TestDay09CancellationAndTimeout</code></p></article><article class="rule"><h3>R5 · 保留预检查插槽</h3><p>协议检查之后、执行之前调用提供的 authorizeBatch。插槽报错保留 errors.Is，整批零执行。参数授权隔离与审计在 Day 11 细化。</p><p class="muted">对应测试：<code>TestDay09PreflightHook</code></p></article></section>
+<section id="read"><h2>官方阅读 20 分钟：带着问题找证据</h2><article class="card"><div class="time">12 分钟</div><h3><a href="https://github.com/cloudwego/eino/blob/main/compose/tool_node.go">compose/tool_node.go · ToolsNodeConfig / ToolsNode</a></h3><p>找出工具集合、调用请求和输出消息的边界。画出本课“先检查 → 执行 → 回填”的对应。</p></article><article class="card"><div class="time">8 分钟</div><h3><a href="https://pkg.go.dev/context#WithTimeout">context.WithTimeout</a></h3><p>为什么派生 context 需要释放？为什么取消信号不能撤销已发生的操作？写下一句合作取消的含义。</p></article><p class="muted">外部链接供源码对照；正文独立可读。本次未重新核对所有远端 main 符号，阅读时记录 commit，名称变化时按职责定位；不把框架默认策略直接视为本课约定。</p></section>
+<section id="continuity"><h2>承接前序设计与本日增量</h2><p>复用 Agent.New/Run、model.Message/ToolCall、tool.Tool/Error 和 EventSink。Agent.Run 已调用 executeBatch，接口不迁移。提供的 authorization_preflight.go 是后续扩展插槽，今天不要求读懂其权限算法。</p><p><strong>路径约定：</strong>练习使用 internal；参考使用 examples/internal。两套包只映射路径前缀，不能混用 model.Message。共用原仓库 go.mod，Go ≥ 1.22.2；没有每日独立 module。</p><p>新增或修改：internal/agent/executor.go；已有实现先保留，不把同名定义重复追加。</p><div class="note"><strong>安全开始：</strong>下面命令只新建仓库外的临时练习副本，复制同一累计模块的前置依赖，再把当天目标换成 TODO。不会修改你当前的 internal/cmd，也不根据你的代码判断进度。</div><pre><code>python3 docs/learning/exercises/prepare.py 09</code></pre><p>在原仓库根运行。脚本打印新副本的绝对路径；进入该目录后再编辑和测试。需要 Python 3.9+ 和 Go 工具链，不需要 API Key。</p><p>副本内包含为兼容累计版本提供的组件；当天任务只编辑上面列出的目标。已经实现过时，也可以只把完整测试应用到自己的版本，无需挖空重做。</p><details><summary>手工应用文件与保留旧实现</summary><p>先备份或在独立工作区操作。按本页路径保存骨架与测试；前序依赖使用同一套累计类型。当天测试文件若已存在，比较后更新，不与旧版重复定义。不要自动覆盖当前项目；参考基线仅用于准备依赖。</p><p>prepare.py 把参考依赖映射到副本 internal；当天方法始终使用未实现骨架。装配脚本不运行用户任务，也不证明你的原实现通过测试。</p></details><h3 class="file-label">已提供的依赖：internal/agent/authorization_preflight.go</h3><p class="download"><a href="exercises/day09/support/internal/agent/authorization_preflight.go.txt" download="authorization_preflight.go">下载 authorization_preflight.go</a></p><details class="code-file" data-kind="support" data-source="day09/support/internal/agent/authorization_preflight.go.txt"><summary>展开完整文件：authorization_preflight.go</summary><pre id="day9-support-internal-agent-authorization-preflight-go"><code>package agent
+
+import (
+	&quot;context&quot;
+	&quot;errors&quot;
+	&quot;fmt&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool&quot;
+)
+
+// authorizeBatch runs after protocol validation, before the first tool executes.
+func (a *Agent) authorizeBatch(ctx context.Context, calls []model.ToolCall, step int) error {
+	// Authorization is a whole-batch preflight, before any side effects.
+	// A custom authorizer receives a copy of arguments, not the executable buffer.
+	if a.authorizer != nil {
+		principal, _ := tool.PrincipalFromContext(ctx)
+		for _, call := range calls {
+			check := call
+			check.Arguments = append([]byte(nil), call.Arguments...)
+			err := a.authorizer.Authorize(ctx, check)
+			if ctx.Err() != nil {
+				err = ctx.Err()
+			}
+			kind := EventToolAuthorized
+			decisionStatus := &quot;ok&quot;
+			if err != nil {
+				kind = EventToolDenied
+				decisionStatus = status(err)
+				if errors.Is(err, tool.ErrForbidden) {
+					decisionStatus = &quot;denied&quot;
+				}
+			}
+			a.emit(ctx, Event{Type: kind, Step: step, ToolName: call.Name, ToolCallID: call.ID, PrincipalID: principal.ID, Status: decisionStatus})
+			if err != nil {
+				return fmt.Errorf(&quot;agent: authorization failed: %w&quot;, err)
+			}
+		}
+	}
+	return nil
+}
+</code></pre><button type="button" data-copy="day9-support-internal-agent-authorization-preflight-go">复制本文件</button></details></section>
+<section id="skeleton"><h2>完整骨架：方法体留给你</h2><p>每个文件的 package、import、类型和签名齐全。panic("TODO: ...") 表示尚未实现；它不是最终错误处理方式。按文件名保存，不只复制某个方法。</p><h3 class="file-label">待实现骨架：internal/agent/executor.go</h3><p class="download"><a href="exercises/day09/skeleton/internal/agent/executor.go.txt" download="executor.go">下载 executor.go</a></p><details class="code-file" data-kind="skeleton" data-source="day09/skeleton/internal/agent/executor.go.txt"><summary>展开完整文件：executor.go</summary><pre id="day9-skeleton-internal-agent-executor-go"><code>package agent
+
+import (
+	&quot;context&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+)
+
+// executeBatch validates the entire batch before executing any tool.
+// Business arguments remain the tool&#x27;s responsibility. Results preserve input
+// order and call IDs; cancellation or timeout terminates the batch with an error.
+func (a *Agent) executeBatch(ctx context.Context, calls []model.ToolCall, step int) ([]model.Message, error) {
+	panic(&quot;TODO: executeBatch&quot;)
+}
+</code></pre><button type="button" data-copy="day9-skeleton-internal-agent-executor-go">复制本文件</button></details></section>
+<section id="tests"><h2>完整测试：夹具和断言都已提供</h2><p>下面是全部测试文件，不需要补 fake、fixture 或断言。测试调用练习的 internal 包，不是已完成的 examples 答案。</p><h3 class="file-label">完整测试：internal/agent/day09_contract_test.go</h3><p class="download"><a href="exercises/day09/tests/internal/agent/day09_contract_test.go.txt" download="day09_contract_test.go">下载 day09_contract_test.go</a></p><details class="code-file" data-kind="tests" data-source="day09/tests/internal/agent/day09_contract_test.go.txt"><summary>展开完整文件：day09_contract_test.go</summary><pre id="day9-tests-internal-agent-day09-contract-test-go"><code>package agent_test
+
+import (
+	&quot;context&quot;
+	&quot;encoding/json&quot;
+	&quot;errors&quot;
+	&quot;reflect&quot;
+	&quot;strings&quot;
+	&quot;testing&quot;
+	&quot;time&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/agent&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool&quot;
+)
+
+type day09Model func(context.Context, []model.Message) (*model.Response, error)
+
+func (f day09Model) Generate(c context.Context, ms []model.Message) (*model.Response, error) {
+	return f(c, ms)
+}
+
+type day09Tool struct {
+	name string
+	fn   func(context.Context, json.RawMessage) (string, error)
+}
+
+func (f day09Tool) Name() string                                                 { return f.name }
+func (f day09Tool) Execute(c context.Context, a json.RawMessage) (string, error) { return f.fn(c, a) }
+
+type day09Sink struct{ events []agent.Event }
+
+func (s *day09Sink) Emit(_ context.Context, e agent.Event) { s.events = append(s.events, e) }
+func day09Calls() []model.ToolCall {
+	return []model.ToolCall{{ID: &quot;read-1&quot;, Name: &quot;read&quot;, Arguments: json.RawMessage(`{&quot;id&quot;:&quot;a&quot;}`)}, {ID: &quot;read-2&quot;, Name: &quot;read&quot;, Arguments: json.RawMessage(`{&quot;id&quot;:&quot;b&quot;}`)}}
+}
+func day09New(t *testing.T, m model.Model, ts map[string]tool.Tool, opts ...agent.Option) *agent.Agent {
+	t.Helper()
+	a, err := agent.New(m, ts, 3, opts...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return a
+}
+
+func TestDay09BatchRoundTrip(t *testing.T) {
+	calls := day09Calls()
+	rounds := 0
+	var seen []string
+	sink := &amp;day09Sink{}
+	m := day09Model(func(_ context.Context, ms []model.Message) (*model.Response, error) {
+		rounds++
+		if rounds == 1 {
+			return &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, ToolCalls: calls}}, nil
+		}
+		if len(ms) != 4 || ms[1].Role != &quot;assistant&quot; || len(ms[1].ToolCalls) != 2 {
+			t.Fatalf(&quot;missing assistant: %+v&quot;, ms)
+		}
+		for i, id := range []string{&quot;read-1&quot;, &quot;read-2&quot;} {
+			if ms[i+2].Role != &quot;tool&quot; || ms[i+2].ToolCallID != id || ms[i+2].Content != []string{&quot;a&quot;, &quot;b&quot;}[i] {
+				t.Fatalf(&quot;wrong pairing: %+v&quot;, ms)
+			}
+		}
+		return &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, Content: &quot;done&quot;}}, nil
+	})
+	target := day09Tool{&quot;read&quot;, func(_ context.Context, args json.RawMessage) (string, error) {
+		var p struct {
+			ID string `json:&quot;id&quot;`
+		}
+		if err := json.Unmarshal(args, &amp;p); err != nil {
+			t.Fatal(err)
+		}
+		seen = append(seen, p.ID)
+		return p.ID, nil
+	}}
+	a := day09New(t, m, map[string]tool.Tool{&quot;read&quot;: target}, agent.WithEventSink(sink))
+	out, err := a.Run(context.Background(), &quot;read a and b&quot;)
+	if err != nil || out != &quot;done&quot; || rounds != 2 || !reflect.DeepEqual(seen, []string{&quot;a&quot;, &quot;b&quot;}) {
+		t.Fatalf(&quot;%q %v seen=%v rounds=%d&quot;, out, err, seen, rounds)
+	}
+	started, completed, terminal := 0, 0, 0
+	for _, e := range sink.events {
+		switch e.Type {
+		case agent.EventToolStarted:
+			started++
+		case agent.EventToolCompleted:
+			completed++
+			if e.Status != &quot;ok&quot; || e.Step != 1 || e.At.IsZero() {
+				t.Fatal(e)
+			}
+		case agent.EventRunFinished, agent.EventRunFailed:
+			terminal++
+		}
+	}
+	if started != 2 || completed != 2 || terminal != 1 {
+		t.Fatalf(&quot;events=%+v&quot;, sink.events)
+	}
+}
+func TestDay09BatchPreflight(t *testing.T) {
+	for _, second := range []model.ToolCall{{ID: &quot;x&quot;, Name: &quot;missing&quot;}, {ID: &quot;read-1&quot;, Name: &quot;read&quot;}, {Name: &quot;read&quot;}} {
+		t.Run(second.ID+&quot;/&quot;+second.Name, func(t *testing.T) {
+			n, rounds := 0, 0
+			calls := []model.ToolCall{day09Calls()[0], second}
+			m := day09Model(func(context.Context, []model.Message) (*model.Response, error) {
+				rounds++
+				return &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, ToolCalls: calls}}, nil
+			})
+			a := day09New(t, m, map[string]tool.Tool{&quot;read&quot;: day09Tool{&quot;read&quot;, func(context.Context, json.RawMessage) (string, error) { n++; return &quot;ok&quot;, nil }}})
+			out, err := a.Run(context.Background(), &quot;&quot;)
+			if err == nil || out != &quot;&quot; || n != 0 || rounds != 1 {
+				t.Fatalf(&quot;partial execution: %q %v tool=%d model=%d&quot;, out, err, n, rounds)
+			}
+		})
+	}
+}
+func TestDay09ErrorsBecomeSafeMessages(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		failure error
+		want    string
+	}{
+		{&quot;controlled&quot;, &amp;tool.Error{Kind: tool.ValidationError, Message: &quot;id required&quot;}, &quot;invalid_arguments: id required&quot;},
+		{&quot;private&quot;, errors.New(&quot;PRIVATE backend token&quot;), &quot;execution_failed: tool execution failed&quot;},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rounds := 0
+			m := day09Model(func(_ context.Context, ms []model.Message) (*model.Response, error) {
+				rounds++
+				if rounds == 1 {
+					return &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, ToolCalls: day09Calls()[:1]}}, nil
+				}
+				if len(ms) != 3 || ms[2].Content != tc.want || strings.Contains(ms[2].Content, &quot;PRIVATE&quot;) {
+					t.Fatalf(&quot;unsafe history: %+v&quot;, ms)
+				}
+				return &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, Content: &quot;explained&quot;}}, nil
+			})
+			a := day09New(t, m, map[string]tool.Tool{&quot;read&quot;: day09Tool{&quot;read&quot;, func(context.Context, json.RawMessage) (string, error) { return &quot;must not escape&quot;, tc.failure }}})
+			out, err := a.Run(context.Background(), &quot;&quot;)
+			if err != nil || out != &quot;explained&quot; || rounds != 2 {
+				t.Fatalf(&quot;%q %v&quot;, out, err)
+			}
+		})
+	}
+}
+func TestDay09CancellationAndTimeout(t *testing.T) {
+	for _, deadline := range []bool{false, true} {
+		t.Run(map[bool]string{false: &quot;cancel&quot;, true: &quot;timeout&quot;}[deadline], func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			n, rounds := 0, 0
+			sink := &amp;day09Sink{}
+			m := day09Model(func(context.Context, []model.Message) (*model.Response, error) {
+				rounds++
+				return &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, ToolCalls: day09Calls()}}, nil
+			})
+			target := day09Tool{&quot;read&quot;, func(c context.Context, _ json.RawMessage) (string, error) {
+				n++
+				if deadline {
+					&lt;-c.Done()
+				} else {
+					cancel()
+				}
+				return &quot;late success&quot;, nil
+			}}
+			opts := []agent.Option{agent.WithEventSink(sink)}
+			if deadline {
+				opts = append(opts, agent.WithToolTimeout(time.Millisecond))
+			}
+			a := day09New(t, m, map[string]tool.Tool{&quot;read&quot;: target}, opts...)
+			_, err := a.Run(ctx, &quot;&quot;)
+			want := context.Canceled
+			if deadline {
+				want = context.DeadlineExceeded
+			}
+			if !errors.Is(err, want) || n != 1 || rounds != 1 {
+				t.Fatalf(&quot;%v calls=%d rounds=%d&quot;, err, n, rounds)
+			}
+			completed := 0
+			for _, e := range sink.events {
+				if e.Type == agent.EventToolCompleted {
+					completed++
+					if e.Status != &quot;cancelled&quot; {
+						t.Fatal(e)
+					}
+				}
+			}
+			if completed != 1 {
+				t.Fatal(sink.events)
+			}
+		})
+	}
+}
+
+type day09Auth func(context.Context, tool.Call) error
+
+func (f day09Auth) Authorize(c context.Context, call tool.Call) error { return f(c, call) }
+func TestDay09PreflightHook(t *testing.T) {
+	calls, n := 0, 0
+	failure := errors.New(&quot;provided preflight rejected&quot;)
+	m := day09Model(func(context.Context, []model.Message) (*model.Response, error) {
+		return &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, ToolCalls: day09Calls()}}, nil
+	})
+	a := day09New(t, m, map[string]tool.Tool{&quot;read&quot;: day09Tool{&quot;read&quot;, func(context.Context, json.RawMessage) (string, error) { n++; return &quot;&quot;, nil }}}, agent.WithAuthorizer(day09Auth(func(context.Context, tool.Call) error { calls++; return failure })))
+	_, err := a.Run(context.Background(), &quot;&quot;)
+	if !errors.Is(err, failure) || calls != 1 || n != 0 {
+		t.Fatalf(&quot;hook bypassed: %v checks=%d executed=%d&quot;, err, calls, n)
+	}
+}
+</code></pre><button type="button" data-copy="day9-tests-internal-agent-day09-contract-test-go">复制本文件</button></details><h3>先编译，再看到明确红灯</h3><pre><code>go test ./internal/agent -run &#x27;^$&#x27; -timeout 20s
+go test ./internal/agent -run &#x27;^TestDay09&#x27; -count=1 -v -timeout 20s</code></pre><p>编译命令预期退出码 0，“no tests to run”在这一步是正常的。第二条必须实际运行用例，并在当天方法的 TODO 处失败；缺包、语法错误、命令未匹配到测试都不算行为红灯。</p><p>已有实现可能直接全绿。保留这些结果，再用契约检查设计；不要为了制造红灯破坏已完成代码。</p></section>
+<section id="tasks"><h2>分步实现：一次只改变一组行为</h2><div class="time">编码 80 分钟 · 每次只看当前任务卡</div><article class="step"><h3>1 · 20 分钟</h3><p><strong>为什么做：</strong>先守住零执行边界，防止错误批次触发业务。</p><p><strong>位置：</strong>executeBatch 的预检查段</p><p><strong>动作：</strong>建立 seen ID 集合，整批检查名称与 ID，随后调用提供的插槽；此阶段不执行工具。</p><pre><code>go test ./internal/agent -run &#x27;^TestDay09(BatchPreflight|PreflightHook)$&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>非法批次与插槽拒绝都使执行次数为 0。</p><details><summary>卡住时再看提示</summary><p>把检查和执行分为两段；不要在第一个检查循环内 Execute。</p></details></article><article class="step"><h3>2 · 25 分钟</h3><p><strong>为什么做：</strong>让模型下一轮拿到两条各自关联的结果。</p><p><strong>位置：</strong>executeBatch 的执行与结果段</p><p><strong>动作：</strong>按 calls 顺序调用 Execute，将原 ID 与结果组装为 tool 消息；Loop 继续保存原 assistant。</p><pre><code>go test ./internal/agent -run &#x27;^TestDay09BatchRoundTrip$&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>模型第二轮看到四条完整消息，结果 a、b 与 ID 一一对应。</p><details><summary>卡住时再看提示</summary><p>工具名找对象，call.ID 填 ToolCallID；它们用途不同。</p></details></article><article class="step"><h3>3 · 20 分钟</h3><p><strong>为什么做：</strong>业务失败应可解释，内部诊断不应泄露给模型。</p><p><strong>位置：</strong>错误分支与事件</p><p><strong>动作：</strong>区分受控错误、未知内部错误和取消；开始/完成事件使用相同的工具身份。</p><pre><code>go test ./internal/agent -run &#x27;^TestDay09(ErrorsBecomeSafeMessages|BatchRoundTrip)$&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>私有后端错误不出现在模型历史，已开始调用事件成对。</p><details><summary>卡住时再看提示</summary><p>先分类 error，再决定回填或终止；不要直接 err.Error()。</p></details></article><article class="step"><h3>4 · 15 分钟</h3><p><strong>为什么做：</strong>取消应结束本轮工作，不能被迟到的成功覆盖。</p><p><strong>位置：</strong>工具 context 生命周期</p><p><strong>动作：</strong>派生单工具超时，执行后检查 ctx.Err，释放计时器；取消后停止后续执行。</p><pre><code>go test ./internal/agent -run &#x27;^TestDay09CancellationAndTimeout$&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>工具误报成功也不能覆盖取消，后续工具计数保持 0。</p><details><summary>卡住时再看提示</summary><p>先检查 toolCtx.Err，再调用 cancel，避免把主动释放当成业务取消。</p></details></article></section>
+<section id="review"><h2>测试与复盘 20 分钟</h2><div class="time">12 分钟 · 从目标到累计回归</div><pre><code>go test ./internal/agent -run &#x27;^TestDay09&#x27; -count=1 -v -timeout 20s
+go test -race ./internal/agent -run &#x27;^TestDay09&#x27; -count=1 -timeout 30s
+go test ./internal/... -timeout 60s
+go test ./examples/... -timeout 60s
+go test -race ./examples/... -timeout 60s</code></pre><p>先让当天目标全绿，再运行累计回归。examples 验证参考基线，不能替代对 internal 练习的测试。若前序练习接口不同，先按迁移说明对齐，不通过修改测试 import 绕到答案。</p><p>重构时保持同一套断言，整理重复逻辑后再运行；不要通过删测试、跳过用例或改预期来“变绿”。</p><div class="time">8 分钟 · 合上代码回答</div><ol><li>为什么不一边检查一边执行？</li><li>read 被调用两次，靠什么区分结果？</li><li>整批预检查是否等于事务？</li></ol><details><summary>完成回答后，再看参考思路</summary><article class="card"><h3>为什么不一边检查一边执行？</h3><p>后项协议错误会在前项执行之后才被发现；整批预检查能避免这类部分执行。</p></article><article class="card"><h3>read 被调用两次，靠什么区分结果？</h3><p>原始调用 ID；名称仅标识能力。</p></article><article class="card"><h3>整批预检查是否等于事务？</h3><p>不是。</p><p>运行中失败不会自动回滚前面的操作。</p></article></details><h3>完成定义</h3><p><strong>实现验收：</strong>当天完整目标用例与 race 通过，记录累计回归的实际结果；失败时记录阶段、原因与未验证范围。</p><p><strong>理解验收：</strong>不看代码，用本日例子讲清输入、职责、结果和失败出口；再说出一个需求变化应该修改哪一层。</p><h3>本次发布验证</h3><div class="note"><p>Go 1.22.2 linux/amd64：原样骨架编译通过；目标测试在 TODO 处按预期失败；同一套测试对兼容参考实现通过（含 race）。</p><p>目标包含 5 个顶层通过测试及其子场景；完整输出见验证记录。</p><p>验证在临时副本中完成，不代表你的当前实现已通过。真实网络、模型或崩溃恢复不在本次验证范围。</p><p><a href="exercises/README.md">查看准备方法与验证范围</a> · <a href="exercises/verification.json">查看原始红绿测试记录</a></p></div><h3>学习清单</h3><div class="meta"><span>本浏览器自评进度；新版清单单独保存</span><span id="count">0 / 8</span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="fill" class="fill"></div></div><div id="checks"></div><noscript><p>未启用脚本仍可展开全文和手动复制；清单不自动保存。</p></noscript></section>
+<section id="answer"><h2>最后再看参考答案</h2><p>这些实现与骨架签名一致，保留相同契约。内部写法可以不同；先按规则和测试独立完成，再对照取舍。</p><h3 class="file-label">参考实现：internal/agent/executor.go</h3><p class="download"><a href="exercises/day09/reference/internal/agent/executor.go.txt" download="executor.go">下载 executor.go</a></p><details class="code-file" data-kind="reference" data-source="day09/reference/internal/agent/executor.go.txt"><summary>展开完整文件：executor.go</summary><pre id="day9-reference-internal-agent-executor-go"><code>package agent
+
+import (
+	&quot;context&quot;
+	&quot;errors&quot;
+	&quot;fmt&quot;
+	&quot;time&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool&quot;
+)
+
+// executeBatch validates the entire batch before executing any tool.
+// Business arguments remain the tool&#x27;s responsibility. Results preserve input
+// order and call IDs; cancellation or timeout terminates the batch with an error.
+func (a *Agent) executeBatch(ctx context.Context, calls []model.ToolCall, step int) ([]model.Message, error) {
+	var results []model.Message
+	// 整批预校验，避免后面的未知工具或重复 ID 导致前面的工具已产生副作用。
+	seen := map[string]bool{}
+	for _, call := range calls {
+		if call.ID == &quot;&quot; || seen[call.ID] {
+			return nil, fmt.Errorf(&quot;agent: missing or duplicate tool call ID&quot;)
+		}
+		seen[call.ID] = true
+		if _, ok := a.tools[call.Name]; !ok {
+			return nil, &amp;tool.Error{Kind: tool.NotFoundError, Message: &quot;tool not registered&quot;}
+		}
+	}
+	if err := a.authorizeBatch(ctx, calls, step); err != nil {
+		return nil, err
+	}
+	for _, call := range calls {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		start := time.Now()
+		e := Event{Type: EventToolStarted, Step: step, ToolName: call.Name, ToolCallID: call.ID, Status: &quot;ok&quot;}
+		a.emit(ctx, e)
+		toolCtx := ctx
+		cancel := func() {}
+		if a.toolTimeout &gt; 0 {
+			toolCtx, cancel = context.WithTimeout(ctx, a.toolTimeout)
+		}
+		result, err := a.tools[call.Name].Execute(toolCtx, call.Arguments)
+		if toolCtx.Err() != nil {
+			err = toolCtx.Err()
+		}
+		cancel()
+		e.Type = EventToolCompleted
+		e.Duration = time.Since(start)
+		e.Status = status(err)
+		a.emit(ctx, e)
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
+		if err != nil {
+			// 仅回填受控提示，未知内部错误不暴露给模型。
+			var known *tool.Error
+			if errors.As(err, &amp;known) {
+				result = known.Error()
+			} else {
+				result = &quot;execution_failed: tool execution failed&quot;
+			}
+		}
+		results = append(results, model.Message{Role: &quot;tool&quot;, ToolCallID: call.ID, Content: result})
+	}
+	return results, nil
+}
+</code></pre><button type="button" data-copy="day9-reference-internal-agent-executor-go">复制本文件</button></details><h3>为什么接着学下一天？</h3><p>今天解决一批调用怎样被检查、执行和关联。Day 10 把超时、重试资格和结果预算集中到包装层。</p></section>
+<footer><a href="agent-runtime-day-08.html">前一天 Day 08</a> · <a href="agent-runtime-day-10.html">下一天 Day 10</a> · <a href="../../index.html">返回学习首页</a><p>Day 09 / 56 · 正文、图示、骨架与测试离线可读</p></footer></main>
+<script>
+const items=["用自己的话解释当天三个概念", "根据两张图讲清输入、职责和返回", "完成官方阅读并写下问题答案", "确认骨架可编译且目标出现预期红灯", "按任务卡逐步完成当天实现", "完整目标与 race 测试通过", "记录累计回归实际结果和未验证项", "合上代码完成需求变化与失败边界复盘"];const key="mini-agent-runtime-day-09-tdd-v3";
+let saved=[];try{const value=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(value))saved=value}catch(_){}
+const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const percent=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=percent+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(percent))}
+items.forEach((s,i)=>{const row=document.createElement("div");row.className="check";const input=document.createElement("input");input.type="checkbox";input.id="task-"+i;input.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=input.id;label.textContent=s;row.append(input,label);box.append(row);input.onchange=()=>{saved[i]=input.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+document.querySelectorAll("button[data-copy]").forEach(button=>button.addEventListener("click",async()=>{const target=document.getElementById(button.dataset.copy);try{await navigator.clipboard.writeText(target.textContent);button.textContent="已复制"}catch(_){const range=document.createRange();range.selectNodeContents(target);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);button.textContent="已选中，请手动复制"}}));
+</script></body></html>

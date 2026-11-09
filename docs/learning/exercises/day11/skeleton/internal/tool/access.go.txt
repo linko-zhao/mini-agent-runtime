@@ -1,0 +1,46 @@
+package tool
+
+import (
+	"context"
+	"errors"
+)
+
+// Principal is supplied by the trusted host after authentication, not by the model.
+type Principal struct{ ID string }
+type principalContextKey struct{}
+
+func WithPrincipal(ctx context.Context, p Principal) context.Context { panic("TODO: WithPrincipal") }
+
+func PrincipalFromContext(ctx context.Context) (Principal, bool) { panic("TODO: PrincipalFromContext") }
+
+var ErrForbidden = errors.New("tool: execution forbidden")
+
+type Capability string
+
+const (
+	ReadCapability  Capability = "read"
+	WriteCapability Capability = "write"
+)
+
+type Authorizer interface {
+	Authorize(context.Context, Call) error
+}
+
+// CapabilityAuthorizer is an immutable, tool-level teaching policy.
+// It is not an authentication service or a resource/tenant-level ACL.
+type CapabilityAuthorizer struct {
+	rules  map[string]Capability
+	grants map[string]map[Capability]bool
+}
+
+func validCapability(c Capability) bool { panic("TODO: validCapability") }
+
+// NewCapabilityAuthorizer copies its inputs. Unknown tools/principals are denied.
+// Read and write are independent capabilities; write does not imply read.
+func NewCapabilityAuthorizer(rules map[string]Capability, grants map[string][]Capability) (*CapabilityAuthorizer, error) {
+	panic("TODO: NewCapabilityAuthorizer")
+}
+
+func (a *CapabilityAuthorizer) Authorize(ctx context.Context, call Call) error {
+	panic("TODO: Authorize")
+}

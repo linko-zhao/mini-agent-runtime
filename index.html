@@ -14,7 +14,7 @@
 </head>
 <body><main>
 <header class="hero"><div class="eyebrow">MINI AGENT RUNTIME · LEARNING PATH</div><h1>Agent Runtime 学习文档</h1><p>八周、56 天，从 Runtime 与 Agent Loop 出发，逐步完成工具编排、状态恢复、记忆、调度、评估与部署。每天 20 分钟阅读、80 分钟编码、20 分钟测试与复盘。</p><div class="chips"><span class="chip">8 周 · 56 天</span><span class="chip">Go 实战</span><span class="chip">独立离线 HTML</span><span class="chip">周日集成复盘</span></div></header>
-<section class="intro"><p><strong>怎么使用：</strong>选择当天文档，先理解它要解决的问题与 Agent 数据流，再带着设计问题阅读、编码和验证。学习目标是能解释每层为何存在，并判断新需求应改哪一层。清单进度保存在浏览器 localStorage 中；前序练习未完成时，可借助 examples 累计参考基线继续学习。</p></section>
+<section class="intro"><p><strong>怎么使用：</strong>新版课程按“具体例子 → 图解设计 → 代码骨架 → 完整测试 → 自己实现”学习。先运行测试看到预期失败，每次补一个方法，最后回归并讲清数据流。编写要求见 <a href="docs/learning/daily-lesson-standard.md">每日教学交付规范</a>；Day 08–15 已采用新规范；Day 01–07 仍保留旧版。清单进度保存在浏览器 localStorage 中；前序练习未完成时，可借助 examples 累计参考基线继续学习。</p></section>
 <section class="week"><div class="week-head"><h2>第 1 周 · Runtime 与 Agent Loop</h2><span>Day 01–07 · 基础、模型接口、执行闭环</span></div><div class="cards">
 <a class="card" href="docs/learning/agent-runtime-day-01.html"><div class="card-top"><span class="day">DAY 01</span><span class="status">学习计划</span></div><h3>Runtime 核心抽象与最小 Agent Loop</h3><p>模型、工具与 Agent 执行闭环</p></a>
 <a class="card" href="docs/learning/agent-runtime-day-02.html"><div class="card-top"><span class="day">DAY 02</span><span class="status">学习计划</span></div><h3>Agent Runtime 迭代与工具调用</h3><p>沿着既有实现推进接口与行为</p></a>
@@ -25,16 +25,19 @@
 <a class="card" href="docs/learning/agent-runtime-day-07.html"><div class="card-top"><span class="day">DAY 07</span><span class="status">学习计划</span></div><h3>第一周集成复盘</h3><p>Runtime、Model、Agent Loop 与工具交互验收</p></a>
 </div></section>
 <section class="week"><div class="week-head"><h2>第 2 周 · Tools 与 MCP</h2><span>Day 08–14 · 工具协议、MCP 客户端与集成复盘</span></div><div class="cards">
-<a class="card" href="docs/learning/agent-runtime-day-08.html"><div class="card-top"><span class="day">DAY 08</span><span class="status">学习计划</span></div><h3>Agent 工具抽象与 Eino 接口设计</h3><p>为什么需要工具契约：从检索场景理解描述、执行与结果回传</p></a>
-<a class="card" href="docs/learning/agent-runtime-day-09.html"><div class="card-top"><span class="day">DAY 09</span><span class="status">学习计划</span></div><h3>Agent 工具调度与 Eino ToolsNode</h3><p>为什么需要执行器：批次检查、结果关联与 Loop 分工</p></a>
-<a class="card" href="docs/learning/agent-runtime-day-10.html"><div class="card-top"><span class="day">DAY 10</span><span class="status">学习计划</span></div><h3>工具执行策略与 Eino 中间件</h3><p>总超时、只读重试、幂等边界与结果预算</p></a>
-<a class="card" href="docs/learning/agent-runtime-day-11.html"><div class="card-top"><span class="day">DAY 11</span><span class="status">学习计划</span></div><h3>工具可见性、执行授权与审计</h3><p>可信主体、整批授权与执行前决策记录</p></a>
-<a class="card" href="docs/learning/agent-runtime-day-12.html"><div class="card-top"><span class="day">DAY 12</span><span class="status">学习计划</span></div><h3>MCP 生命周期与工具协议</h3><p>初始化、能力协商、工具发现与JSON-RPC调用</p></a>
-<a class="card" href="docs/learning/agent-runtime-day-13.html"><div class="card-top"><span class="day">DAY 13</span><span class="status">学习计划</span></div><h3>MCP工具适配与Agent往返</h3><p>名称隔离、结果映射、授权与模型消息关联</p></a>
-<a class="card" href="docs/learning/agent-runtime-day-14.html"><div class="card-top"><span class="day">DAY 14</span><span class="status">学习计划</span></div><h3>第二周综合集成与复盘</h3><p>本地/远端工具闭环、七场景验收与恢复边界</p></a>
+<a class="card" href="docs/learning/agent-runtime-day-08.html"><div class="card-top"><span class="day">DAY 08</span><span class="status">图解 · TDD 样板</span></div><h3>图解工具设计，自己实现注册表</h3><p>设计理由、完整骨架与测试、五步独立实现任务</p></a>
+<a class="card" href="docs/learning/agent-runtime-day-09.html"><div class="card-top"><span class="day">DAY 09</span><span class="status">图解 · TDD</span></div><h3>一次多个工具请求，怎样安全执行？</h3><p>先检查整批，再按顺序执行，把每个结果送回正确的调用。</p></a>
+<a class="card" href="docs/learning/agent-runtime-day-10.html"><div class="card-top"><span class="day">DAY 10</span><span class="status">图解 · TDD</span></div><h3>给工具加执行策略，业务代码不用重写</h3><p>一次逻辑调用，共用超时、有限重试与结果预算。</p></a>
+<a class="card" href="docs/learning/agent-runtime-day-11.html"><div class="card-top"><span class="day">DAY 11</span><span class="status">图解 · TDD</span></div><h3>模型能看到，不等于用户能执行</h3><p>可信主体、默认拒绝、整批授权与决策审计。</p></a>
+<a class="card" href="docs/learning/agent-runtime-day-12.html"><div class="card-top"><span class="day">DAY 12</span><span class="status">图解 · TDD</span></div><h3>MCP：先握手，再发现和调用工具</h3><p>把协议消息、工具业务结果、会话状态分开理解。</p></a>
+<a class="card" href="docs/learning/agent-runtime-day-13.html"><div class="card-top"><span class="day">DAY 13</span><span class="status">图解 · TDD</span></div><h3>让远端 MCP 工具接回已有 Agent</h3><p>名字隔离、目录分页和结果投影，分别解决不同问题。</p></a>
+<a class="card" href="docs/learning/agent-runtime-day-14.html"><div class="card-top"><span class="day">DAY 14</span><span class="status">总结 · 集成验收</span></div><h3>第二周复盘：亲手把整条链装起来</h3><p>少加新概念，多用图、装配骨架和故障矩阵检验理解。</p></a>
+</div></section>
+<section class="week"><div class="week-head"><h2>第 3 周 · 状态机与 Checkpoint</h2><span>Day 15–21 · 显式状态、持久化边界与恢复</span></div><div class="cards">
+<a class="card" href="docs/learning/agent-runtime-day-15.html"><div class="card-top"><span class="day">DAY 15</span><span class="status">图解 · TDD</span></div><h3>运行到哪一步？把进度写成状态机</h3><p>阶段、事件、消息快照、合法转换与终态</p></a>
+<div class="card future"><div class="card-top"><span class="day">DAY 16–21</span><span class="status">待生成</span></div><h3>接入运行状态与 Checkpoint</h3><p>沿第三周路线增量推进；Day 21 集成复盘</p></div>
 </div></section>
 <section class="week"><div class="week-head"><h2>后续学习路线</h2><span>每天生成对应的独立学习文档</span></div><div class="cards">
-<div class="card future"><div class="card-top"><span class="day">WEEK 03 · 15–21</span><span class="status">待生成</span></div><h3>状态机与 Checkpoint</h3><p>执行状态、持久化边界与恢复验证</p></div>
 <div class="card future"><div class="card-top"><span class="day">WEEK 04 · 22–28</span><span class="status">待生成</span></div><h3>中断审批与故障恢复</h3><p>人工介入、安全边界与恢复路径</p></div>
 <div class="card future"><div class="card-top"><span class="day">WEEK 05 · 29–35</span><span class="status">待生成</span></div><h3>Context 与 Memory</h3><p>上下文管理、压缩与记忆策略</p></div>
 <div class="card future"><div class="card-top"><span class="day">WEEK 06 · 36–42</span><span class="status">待生成</span></div><h3>调度与隔离</h3><p>并发调度、资源控制与执行隔离</p></div>

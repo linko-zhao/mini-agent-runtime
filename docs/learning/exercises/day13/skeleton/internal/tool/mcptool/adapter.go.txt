@@ -1,0 +1,56 @@
+// Package mcptool adapts the Day12 MCP client to the existing Day08 tool contract.
+package mcptool
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+
+	"regexp"
+
+	"github.com/linko-zhao/mini-agent-runtime/internal/mcp"
+	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
+)
+
+var (
+	ErrDiscovery          = errors.New("mcptool: discovery rejected")
+	ErrRemoteExecution    = errors.New("mcptool: remote execution failed")
+	ErrUnsupportedContent = errors.New("mcptool: unsupported content")
+	ErrInvalidResult      = errors.New("mcptool: invalid result")
+	prefixPattern         = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9-]*$`)
+	namePattern           = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+)
+
+// Caller is implemented by an already-initialized *mcp.Client.
+// The host owns initialization, transport cleanup and recovery.
+type Caller interface {
+	ListTools(context.Context, string) (mcp.ToolsPage, error)
+	CallTool(context.Context, string, json.RawMessage) (mcp.ToolResult, error)
+}
+
+// ResultEnvelope is the explicit projection into the existing string result.
+// Non-text blocks are rejected, not silently flattened or discarded.
+type ResultEnvelope struct {
+	Text              []string        `json:"text"`
+	StructuredContent json.RawMessage `json:"structuredContent,omitempty"`
+}
+
+type remoteTool struct {
+	caller     Caller
+	remoteName string
+	spec       tool.Spec
+}
+
+func localName(prefix, name string) (string, error) { panic("TODO: localName") }
+
+// New snapshots metadata. It does not initialize a client, execute a tool,
+// or derive authorization/retry policy from remote annotations.
+func New(caller Caller, prefix string, d mcp.Descriptor) (tool.Invokable, error) { panic("TODO: New") }
+
+func (t *remoteTool) Meta(ctx context.Context) (tool.Spec, error) { panic("TODO: Meta") }
+
+func failure(message string, cause error) error { panic("TODO: failure") }
+
+func (t *remoteTool) Invoke(ctx context.Context, args json.RawMessage) (string, error) {
+	panic("TODO: Invoke")
+}

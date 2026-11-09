@@ -1,59 +1,331 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Day 10 · 工具执行策略与 Eino 中间件</title><style>
-:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#58667b;--line:#e0e6ee;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:920px;margin:auto;padding:32px 22px 70px}.hero{background:#183561;color:#fff;border-radius:18px;padding:29px 30px}.hero small{opacity:.8;letter-spacing:1px}.hero h1{margin:7px 0;font-size:30px;line-height:1.3}.hero p{margin:0;color:#e6eefa}.chips{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}.chip{border:1px solid #8ea4c8;border-radius:20px;padding:3px 10px;font-size:12px}section{background:var(--paper);border:1px solid var(--line);border-radius:14px;margin-top:18px;padding:22px 26px}h2{font-size:19px;margin:0 0 13px}h3{font-size:16px;margin:18px 0 6px}.time{font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.4px}p{margin:8px 0}a{color:var(--accent)}li{margin:6px 0}code{background:#f0f3f8;padding:2px 5px;border-radius:4px}pre{overflow:auto;background:#142136;color:#e7f3ff;padding:17px;border-radius:10px;font-size:13px;line-height:1.65}pre code{background:transparent;padding:0}.goal{background:var(--pale);border-left:3px solid var(--accent);padding:12px 15px;border-radius:4px}.note{background:#fff8e9;border:1px solid #f2deb2;border-radius:9px;padding:11px 14px;color:#644b18}.info{background:#eff6ff;border:1px solid #d5e4fc;border-radius:9px;padding:11px 14px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.grid>div{padding:12px;background:#f6f8fc;border-radius:9px}.grid strong{display:block;font-size:19px}.grid span{font-size:12px;color:var(--sub)}.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0}.check input{margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer;flex:1}.check.done label{text-decoration:line-through;color:var(--sub)}.progress{height:8px;background:#e3e9f2;border-radius:99px;overflow:hidden}.fill{height:100%;background:var(--accent);width:0%;transition:width .2s}.meta{display:flex;justify-content:space-between;font-size:13px;color:var(--sub);margin-bottom:9px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px;vertical-align:top}th{background:#f4f7fc}.tag{display:inline-block;background:#eaf0fc;color:#2459bd;border-radius:5px;font-size:12px;padding:2px 7px;margin-right:6px}.muted{color:var(--sub);font-size:13px}footer{text-align:center;color:var(--sub);font-size:12px;margin:24px}@media(max-width:600px){main{padding:14px 12px 40px}.hero{padding:22px}.hero h1{font-size:24px}section{padding:18px}.grid{grid-template-columns:1fr}table{font-size:12px}th,td{padding:8px}pre{font-size:12px}}
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="description" content="Day 10 图解设计与测试先行学习文档"><title>Day 10 · 给工具加执行策略，业务代码不用重写</title><style>
+:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#52617a;--line:#dce4ef;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.85 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:820px;padding:28px 22px 64px;margin:auto}.hero{background:#183561;color:white;border-radius:18px;padding:30px}.hero h1{font-size:30px;line-height:1.45;margin:12px 0}.hero p{color:#e6eefa}.eyebrow,.time{font-size:14px;font-weight:700}.chips{display:flex;flex-wrap:wrap;gap:8px}.chips span{font-size:14px;border:1px solid #9cb5d9;border-radius:20px;padding:3px 12px}section,nav{background:white;border:1px solid var(--line);border-radius:14px;padding:26px;margin-top:20px}h2{font-size:24px;line-height:1.5;margin:0 0 20px}h3{font-size:20px;line-height:1.5;margin:24px 0 10px}p{margin:12px 0}a{color:var(--accent);text-underline-offset:3px}li{margin:10px 0}code{font-size:.88em;background:#edf1f7;padding:2px 4px;border-radius:4px;overflow-wrap:anywhere}pre{background:#142136;color:#e7f3ff;border-radius:10px;padding:18px;overflow:auto;font-size:14px;line-height:1.7;tab-size:4}pre code{background:none;padding:0;font-size:inherit;overflow-wrap:normal}.note,.goal{border-left:4px solid var(--accent);background:var(--pale);padding:14px 18px;border-radius:4px}.warn{border-left-color:#9b6500;background:#fff6e3}.card,.rule,.step{border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:18px 0}.card h3,.step h3{margin-top:0}.muted{color:var(--sub);font-size:15px}.flow{display:flex;flex-direction:column;gap:10px;margin:20px 0}.node{border:2px solid #9eb6db;border-radius:10px;padding:15px;background:#f4f8ff}.node strong{display:block}.arrow{text-align:center;color:#345276;font-size:16px}.branch{border:2px dashed #9b6500;background:#fff7e8}.time{color:var(--accent)}details{border:1px solid var(--line);border-radius:9px;padding:12px 16px;margin:16px 0}summary{cursor:pointer;font-weight:650}summary:focus-visible,a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid #c67800;outline-offset:4px}button{font:inherit;font-size:15px;background:#edf3ff;color:#183561;border:1px solid #9eb6db;border-radius:7px;padding:7px 12px;cursor:pointer}.check{display:flex;gap:12px;margin:14px 0}.check input{width:20px;height:20px;flex-shrink:0;margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer}.done label{color:var(--sub);text-decoration:line-through}.progress{background:#e3e9f2;height:12px;border-radius:8px;overflow:hidden}.fill{background:var(--accent);height:100%;width:0}.meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:15px}footer{font-size:15px;text-align:center;padding:24px}.toplinks{display:flex;flex-wrap:wrap;gap:10px 22px}.download{font-size:15px}.code-actions{display:flex;gap:12px;align-items:center;margin-top:12px}.copy-state{font-size:14px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@media(max-width:600px){main{padding:12px 10px 36px}section,nav{padding:20px 16px}.hero{padding:23px 20px}.hero h1{font-size:26px}h2{font-size:22px}pre{padding:14px;font-size:13px}.card,.rule,.step{padding:14px}body{font-size:18px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+
+figure{margin-inline:0}p,.node,figcaption{overflow-wrap:anywhere}.file-label{overflow-wrap:anywhere}.phase{font-weight:700;color:#183561}.copy-status{font-size:14px;color:#52617a}details>pre{margin-bottom:12px}
 </style></head><body><main>
-<header class="hero"><small>MINI AGENT RUNTIME · WEEK 02 · EINO 源码对照</small><h1>Day 10 / 56 · 工具执行策略与 Eino 中间件</h1><p>工具调用成功接回模型后，怎样控制调用的耗时、失败恢复与输出成本？在既有接口外增加兼容策略层。</p><div class="chips"><span class="chip">阅读 20 分钟</span><span class="chip">编码 80 分钟</span><span class="chip">测试复盘 20 分钟</span></div></header>
-<section><h2>为什么今天要学执行策略？</h2><div class="goal">能解释策略与业务工具、Agent Loop 的职责差异，并能为读取能力选择有限重试、整次超时与结果预算，避免让 Agent 因慢请求、重复副作用或过量正文失控。</div>
-<p>Day 08 建立 Meta/Invoke 与注册适配，Day 09 确立批次 ID 检查、顺序执行及消息回填。现在用户希望“检索文档后生成答案”，后端偶发暂时失败；如果把重试写进每个工具，取消、耗时与错误语义就会不一致。如果对所有工具一律重试，创建工单可能发生两次。</p><p>今天采用<strong>装配时包装一次工具，执行时应用统一策略</strong>：不改变 Tool.Execute，不引入第二套 Call/Message。先预测行为，再阅读 Eino 对应入口，最后对照参考实现。</p></section>
-<section><h2>先走通完整 Agent 数据流</h2><pre><code>装配：Store → SearchKnowledge/GetDocument（Meta/Invoke）
-    → Registry.Register → Registry.Tools（旧 Tool 适配快照）
-    → WithPolicy（保留 Name/Definition）→ Agent.New → 绑定模型描述
-运行：Model.Generate → assistant.ToolCalls
-    → Loop 保存 assistant，整批检查 ID/名称
-    → EventToolStarted → 策略.Execute（总超时、重试资格）
-        → Tool.Execute → Invoke → Store
-        ← 暂时失败：仅显式只读且分类允许，有限重试
-        ← 成功：检查结果字节预算
-    → EventToolCompleted
-    → tool{原始 ToolCallID, Content} → Model.Generate → 最终回答</code></pre>
-<p>知识检索得到文档 ID 后，读取仍在后续模型轮次。一次内部重试沿用同一逻辑调用，不追加额外 tool 消息；模型下一轮重新发起调用则是新的 Agent 决策。现有事件记录逻辑调用总耗时，并未增加每次尝试的审计事件。</p><p>离线 FakeStore 和脚本模型只能验证协议、取消和策略，不证明真实模型会选对工具、后端支持幂等或真实网络重试有效。</p></section>
-<section><h2>承接前序设计与本日增量</h2><table><tr><th>操作</th><th>文件/接口</th><th>承接关系</th></tr>
-<tr><td>复用</td><td>examples/internal/model、tool/contract.go、registry.go、agent/agent.go</td><td>沿用 Message、Call、Meta/Invoke、Registry.Tools、Agent.New/Run；不更改消息或取消错误语义。</td></tr>
-<tr><td>新增</td><td>examples/internal/tool/policy.go、policy_test.go</td><td>WithPolicy 返回兼容 DescribedTool；围绕一次 Execute 添加控制。</td></tr>
-<tr><td>修改</td><td>examples/cmd/knowledge/main.go</td><td>对注册快照装配超时/预算包装，再传给原 Agent.New。</td></tr>
-<tr><td>更新</td><td>examples/README.md、CONTRACTS.md</td><td>记录策略默认值、权限/幂等边界及验证限制。</td></tr></table>
-<p>所有示例共享根 go.mod，包前缀仍为 github.com/linko-zhao/mini-agent-runtime/examples/internal/。Day 09 中提取私有 executeBatch 是建议练习，参考基线的执行块仍在 agent.go；今天将兼容包装接入这条已有调用路径，不把建议签名当成已存在 API。无公开签名迁移；调用方只需在装配工具后增加包装。</p></section>
-<section><h2>为什么这样设计？</h2><table><tr><th>决策</th><th>收益与代价</th></tr>
-<tr><td>超时包住全部尝试和等待</td><td>避免每次重试重置预算造成总耗时失控；更早的父 context/Agent 超时仍优先。取消需要工具合作。</td></tr>
-<tr><td>默认一次；显式只读+分类器才能重试</td><td>避免把模型自报或普通错误当成安全证据。受控 tool.Error、取消/超时不重试；后端暂时性必须由可信分类器识别。</td></tr>
-<tr><td>结果超预算返回受控错误</td><td>保护下一轮上下文；不直接截断 JSON 造成无效结构。当前按字节计数，不能替代 token 预算或阻止上游已分配的大结果。</td></tr>
-<tr><td>包装器保留描述和旧接口</td><td>原 Loop、注册和消息协议不用迁移；尚非 Eino 完整的可组合中间件链，也未实现流式工具。</td></tr>
-</table><p class="note"><strong>幂等边界：</strong>ReadOnly 由应用配置，不是授权或外部副作用撤销。写入工具今天不自动重试；如服务端明确支持幂等键，后续需定义键的业务范围、存储、过期和确认协议，不能用 ToolCallID 或进程内 map 宣称跨 Run exactly-once。超时之后外部操作可能已经发生。</p></section>
-<section><div class="time">20 MIN · READ</div><h2>带着问题阅读 Eino 与 Go 官方资料</h2><h3>12 分钟 · Eino 的包装入口</h3><p>阅读 <a href="https://github.com/cloudwego/eino/blob/main/compose/tool_node.go">compose/tool_node.go</a>，定位 InvokableToolEndpoint、InvokableToolMiddleware、ToolMiddleware、ToolsNodeConfig.ToolCallMiddlewares 和 Invoke。问题：包装在哪一层拿到调用信息？顺序/并行与每次调用策略是什么关系？框架默认错误行为是否等于课程策略？</p><p>产出：将 Endpoint 映射为单次工具执行，Middleware 映射为统一包装；本课 WithPolicy 是兼容旧接口的最小实现，不声称与 Eino API 相同。源码链接已核对，main 可能变化，学习时记录版本。</p><h3>8 分钟 · 取消与错误链</h3><p>阅读 <a href="https://pkg.go.dev/context#WithTimeout">context.WithTimeout</a> 与 <a href="https://go.dev/blog/go1.13-errors">Go 错误链</a>。回答：为什么总超时要在尝试循环之外？为什么 errors.Is(ctx error) 要优先于重试分类器？画出父/子 context 的预算关系。</p></section>
-<section><div class="time">80 MIN · BUILD</div><h2>四项连续演进练习</h2>
-<h3>任务一 · 20 分钟：先预测，再读 Policy 包装</h3><p><strong>为什么做：</strong>把跨业务策略集中起来，保持既有 Tool 调用契约。<strong>操作与观察：</strong>5 分钟画装配和执行链，10 分钟阅读新增 policy.go，5 分钟对照 Name/Definition 转发。下面是参考实现的接口摘录，不是独立可运行程序：</p><pre><code>type Policy struct {
-    Timeout time.Duration
-    MaxAttempts int
-    ReadOnly bool
-    Retryable func(error) bool
-    RetryDelay time.Duration
-    MaxResultBytes int
+<header class="hero"><div class="eyebrow">DAY 10 / 56 · 第 2 周 · 图解与 TDD</div><h1>给工具加执行策略，业务代码不用重写</h1><p>一次逻辑调用，共用超时、有限重试与结果预算。</p><div class="chips"><span>阅读 20 分钟</span><span>实现 80 分钟</span><span>测试复盘 20 分钟</span></div></header>
+<nav aria-label="本页学习路线"><strong>一次只做一小步，答案最后看</strong><div class="toplinks"><a href="#goal">① 今天做什么</a><a href="#concepts">② 概念与图解</a><a href="#design">③ 设计理由</a><a href="#contract">④ 行为契约</a><a href="#skeleton">⑤ 骨架</a><a href="#tests">⑥ 完整测试</a><a href="#tasks">⑦ 动手步骤</a><a href="#review">⑧ 验收</a></div></nav>
+<section id="goal"><h2>今天只解决什么？</h2><div class="goal">实现 WithPolicy 包装器，让已有工具统一遵守超时、重试资格和输出字节预算。</div><p>读取 doc-1 时后端短暂失败，随后恢复；同样的错误若发生在写入工具，重试却可能重复产生副作用。</p><p>把每种工具都改成自带重试，容易遗漏资格检查。包装器接收同一个 Execute 接口，将运行策略放在业务外面。</p><div class="note">不实现写入去重、持久幂等或跨 Run 恢复。ReadOnly 由可信宿主配置，不信任模型或远端自报。</div></section>
+<section id="concepts"><h2>先把概念说清楚</h2><article class="card"><h3>包装器：原接口外加一层</h3><p>外部仍调用 Execute；内部先处理策略，再调用原工具。</p><p>Name 与 Definition 保持原样，Loop 无需改变。</p></article><article class="card"><h3>逻辑调用与尝试</h3><p>模型的一条 ToolCall 是一次逻辑调用。</p><p>内部可能尝试两次，但只向模型回填一条结果，调用 ID 不变。</p></article><article class="card"><h3>字节预算：限制返回成本</h3><p>MaxResultBytes 按 UTF-8 字节计数。</p><p>中文通常不止一个字节；超限报受控错误，不截断可能是 JSON 的结果。</p></article><h3>图 1 · 模块职责与数据去向</h3><figure class="flow" aria-label="图 1 · 模块职责与数据去向"><div class="node"><strong>Registry.Tools</strong>提供旧 DescribedTool 对象。</div><div class="arrow">↓ DescribedTool 对象</div><div class="node"><strong>WithPolicy / policyTool</strong>限制整次 Execute；管理内部尝试、等待与成功结果预算。</div><div class="arrow">↓ ctx / Arguments</div><div class="node"><strong>原 Tool / Store</strong>只做一次后端操作；合作响应 ctx；不承担整个 Run 的调度。</div><figcaption class="muted">沿箭头从上到下读；每个框说明负责的事或当前输入输出。</figcaption></figure><details><summary>展开这张图的逐步文字说明</summary><ol><li><strong>Registry.Tools</strong>：提供旧 DescribedTool 对象。</li><li><strong>WithPolicy / policyTool</strong>：限制整次 Execute；管理内部尝试、等待与成功结果预算。</li><li><strong>原 Tool / Store</strong>：只做一次后端操作；合作响应 ctx；不承担整个 Run 的调度。</li></ol></details></section>
+<section id="walkthrough"><h2>沿同一个例子走一遍</h2><h3>图 2 · 一次完整过程</h3><figure class="flow" aria-label="图 2 · 一次完整过程"><div class="node"><strong>① 配置只读读取</strong>MaxAttempts=2，ReadOnly=true，Retryable 识别 transient。</div><div class="arrow">↓ 同一条逻辑调用</div><div class="node"><strong>② 第一次尝试</strong>Execute 收到独立参数副本；后端返回 transient。</div><div class="arrow">↓ transient 与剩余尝试资格</div><div class="node"><strong>③ 检查资格并等待</strong>同一逻辑 ctx 尚未过期，错误可重试，剩余次数足够；等待也响应取消。</div><div class="arrow">↓ 成功字符串 ok</div><div class="node"><strong>④ 第二次尝试与预算</strong>返回 ok，2 字节，预算为 2；包装器只向 Loop 返回一次 ok。</div><figcaption class="muted">沿箭头从上到下读；每个框说明负责的事或当前输入输出。</figcaption></figure><details><summary>展开这张图的逐步文字说明</summary><ol><li><strong>① 配置只读读取</strong>：MaxAttempts=2，ReadOnly=true，Retryable 识别 transient。</li><li><strong>② 第一次尝试</strong>：Execute 收到独立参数副本；后端返回 transient。</li><li><strong>③ 检查资格并等待</strong>：同一逻辑 ctx 尚未过期，错误可重试，剩余次数足够；等待也响应取消。</li><li><strong>④ 第二次尝试与预算</strong>：返回 ok，2 字节，预算为 2；包装器只向 Loop 返回一次 ok。</li></ol></details><h3>失败时停在哪里？</h3><div class="node branch">输出“中文”是 6 个 UTF-8 字节。预算为 5 时返回 ExecutionError 和空结果，不把截断文本或原结果送给模型；后端已执行的动作不会被撤销。</div></section>
+<section id="design"><h2>这些字段、接口和方法为什么存在？</h2><article class="card"><h3>Policy：六项显式配置</h3><p>Timeout 是整次逻辑调用的总时限；MaxAttempts 是包含首次在内的上限，0 归一为 1。</p><p>RetryDelay 是两次尝试的等待时间。</p></article><article class="card"><h3>只读资格和分类器</h3><p>ReadOnly 表示宿主确认可只读重试；Retryable(error) 判断未知后端错误是否暂时性。</p><p>MaxAttempts&gt;1 时两者缺一就构造失败；只读不等于被授权。</p></article><article class="card"><h3>结果预算与零值</h3><p>MaxResultBytes=0 不限；正值限制成功输出。</p><p>Timeout/RetryDelay=0 分别表示不额外限时/不等待；这些数值及 MaxAttempts 均不接受负值。</p></article><article class="card"><h3>policyTool 保存什么？</h3><p>target 保存原 DescribedTool，policy 保存值拷贝。</p><p>构造不执行目标；Name、Definition 委托目标，不复制其业务状态。</p><p>注入目标和 Retryable 的并发安全由宿主保证。</p></article><article class="card"><h3>WithPolicy 的输入输出</h3><p>输入非 nil 的 DescribedTool 和合法 Policy，返回同一接口的新对象。</p><p>共享注册表可逐项包装后交给原 Agent.New。</p></article><article class="card"><h3>Execute 的取消与拷贝</h3><p>入场先检查取消；整次调用只派生一次超时。</p><p>每次尝试独立复制 Arguments；执行后若 ctx 已取消，优先返回取消。</p></article><article class="card"><h3>为什么不重试所有 error？</h3><p>tool.Error 已表达可回填的业务问题；Canceled/DeadlineExceeded 表示应停止。</p><p>只有其他错误被 Retryable 接受、且还有次数，才等待并重试。</p></article></section>
+<section id="contract"><h2>行为契约：不用猜参考代码</h2><p>按下面规则实现。内部算法可以不同；未约定的错误文本不必逐字一致，错误链用 errors.Is/As 检查。</p><article class="rule"><h3>R1 · 构造与兼容</h3><p>拒绝 nil、负值；MaxAttempts=0 默认 1；大于 1 必须同时有 ReadOnly 和 Retryable。Name/Definition 不变。</p><p class="muted">对应测试：<code>TestDay10PolicyConfig / TestPolicyNoUnsafeRetry / TestPolicyReadRetryAndBudget</code></p></article><article class="rule"><h3>R2 · 默认只尝试一次</h3><p>Policy{} 不自动重试，结果和最终错误原样返回；errors.Is 保留最后原因。</p><p class="muted">对应测试：<code>TestPolicyDefaultNoRetry</code></p></article><article class="rule"><h3>R3 · 有限的只读重试</h3><p>仅未知且被分类为暂时性的错误重试；每次 Arguments 独立拷贝。业务错误、取消、超时、永久错误不重试，次数包含首次。</p><p class="muted">对应测试：<code>TestPolicyReadRetryAndBudget / TestPolicyNoUnsafeRetry / TestDay10AttemptLimitAndSharedDeadline</code></p></article><article class="rule"><h3>R4 · 共用截止时间</h3><p>Timeout 覆盖所有尝试和等待，不在重试时重新计时；父 context 更早到期时仍优先。执行后取消优先于目标返回的成功，等待取消后不再执行。</p><p class="muted">对应测试：<code>TestPolicyCancellationAndTimeout / TestPolicyCancellationDuringRetryWait / TestDay10AttemptLimitAndSharedDeadline / TestDay10ParentDeadline</code></p></article><article class="rule"><h3>R5 · 成功结果预算</h3><p>成功字符串长度按字节比较，等于预算允许，大于预算返回空字符串与 tool.ExecutionError。错误路径不把原成功文本带回。</p><p class="muted">对应测试：<code>TestPolicyReadRetryAndBudget</code></p></article></section>
+<section id="read"><h2>官方阅读 20 分钟：带着问题找证据</h2><article class="card"><div class="time">12 分钟</div><h3><a href="https://github.com/cloudwego/eino/blob/main/compose/tool_node.go">compose/tool_node.go · ToolCallMiddlewares</a></h3><p>找到调用包装的入口。画出本课包装器在 Loop 与业务 Execute 之间的位置，不照搬框架默认重试行为。</p></article><article class="card"><div class="time">8 分钟</div><h3><a href="https://pkg.go.dev/time#NewTimer">time.NewTimer 与 context.Context</a></h3><p>等待时为什么不能只 sleep？说明 timer 与 ctx.Done 的两个出口。</p></article><p class="muted">外部链接供源码对照；正文独立可读。本次未重新核对所有远端 main 符号，阅读时记录 commit，名称变化时按职责定位；不把框架默认策略直接视为本课约定。</p></section>
+<section id="continuity"><h2>承接前序设计与本日增量</h2><p>复用 Day 08 DescribedTool、Day 09 调用 ID/结果边界、tool.Error 和旧消息类型。新增或修改 internal/tool/policy.go；注册、Loop、Agent.New/Run 均不改签名。</p><p><strong>路径约定：</strong>练习使用 internal；参考使用 examples/internal。两套包只映射路径前缀，不能混用 model.Message。共用原仓库 go.mod，Go ≥ 1.22.2；没有每日独立 module。</p><p>新增或修改：internal/tool/policy.go；已有实现先保留，不把同名定义重复追加。</p><div class="note"><strong>安全开始：</strong>下面命令只新建仓库外的临时练习副本，复制同一累计模块的前置依赖，再把当天目标换成 TODO。不会修改你当前的 internal/cmd，也不根据你的代码判断进度。</div><pre><code>python3 docs/learning/exercises/prepare.py 10</code></pre><p>在原仓库根运行。脚本打印新副本的绝对路径；进入该目录后再编辑和测试。需要 Python 3.9+ 和 Go 工具链，不需要 API Key。</p><p>副本内包含为兼容累计版本提供的组件；当天任务只编辑上面列出的目标。已经实现过时，也可以只把完整测试应用到自己的版本，无需挖空重做。</p><details><summary>手工应用文件与保留旧实现</summary><p>先备份或在独立工作区操作。按本页路径保存骨架与测试；前序依赖使用同一套累计类型。当天测试文件若已存在，比较后更新，不与旧版重复定义。不要自动覆盖当前项目；参考基线仅用于准备依赖。</p><p>prepare.py 把参考依赖映射到副本 internal；当天方法始终使用未实现骨架。装配脚本不运行用户任务，也不证明你的原实现通过测试。</p></details></section>
+<section id="skeleton"><h2>完整骨架：方法体留给你</h2><p>每个文件的 package、import、类型和签名齐全。panic("TODO: ...") 表示尚未实现；它不是最终错误处理方式。按文件名保存，不只复制某个方法。</p><h3 class="file-label">待实现骨架：internal/tool/policy.go</h3><p class="download"><a href="exercises/day10/skeleton/internal/tool/policy.go.txt" download="policy.go">下载 policy.go</a></p><details class="code-file" data-kind="skeleton" data-source="day10/skeleton/internal/tool/policy.go.txt"><summary>展开完整文件：policy.go</summary><pre id="day10-skeleton-internal-tool-policy-go"><code>package tool
+
+import (
+	&quot;context&quot;
+	&quot;encoding/json&quot;
+
+	&quot;time&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+)
+
+// Policy applies to the whole logical call, including all retries and waits.
+// ReadOnly is an explicit application assertion, never inferred from a model.
+type Policy struct {
+	Timeout        time.Duration
+	MaxAttempts    int
+	ReadOnly       bool
+	Retryable      func(error) bool
+	RetryDelay     time.Duration
+	MaxResultBytes int
 }
-func WithPolicy(t DescribedTool, p Policy) (DescribedTool, error)</code></pre><p><strong>完成证据：</strong>能说明为什么不修改 Meta/Invoke、Registry.Tools 和 Agent.New；零 Timeout/MaxResultBytes 表示禁用对应限制，零 MaxAttempts 规范化为一次，负配置被拒绝。</p>
-<h3>任务二 · 25 分钟：理解超时与重试的控制流</h3><p><strong>为什么做：</strong>重试不应绕过取消或扩大副作用。<strong>操作与观察：</strong>10 分钟跟踪总超时 → Execute → ctx.Err → 错误分类 → 次数限制 → 可取消等待；10 分钟预测第一次失败第二次成功、受控参数错误、等待时取消；5 分钟修改 policy_test.go 的分类器并观察次数断言。每次尝试复制 Arguments，避免业务实现污染下一次输入。</p><p><strong>完成证据：</strong>只读暂时失败可恢复；取消、超时、受控错误不重试；写工具配置多个尝试在装配时失败；等待使用 timer/select，取消后不会开始下一次尝试。当前延迟固定且默认零，生产退避/jitter 需另行设计。</p>
-<h3>任务三 · 20 分钟：观察预算怎样影响下一轮模型</h3><p><strong>为什么做：</strong>大结果会消耗上下文，失败策略要在调用层保持一致。<strong>操作与观察：</strong>10 分钟观察 MaxResultBytes 对中文 UTF-8 字节的计数，10 分钟追踪超限 ExecutionError 如何经既有 Agent 转成受控 tool 消息。对比取消错误如何终止整个 Run。</p><p><strong>完成证据：</strong>超限原文不进入模型；逻辑调用保持原 ID；tool 事件耗时包含重试；能解释工具失败反馈与 Run 终止的区别。</p>
-<h3>任务四 · 15 分钟：装配知识工具并演示</h3><p><strong>为什么做：</strong>策略必须落到 Agent 实际路径。<strong>操作与观察：</strong>先看 cmd/knowledge 如何将 Registry.Tools() 的 DescribedTool 用 WithPolicy 包装，再传给原 Agent.New；示例给读取工具设置1秒总超时和4096字节预算，默认一次尝试，不启用真实网络重试。运行入口验证检索 → 文档读取 → 回答的既有流程。</p><pre><code># 从仓库根执行；共享根 go.mod
-go run ./examples/cmd/knowledge</code></pre><p><strong>完成证据：</strong>装配策略不改变模型描述和业务 Store；能指出若要增加写入授权应改哪里，而非靠 ReadOnly 开关当权限检查。</p></section>
-<section><div class="time">20 MIN · TEST &amp; REVIEW</div><h2>实作验收与理解验收</h2><p><strong>12分钟：</strong>阅读 policy_test.go，先预测次数/错误，再运行：</p><pre><code>go test ./examples/...
-go test -race ./examples/...</code></pre><table><tr><th>测试</th><th>证据与设计判断</th></tr>
-<tr><td>TestPolicyReadRetryAndBudget</td><td>暂时失败恢复、参数副本、定义转发、中文结果超字节预算被拒绝。</td></tr>
-<tr><td>TestPolicyNoUnsafeRetry / DefaultNoRetry</td><td>拒绝未授权重试配置；默认、永久错误、受控错误与取消类错误都不盲目重试。</td></tr>
-<tr><td>TestPolicyCancellationAndTimeout / CancellationDuringRetryWait</td><td>合作式超时、预取消和等待中取消保持错误链，后续尝试不执行。</td></tr>
-<tr><td>全部 examples 回归</td><td>原有工具协议、消息往返、注册和模型适配测试仍须通过；race 不报告并不证明未执行路径安全。</td></tr></table>
-<p class="note"><strong>本次真实验收状态：</strong>已尝试两条要求命令，均返回 <code>Go: Unknown option: test</code>；当前 /usr/bin/go 不是 Go 语言工具链，gofmt 也不可用。下载 Go 1.22.2 时代理端口连接失败。因此示例的编译、测试、race 与演示运行均<strong>未验证</strong>，不报告通过；请在可用 Go 环境重新运行。本页与 examples 及契约一起发布，不以环境缺失改变课程进度。</p>
-<p><strong>8分钟复盘：</strong></p><ol><li>不看代码讲述：一次读取失败后重试成功，结果怎样沿原 ID 返回下一轮模型？</li><li>需求变成创建工单，为什么不能只把 MaxAttempts 调大？幂等保证需要哪个系统提供？</li><li>如果后端不响应 context，包装器还能保证1秒返回吗？为什么不靠额外 goroutine 宣称解决？</li><li>如果要求每次尝试都审计，应扩展哪一层，如何避免重复发布 Run 终态？</li></ol>
-<h3>交互清单</h3><div class="meta"><span>仅表示学习自评，不代表测试通过</span><span id="count">0 / 8</span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div><div id="checks"></div></section>
-<section><h2>Definition of Done 与 Day 11 衔接</h2><p>理解验收：能解释策略插入点、一次逻辑调用与尝试、取消/业务失败的差异，以及幂等承诺的边界。实作验收：两条 examples 测试在可用环境通过，演示保持消息协议，新增用例验证次数、错误与预算。当前实作尚未在本环境验证。</p><p>Day 11 进入工具可见性、执行授权与审计：Day 08 的“模型看得见什么”和今天的“怎样执行”都不能回答“本次用户是否有权执行”。下一节把授权检查放在副作用之前，继续沿同一套接口演进。</p></section><footer>Agent Runtime · Day 10 / 56 · 离线内容可读 · <a href="../../index.html">返回学习首页</a></footer></main>
+
+// WithPolicy preserves the legacy described-tool boundary used by Agent.
+// No automatic retry occurs unless both ReadOnly and Retryable permit it.
+func WithPolicy(t DescribedTool, p Policy) (DescribedTool, error) { panic(&quot;TODO: WithPolicy&quot;) }
+
+type policyTool struct {
+	target DescribedTool
+	policy Policy
+}
+
+func (t *policyTool) Name() string                     { panic(&quot;TODO: Name&quot;) }
+func (t *policyTool) Definition() model.ToolDefinition { panic(&quot;TODO: Definition&quot;) }
+func (t *policyTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
+	panic(&quot;TODO: Execute&quot;)
+}
+</code></pre><button type="button" data-copy="day10-skeleton-internal-tool-policy-go">复制本文件</button></details></section>
+<section id="tests"><h2>完整测试：夹具和断言都已提供</h2><p>下面是全部测试文件，不需要补 fake、fixture 或断言。测试调用练习的 internal 包，不是已完成的 examples 答案。</p><h3 class="file-label">完整测试：internal/tool/policy_test.go</h3><p class="download"><a href="exercises/day10/tests/internal/tool/policy_test.go.txt" download="policy_test.go">下载 policy_test.go</a></p><details class="code-file" data-kind="tests" data-source="day10/tests/internal/tool/policy_test.go.txt"><summary>展开完整文件：policy_test.go</summary><pre id="day10-tests-internal-tool-policy-test-go"><code>package tool
+
+import (
+	&quot;context&quot;
+	&quot;encoding/json&quot;
+	&quot;errors&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+	&quot;sync&quot;
+	&quot;testing&quot;
+	&quot;time&quot;
+)
+
+type policyFake struct {
+	fn func(context.Context, json.RawMessage) (string, error)
+}
+
+func (f policyFake) Name() string                     { return &quot;lookup&quot; }
+func (f policyFake) Definition() model.ToolDefinition { return model.ToolDefinition{Name: &quot;lookup&quot;} }
+func (f policyFake) Execute(ctx context.Context, a json.RawMessage) (string, error) {
+	return f.fn(ctx, a)
+}
+
+func TestPolicyReadRetryAndBudget(t *testing.T) {
+	transient := errors.New(&quot;transient&quot;)
+	calls := 0
+	wrapped, err := WithPolicy(policyFake{func(_ context.Context, a json.RawMessage) (string, error) {
+		calls++
+		if string(a) != &quot;{}&quot; {
+			t.Fatalf(&quot;mutated args: %s&quot;, a)
+		}
+		a[0] = &#x27;x&#x27;
+		if calls == 1 {
+			return &quot;&quot;, transient
+		}
+		return &quot;ok&quot;, nil
+	}}, Policy{MaxAttempts: 2, ReadOnly: true, Retryable: func(e error) bool { return errors.Is(e, transient) }, MaxResultBytes: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := wrapped.Execute(context.Background(), json.RawMessage(&quot;{}&quot;))
+	if err != nil || out != &quot;ok&quot; || calls != 2 || wrapped.Name() != &quot;lookup&quot; || wrapped.Definition().Name != &quot;lookup&quot; {
+		t.Fatalf(&quot;%q %v calls=%d&quot;, out, err, calls)
+	}
+	budget, _ := WithPolicy(policyFake{func(context.Context, json.RawMessage) (string, error) { return &quot;中文&quot;, nil }}, Policy{MaxResultBytes: 5})
+	out, err = budget.Execute(context.Background(), nil)
+	var known *Error
+	if out != &quot;&quot; || !errors.As(err, &amp;known) || known.Kind != ExecutionError {
+		t.Fatalf(&quot;%q %v&quot;, out, err)
+	}
+}
+
+func TestPolicyNoUnsafeRetry(t *testing.T) {
+	for _, p := range []Policy{{MaxAttempts: 2}, {MaxAttempts: 2, ReadOnly: true}, {Timeout: -1}, {RetryDelay: -1}, {MaxResultBytes: -1}} {
+		if _, err := WithPolicy(policyFake{}, p); err == nil {
+			t.Fatalf(&quot;accepted %+v&quot;, p)
+		}
+	}
+	for _, failure := range []error{&amp;Error{Kind: ValidationError, Message: &quot;bad input&quot;}, context.Canceled, context.DeadlineExceeded, errors.New(&quot;permanent&quot;)} {
+		calls := 0
+		wrapped, _ := WithPolicy(policyFake{func(context.Context, json.RawMessage) (string, error) { calls++; return &quot;&quot;, failure }}, Policy{MaxAttempts: 3, ReadOnly: true, Retryable: func(e error) bool { return e != failure || failure.Error() != &quot;permanent&quot; }})
+		_, err := wrapped.Execute(context.Background(), nil)
+		if !errors.Is(err, failure) || calls != 1 {
+			t.Fatalf(&quot;%v calls=%d&quot;, err, calls)
+		}
+	}
+}
+
+func TestPolicyCancellationAndTimeout(t *testing.T) {
+	calls := 0
+	wrapped, _ := WithPolicy(policyFake{func(ctx context.Context, _ json.RawMessage) (string, error) {
+		calls++
+		&lt;-ctx.Done()
+		return &quot;late&quot;, nil
+	}}, Policy{Timeout: 5 * time.Millisecond})
+	_, err := wrapped.Execute(context.Background(), nil)
+	if !errors.Is(err, context.DeadlineExceeded) || calls != 1 {
+		t.Fatalf(&quot;%v calls=%d&quot;, err, calls)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = wrapped.Execute(ctx, nil)
+	if !errors.Is(err, context.Canceled) || calls != 1 {
+		t.Fatalf(&quot;%v calls=%d&quot;, err, calls)
+	}
+}
+
+func TestPolicyCancellationDuringRetryWait(t *testing.T) {
+	parent, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ctx := &amp;policyWaitContext{Context: parent, entered: make(chan struct{})}
+	go func() { &lt;-ctx.entered; cancel() }()
+	calls := 0
+	failure := errors.New(&quot;temporary&quot;)
+	wrapped, _ := WithPolicy(policyFake{func(context.Context, json.RawMessage) (string, error) {
+		calls++
+		return &quot;&quot;, failure
+	}}, Policy{MaxAttempts: 3, ReadOnly: true, Retryable: func(error) bool { return true }, RetryDelay: time.Hour})
+	_, err := wrapped.Execute(ctx, nil)
+	if !errors.Is(err, context.Canceled) || calls != 1 {
+		t.Fatalf(&quot;%v calls=%d&quot;, err, calls)
+	}
+}
+
+func TestPolicyDefaultNoRetry(t *testing.T) {
+	calls := 0
+	cause := errors.New(&quot;transient&quot;)
+	wrapped, _ := WithPolicy(policyFake{func(context.Context, json.RawMessage) (string, error) { calls++; return &quot;&quot;, cause }}, Policy{})
+	_, err := wrapped.Execute(context.Background(), nil)
+	if !errors.Is(err, cause) || calls != 1 {
+		t.Fatalf(&quot;%v calls=%d&quot;, err, calls)
+	}
+}
+
+// Done 被重试等待观察到后才取消，避免用 sleep 猜时序。
+type policyWaitContext struct {
+	context.Context
+	entered chan struct{}
+	once    sync.Once
+}
+
+func (c *policyWaitContext) Done() &lt;-chan struct{} {
+	c.once.Do(func() { close(c.entered) })
+	return c.Context.Done()
+}
+func TestDay10PolicyConfig(t *testing.T) {
+	if _, err := WithPolicy(nil, Policy{}); err == nil {
+		t.Fatal(&quot;nil accepted&quot;)
+	}
+	if _, err := WithPolicy(policyFake{}, Policy{MaxAttempts: -1}); err == nil {
+		t.Fatal(&quot;negative attempts accepted&quot;)
+	}
+	for _, p := range []Policy{{}, {MaxAttempts: 1}, {ReadOnly: true, MaxAttempts: 2, Retryable: func(error) bool { return true }}} {
+		if got, err := WithPolicy(policyFake{}, p); err != nil || got == nil {
+			t.Fatal(p, err)
+		}
+	}
+}
+func TestDay10AttemptLimitAndSharedDeadline(t *testing.T) {
+	failure := errors.New(&quot;temporary&quot;)
+	n := 0
+	var deadline time.Time
+	wrapped, err := WithPolicy(policyFake{func(ctx context.Context, _ json.RawMessage) (string, error) {
+		n++
+		d, ok := ctx.Deadline()
+		if !ok {
+			t.Fatal(&quot;missing deadline&quot;)
+		}
+		if n == 1 {
+			deadline = d
+		} else if !d.Equal(deadline) {
+			t.Fatal(&quot;timeout restarted between attempts&quot;)
+		}
+		return &quot;&quot;, failure
+	}}, Policy{Timeout: time.Hour, ReadOnly: true, MaxAttempts: 2, Retryable: func(error) bool { return true }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = wrapped.Execute(context.Background(), nil)
+	if !errors.Is(err, failure) || n != 2 {
+		t.Fatalf(&quot;%v attempts=%d&quot;, err, n)
+	}
+}
+
+func TestDay10ParentDeadline(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	defer cancel()
+	target := policyFake{func(c context.Context, _ json.RawMessage) (string, error) { &lt;-c.Done(); return &quot;late&quot;, nil }}
+	wrapped, err := WithPolicy(target, Policy{Timeout: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := wrapped.Execute(ctx, nil)
+	if out != &quot;&quot; || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf(&quot;%q %v&quot;, out, err)
+	}
+}
+</code></pre><button type="button" data-copy="day10-tests-internal-tool-policy-test-go">复制本文件</button></details><h3>先编译，再看到明确红灯</h3><pre><code>go test ./internal/tool -run &#x27;^$&#x27; -timeout 20s
+go test ./internal/tool -run &#x27;^(TestPolicy|TestDay10)&#x27; -count=1 -v -timeout 20s</code></pre><p>编译命令预期退出码 0，“no tests to run”在这一步是正常的。第二条必须实际运行用例，并在当天方法的 TODO 处失败；缺包、语法错误、命令未匹配到测试都不算行为红灯。</p><p>已有实现可能直接全绿。保留这些结果，再用契约检查设计；不要为了制造红灯破坏已完成代码。</p></section>
+<section id="tasks"><h2>分步实现：一次只改变一组行为</h2><div class="time">编码 80 分钟 · 每次只看当前任务卡</div><article class="step"><h3>1 · 15 分钟</h3><p><strong>为什么做：</strong>把非法策略挡在运行之前，明确零值含义。</p><p><strong>位置：</strong>WithPolicy、policyTool、Name/Definition</p><p><strong>动作：</strong>完成配置验证、默认尝试次数及元信息委托；不要执行后端。</p><pre><code>go test ./internal/tool -run &#x27;^TestDay10PolicyConfig$&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>合法配置返回包装器，非法配置在构造阶段报错。</p><details><summary>卡住时再看提示</summary><p>不要把 MaxAttempts 的 0 当成执行 0 次。</p></details></article><article class="step"><h3>2 · 20 分钟</h3><p><strong>为什么做：</strong>先保持原有单次调用语义，再增加复杂策略。</p><p><strong>位置：</strong>Execute 的单次路径</p><p><strong>动作：</strong>先做一次调用，返回结果/错误；保留原接口。</p><pre><code>go test ./internal/tool -run &#x27;^TestPolicyDefaultNoRetry$&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>默认 transient 只调用一次，不偷偷重试。</p><details><summary>卡住时再看提示</summary><p>先把最小执行路径写通，再增加循环。</p></details></article><article class="step"><h3>3 · 25 分钟</h3><p><strong>为什么做：</strong>只有可信资格和明确错误分类才能安全重试。</p><p><strong>位置：</strong>Execute 的重试与预算</p><p><strong>动作：</strong>加入只读资格、错误分类、次数上限、参数副本和成功结果字节检查。</p><pre><code>go test ./internal/tool -run &#x27;^(TestPolicyReadRetryAndBudget|TestPolicyNoUnsafeRetry|TestDay10AttemptLimitAndSharedDeadline)$&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>两次尝试得到 ok；业务错误不重试；中文超预算被拒绝。</p><details><summary>卡住时再看提示</summary><p>先区分可回填业务错误，再调用 Retryable；不要用字符数计算预算。</p></details></article><article class="step"><h3>4 · 20 分钟</h3><p><strong>为什么做：</strong>超时必须覆盖整个逻辑调用，等待也要能停止。</p><p><strong>位置：</strong>Execute 的总超时与等待</p><p><strong>动作：</strong>整次调用只建一个超时 context；等待用 timer 与取消双出口，执行后检查 context。</p><pre><code>go test ./internal/tool -run &#x27;^(TestPolicyCancellation|TestDay10ParentDeadline)&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>取消等待后不再开始下一次尝试，迟到的成功不能覆盖超时。</p><details><summary>卡住时再看提示</summary><p>测试用可观察 Done 的 context 同步取消，不依赖 sleep 猜时序。</p></details></article></section>
+<section id="review"><h2>测试与复盘 20 分钟</h2><div class="time">12 分钟 · 从目标到累计回归</div><pre><code>go test ./internal/tool -run &#x27;^(TestPolicy|TestDay10)&#x27; -count=1 -v -timeout 20s
+go test -race ./internal/tool -run &#x27;^(TestPolicy|TestDay10)&#x27; -count=1 -timeout 30s
+go test ./internal/... -timeout 60s
+go test ./examples/... -timeout 60s
+go test -race ./examples/... -timeout 60s</code></pre><p>先让当天目标全绿，再运行累计回归。examples 验证参考基线，不能替代对 internal 练习的测试。若前序练习接口不同，先按迁移说明对齐，不通过修改测试 import 绕到答案。</p><p>重构时保持同一套断言，整理重复逻辑后再运行；不要通过删测试、跳过用例或改预期来“变绿”。</p><div class="time">8 分钟 · 合上代码回答</div><ol><li>为什么内部两次尝试只产生一条 tool 消息？</li><li>ReadOnly 能代替权限判断吗？</li><li>为什么超限不直接截断？</li></ol><details><summary>完成回答后，再看参考思路</summary><article class="card"><h3>为什么内部两次尝试只产生一条 tool 消息？</h3><p>Loop 看到的是同一次 Execute；尝试属于包装器内部，不新增模型调用 ID。</p></article><article class="card"><h3>ReadOnly 能代替权限判断吗？</h3><p>不能。</p><p>它只声明重试资格，不授予用户执行权限。</p></article><article class="card"><h3>为什么超限不直接截断？</h3><p>输出可能是结构化 JSON；截断会破坏协议，也不能回滚外部操作。</p></article></details><h3>完成定义</h3><p><strong>实现验收：</strong>当天完整目标用例与 race 通过，记录累计回归的实际结果；失败时记录阶段、原因与未验证范围。</p><p><strong>理解验收：</strong>不看代码，用本日例子讲清输入、职责、结果和失败出口；再说出一个需求变化应该修改哪一层。</p><h3>本次发布验证</h3><div class="note"><p>Go 1.22.2 linux/amd64：原样骨架编译通过；目标测试在 TODO 处按预期失败；同一套测试对兼容参考实现通过（含 race）。</p><p>目标包含 8 个顶层通过测试及其子场景；完整输出见验证记录。</p><p>验证在临时副本中完成，不代表你的当前实现已通过。真实网络、模型或崩溃恢复不在本次验证范围。</p><p><a href="exercises/README.md">查看准备方法与验证范围</a> · <a href="exercises/verification.json">查看原始红绿测试记录</a></p></div><h3>学习清单</h3><div class="meta"><span>本浏览器自评进度；新版清单单独保存</span><span id="count">0 / 8</span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="fill" class="fill"></div></div><div id="checks"></div><noscript><p>未启用脚本仍可展开全文和手动复制；清单不自动保存。</p></noscript></section>
+<section id="answer"><h2>最后再看参考答案</h2><p>这些实现与骨架签名一致，保留相同契约。内部写法可以不同；先按规则和测试独立完成，再对照取舍。</p><h3 class="file-label">参考实现：internal/tool/policy.go</h3><p class="download"><a href="exercises/day10/reference/internal/tool/policy.go.txt" download="policy.go">下载 policy.go</a></p><details class="code-file" data-kind="reference" data-source="day10/reference/internal/tool/policy.go.txt"><summary>展开完整文件：policy.go</summary><pre id="day10-reference-internal-tool-policy-go"><code>package tool
+
+import (
+	&quot;context&quot;
+	&quot;encoding/json&quot;
+	&quot;errors&quot;
+	&quot;fmt&quot;
+	&quot;time&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+)
+
+// Policy applies to the whole logical call, including all retries and waits.
+// ReadOnly is an explicit application assertion, never inferred from a model.
+type Policy struct {
+	Timeout        time.Duration
+	MaxAttempts    int
+	ReadOnly       bool
+	Retryable      func(error) bool
+	RetryDelay     time.Duration
+	MaxResultBytes int
+}
+
+// WithPolicy preserves the legacy described-tool boundary used by Agent.
+// No automatic retry occurs unless both ReadOnly and Retryable permit it.
+func WithPolicy(t DescribedTool, p Policy) (DescribedTool, error) {
+	if t == nil || p.Timeout &lt; 0 || p.MaxAttempts &lt; 0 || p.RetryDelay &lt; 0 || p.MaxResultBytes &lt; 0 {
+		return nil, fmt.Errorf(&quot;tool: invalid policy&quot;)
+	}
+	if p.MaxAttempts == 0 {
+		p.MaxAttempts = 1
+	}
+	if p.MaxAttempts &gt; 1 &amp;&amp; (!p.ReadOnly || p.Retryable == nil) {
+		return nil, fmt.Errorf(&quot;tool: retries require explicit read-only and retryable policy&quot;)
+	}
+	return &amp;policyTool{target: t, policy: p}, nil
+}
+
+type policyTool struct {
+	target DescribedTool
+	policy Policy
+}
+
+func (t *policyTool) Name() string                     { return t.target.Name() }
+func (t *policyTool) Definition() model.ToolDefinition { return t.target.Definition() }
+func (t *policyTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return &quot;&quot;, err
+	}
+	if t.policy.Timeout &gt; 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, t.policy.Timeout)
+		defer cancel()
+	}
+	for attempt := 1; attempt &lt;= t.policy.MaxAttempts; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return &quot;&quot;, err
+		}
+		result, err := t.target.Execute(ctx, append(json.RawMessage(nil), args...))
+		if ctx.Err() != nil {
+			return &quot;&quot;, ctx.Err()
+		}
+		if err == nil {
+			if t.policy.MaxResultBytes &gt; 0 &amp;&amp; len(result) &gt; t.policy.MaxResultBytes {
+				return &quot;&quot;, &amp;Error{Kind: ExecutionError, Message: &quot;tool result exceeds byte budget&quot;}
+			}
+			return result, nil
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return &quot;&quot;, err
+		}
+		var controlled *Error
+		if errors.As(err, &amp;controlled) || attempt == t.policy.MaxAttempts || t.policy.Retryable == nil || !t.policy.Retryable(err) {
+			return &quot;&quot;, err
+		}
+		if t.policy.RetryDelay &gt; 0 {
+			timer := time.NewTimer(t.policy.RetryDelay)
+			select {
+			case &lt;-ctx.Done():
+				timer.Stop()
+				return &quot;&quot;, ctx.Err()
+			case &lt;-timer.C:
+			}
+		}
+	}
+	panic(&quot;unreachable&quot;)
+}
+</code></pre><button type="button" data-copy="day10-reference-internal-tool-policy-go">复制本文件</button></details><h3>为什么接着学下一天？</h3><p>今天将执行策略从业务工具中分离。Day 11 再单独回答：当前用户是否有权调用这个工具？</p></section>
+<footer><a href="agent-runtime-day-09.html">前一天 Day 09</a> · <a href="agent-runtime-day-11.html">下一天 Day 11</a> · <a href="../../index.html">返回学习首页</a><p>Day 10 / 56 · 正文、图示、骨架与测试离线可读</p></footer></main>
 <script>
-const items=["解释策略层在 Agent 数据流中的位置","对照 Eino 中间件与本课兼容包装","区分总超时与每次尝试超时","预测只读暂时失败和写入重试风险","跟踪取消与错误链","验证字节预算与模型结果整形","在可用Go环境运行两条examples测试并记录结果","不看代码完成设计推演"];
-const key="agent-runtime-day10-v1";let saved=[];try{const v=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(v))saved=v}catch(_){}const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const p=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=p+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(p))}items.forEach((s,i)=>{const r=document.createElement("div");r.className="check";const c=document.createElement("input");c.type="checkbox";c.id="task-"+i;c.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=c.id;label.textContent=s;r.append(c,label);box.append(r);c.onchange=()=>{saved[i]=c.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+const items=["用自己的话解释当天三个概念", "根据两张图讲清输入、职责和返回", "完成官方阅读并写下问题答案", "确认骨架可编译且目标出现预期红灯", "按任务卡逐步完成当天实现", "完整目标与 race 测试通过", "记录累计回归实际结果和未验证项", "合上代码完成需求变化与失败边界复盘"];const key="mini-agent-runtime-day-10-tdd-v3";
+let saved=[];try{const value=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(value))saved=value}catch(_){}
+const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const percent=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=percent+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(percent))}
+items.forEach((s,i)=>{const row=document.createElement("div");row.className="check";const input=document.createElement("input");input.type="checkbox";input.id="task-"+i;input.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=input.id;label.textContent=s;row.append(input,label);box.append(row);input.onchange=()=>{saved[i]=input.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+document.querySelectorAll("button[data-copy]").forEach(button=>button.addEventListener("click",async()=>{const target=document.getElementById(button.dataset.copy);try{await navigator.clipboard.writeText(target.textContent);button.textContent="已复制"}catch(_){const range=document.createRange();range.selectNodeContents(target);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);button.textContent="已选中，请手动复制"}}));
 </script></body></html>

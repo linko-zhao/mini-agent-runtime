@@ -1,84 +1,515 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>Day 11 · 工具可见性、执行授权与审计</title><style>
-:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#58667b;--line:#e0e6ee;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:920px;margin:auto;padding:32px 22px 70px}.hero{background:#183561;color:#fff;border-radius:18px;padding:29px 30px}.hero small{opacity:.8;letter-spacing:1px}.hero h1{margin:7px 0;font-size:30px;line-height:1.3}.hero p{margin:0;color:#e6eefa}.chips{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}.chip{border:1px solid #8ea4c8;border-radius:20px;padding:3px 10px;font-size:12px}section{background:var(--paper);border:1px solid var(--line);border-radius:14px;margin-top:18px;padding:22px 26px}h2{font-size:19px;margin:0 0 13px}h3{font-size:16px;margin:18px 0 6px}.time{font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.4px}p{margin:8px 0}a{color:var(--accent)}li{margin:6px 0}code{background:#f0f3f8;padding:2px 5px;border-radius:4px}pre{overflow:auto;background:#142136;color:#e7f3ff;padding:17px;border-radius:10px;font-size:13px;line-height:1.65}pre code{background:transparent;padding:0}.goal{background:var(--pale);border-left:3px solid var(--accent);padding:12px 15px;border-radius:4px}.note{background:#fff8e9;border:1px solid #f2deb2;border-radius:9px;padding:11px 14px;color:#644b18}.info{background:#eff6ff;border:1px solid #d5e4fc;border-radius:9px;padding:11px 14px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.grid>div{padding:12px;background:#f6f8fc;border-radius:9px}.grid strong{display:block;font-size:19px}.grid span{font-size:12px;color:var(--sub)}.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0}.check input{margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer;flex:1}.check.done label{text-decoration:line-through;color:var(--sub)}.progress{height:8px;background:#e3e9f2;border-radius:99px;overflow:hidden}.fill{height:100%;background:var(--accent);width:0%;transition:width .2s}.meta{display:flex;justify-content:space-between;font-size:13px;color:var(--sub);margin-bottom:9px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px;vertical-align:top}th{background:#f4f7fc}.tag{display:inline-block;background:#eaf0fc;color:#2459bd;border-radius:5px;font-size:12px;padding:2px 7px;margin-right:6px}.muted{color:var(--sub);font-size:13px}footer{text-align:center;color:var(--sub);font-size:12px;margin:24px}@media(max-width:600px){main{padding:14px 12px 40px}.hero{padding:22px}.hero h1{font-size:24px}section{padding:18px}.grid{grid-template-columns:1fr}table{font-size:12px}th,td{padding:8px}pre{font-size:12px}}
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="description" content="Day 11 图解设计与测试先行学习文档"><title>Day 11 · 模型能看到，不等于用户能执行</title><style>
+:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#52617a;--line:#dce4ef;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.85 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:820px;padding:28px 22px 64px;margin:auto}.hero{background:#183561;color:white;border-radius:18px;padding:30px}.hero h1{font-size:30px;line-height:1.45;margin:12px 0}.hero p{color:#e6eefa}.eyebrow,.time{font-size:14px;font-weight:700}.chips{display:flex;flex-wrap:wrap;gap:8px}.chips span{font-size:14px;border:1px solid #9cb5d9;border-radius:20px;padding:3px 12px}section,nav{background:white;border:1px solid var(--line);border-radius:14px;padding:26px;margin-top:20px}h2{font-size:24px;line-height:1.5;margin:0 0 20px}h3{font-size:20px;line-height:1.5;margin:24px 0 10px}p{margin:12px 0}a{color:var(--accent);text-underline-offset:3px}li{margin:10px 0}code{font-size:.88em;background:#edf1f7;padding:2px 4px;border-radius:4px;overflow-wrap:anywhere}pre{background:#142136;color:#e7f3ff;border-radius:10px;padding:18px;overflow:auto;font-size:14px;line-height:1.7;tab-size:4}pre code{background:none;padding:0;font-size:inherit;overflow-wrap:normal}.note,.goal{border-left:4px solid var(--accent);background:var(--pale);padding:14px 18px;border-radius:4px}.warn{border-left-color:#9b6500;background:#fff6e3}.card,.rule,.step{border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:18px 0}.card h3,.step h3{margin-top:0}.muted{color:var(--sub);font-size:15px}.flow{display:flex;flex-direction:column;gap:10px;margin:20px 0}.node{border:2px solid #9eb6db;border-radius:10px;padding:15px;background:#f4f8ff}.node strong{display:block}.arrow{text-align:center;color:#345276;font-size:16px}.branch{border:2px dashed #9b6500;background:#fff7e8}.time{color:var(--accent)}details{border:1px solid var(--line);border-radius:9px;padding:12px 16px;margin:16px 0}summary{cursor:pointer;font-weight:650}summary:focus-visible,a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid #c67800;outline-offset:4px}button{font:inherit;font-size:15px;background:#edf3ff;color:#183561;border:1px solid #9eb6db;border-radius:7px;padding:7px 12px;cursor:pointer}.check{display:flex;gap:12px;margin:14px 0}.check input{width:20px;height:20px;flex-shrink:0;margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer}.done label{color:var(--sub);text-decoration:line-through}.progress{background:#e3e9f2;height:12px;border-radius:8px;overflow:hidden}.fill{background:var(--accent);height:100%;width:0}.meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:15px}footer{font-size:15px;text-align:center;padding:24px}.toplinks{display:flex;flex-wrap:wrap;gap:10px 22px}.download{font-size:15px}.code-actions{display:flex;gap:12px;align-items:center;margin-top:12px}.copy-state{font-size:14px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@media(max-width:600px){main{padding:12px 10px 36px}section,nav{padding:20px 16px}.hero{padding:23px 20px}.hero h1{font-size:26px}h2{font-size:22px}pre{padding:14px;font-size:13px}.card,.rule,.step{padding:14px}body{font-size:18px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+
+figure{margin-inline:0}p,.node,figcaption{overflow-wrap:anywhere}.file-label{overflow-wrap:anywhere}.phase{font-weight:700;color:#183561}.copy-status{font-size:14px;color:#52617a}details>pre{margin-bottom:12px}
 </style></head><body><main>
-<header class="hero"><small>MINI AGENT RUNTIME · WEEK 02 · EINO 源码对照</small><h1>Day 11 / 56 · 工具可见性、执行授权与审计</h1><p>模型提出调用意图，宿主决定是否有权执行。把工具描述、调用策略和权限判断放回各自职责。</p><div class="chips"><span class="chip">阅读 20 分钟</span><span class="chip">编码 80 分钟</span><span class="chip">测试复盘 20 分钟</span></div></header>
-<section><h2>为什么隐藏工具还不够？</h2><div class="goal">能解释可见性和授权的区别，沿现有 Agent 数据流添加执行前的权限检查，并用零执行反例验证拒绝没有越过副作用边界。</div>
-<p>Day 08 的注册表知道有哪些能力，WithVisibleTools 决定模型看到哪些描述。Day 09 保证同批调用 ID 和结果对应，Day 10 约束耗时、重试资格与结果预算。现在用户只是知识库读者，模型却请求 publish_document。即使没有向模型展示该工具，Runtime 若只按已注册名称分派，仍可能执行写入。</p>
-<p>今天解决“这个可信调用者能否执行这项能力”，而不是继续调整检索工具的业务算法。权限由应用及后端决定；提示词里写“不要调用”或模型自报身份不能代替授权。整个课程仍按既定进度推进，不依据学习者的根 internal/cmd 实现判断完成。</p></section>
-<section><h2>先走通允许与拒绝两条过程</h2><pre><code>装配：Store → Meta/Invoke → Registry.Tools → Day10 WithPolicy
-    → Agent.New(..., WithVisibleTools(...), WithAuthorizer(policy))
-请求：宿主认证会话 → WithPrincipal(ctx, Principal{ID:"knowledge-reader"})
-    → Model.Generate → assistant.ToolCalls → 保存原 assistant
-    → 整批 ID/已注册名称检查 → 整批 Authorize(ctx, Call)
-       ├ 任何拒绝/故障/取消：决策事件 → RunFailed
-       │                    本批 Execute 次数为0，不再调用模型
-       └ 全部允许：决策事件 → ToolStarted
-              → Policy.Execute → Invoke → Store（仍检查资源级权限）
-              → ToolCompleted → tool{原 ToolCallID, Content}
-              → Model.Generate(完整历史) → 最终答案</code></pre>
-<p><strong>先预测：</strong>同批 [允许的读取 A，拒绝的写入 B]。我们的实现先完成整批授权，因此 A 也不执行。审计中可能已经有“A 允许”决策，但它不是“A 已执行”。这不是事务：整批允许后，后端失败或取消仍可能造成部分操作已发生。</p>
-<p>离线脚本模型可证明 Runtime 对恶意或错误调用仍执行检查；不能证明真实认证、租户 ACL、后端权限、实时撤权或审计存储已经部署。</p></section>
-<section><h2>三道边界分别负责什么？</h2><table><thead><tr><th>边界</th><th>输入/目的</th><th>不能替代</th></tr></thead><tbody>
-<tr><td>可见性 WithVisibleTools</td><td>选择给模型的描述，降低误选和上下文成本</td><td>不删除执行注册，不是访问控制</td></tr>
-<tr><td>执行策略 WithPolicy</td><td>限制时间、重试资格和输出预算</td><td>ReadOnly 配置不授予读取权限</td></tr>
-<tr><td>执行授权 WithAuthorizer</td><td>使用可信主体和服务端能力表，允许或拒绝调用</td><td>本课工具级规则不替代文档/租户级后端 ACL</td></tr>
-</tbody></table>
-<p>课程采用静态、不可变的工具级能力快照：read 与 write 是独立授权；未声明工具、未知或缺失主体默认拒绝。不同用户的 Principal 放在各自 Run 的 context，不存进共享 Agent 字段。实际服务中只能由完成认证的宿主注入；本课的 reader 字符串是离线演示身份。</p>
-<p class="note">为了保持前序 API 兼容，省略 WithAuthorizer 仍是旧行为，<strong>不会自动启用权限检查</strong>。宿主对不可信模型开放工具时必须显式配置授权；WithAuthorizer(nil) 则在 New 阶段报错。</p></section>
-<section><h2>承接前序设计与本日增量</h2><table><thead><tr><th>操作</th><th>路径</th><th>职责与迁移</th></tr></thead><tbody>
-<tr><td>复用</td><td>examples/internal/model、tool/contract.go、registry.go、policy.go</td><td>沿用 ToolCall/Message、Meta/Invoke、旧 Tool 适配和 Day10 策略；共享根 go.mod</td></tr>
-<tr><td>新增</td><td>examples/internal/tool/access.go、access_test.go</td><td>可信主体 context、Authorizer、不可变能力规则</td></tr>
-<tr><td>修改</td><td>examples/internal/agent/agent.go、options.go</td><td>添加 WithAuthorizer 和整批执行前授权；New/Run 签名不变</td></tr>
-<tr><td>扩展</td><td>examples/internal/agent/event.go、authorization_test.go</td><td>授权决策事件、PrincipalID 与集成反例</td></tr>
-<tr><td>修改/新增</td><td>examples/cmd/knowledge/main.go、examples/cmd/access/main.go</td><td>前者读取允许，后者隐藏写工具仍被请求但零执行</td></tr>
-<tr><td>更新</td><td>examples/README.md、CONTRACTS.md</td><td>记录配置责任、失败语义、兼容迁移与验收结果</td></tr>
-</tbody></table><p>授权复用 <code>tool.Call</code>（既有 model.ToolCall 的别名），不新建另一套消息类型。Agent 交给自定义 Authorizer 的 Arguments 是副本，避免授权器修改实际执行输入。基线使用命名字段构造 Event；新增 PrincipalID 不要求修改这些构造。历史按位置构造 Event 的外部示例应迁移为命名字段，事件 switch 需要识别新类型。</p></section>
-<section><h2>设计选择与代价</h2><table><thead><tr><th>选择</th><th>为什么与限制</th></tr></thead><tbody>
-<tr><td>整批开始前授权</td><td>后项被拒绝时不会先执行前项；代价是一次拒绝阻止本批其他合法调用。只校验能力，不保证业务参数和资源 ACL 都已通过。</td></tr>
-<tr><td>拒绝或授权服务错误终止 Run</td><td>避免把授权失败当作普通工具结果让模型反复试探。errors.Is 能识别 ErrForbidden；原因链返回可信宿主，不进入模型历史。</td></tr>
-<tr><td>配置快照不变、主体来自 context</td><td>可在并发请求间共享，降低串用户风险；不提供实时撤权。长任务和后端仍需当前资源级鉴权。</td></tr>
-<tr><td>审计复用 EventSink</td><td>不引入第二套观测系统；只有同步信号，没有落盘、可靠交付或抗篡改保证。后续可观测性章节再演进。</td></tr>
-</tbody></table><p>权限检查发生在 Day10 Policy 重试外部；当前一个逻辑调用只按快照授权一次，不在每次内部尝试重新授权。写入本来就不自动重试。未来如果要求实时撤权或审批，应定义新的执行协议，而非修改模型提示词。</p></section>
-<section><div class="time">20 MIN · READ</div><h2>带着问题读 Eino 与 Go 官方资料</h2><h3>12 分钟 · Eino 的调用包装入口</h3><p>阅读 <a href="https://github.com/cloudwego/eino/blob/main/compose/tool_node.go">compose/tool_node.go</a> 中 ToolInput、InvokableToolEndpoint、InvokableToolMiddleware、ToolCallMiddlewares 和 Invoke。找出 Name、Arguments、CallID 的来源，思考：可信用户身份来自哪里？应该在工具副作用之前还是返回之后检查？</p><p><strong>阅读产出：</strong>画出“中间件检查 → 业务工具 → 结果”的位置，再对照本课的批次 preflight。单调用中间件可以保护每个工具，但不自动保证同批后项拒绝时前项零执行。本课因此将整批能力检查放在 Loop 的已有批次边界；Eino 是扩展点对照，不声称它自动实现本课程的能力策略。</p><h3>8 分钟 · context 中的请求身份</h3><p>阅读 <a href="https://pkg.go.dev/context#WithValue">context.WithValue</a>，关注请求范围数据与自定义键类型。问题：为什么用私有键避免冲突？为什么 WithPrincipal 只传主体标识而不存令牌？为什么有这个 helper 不代表已经完成认证？</p><p>源码链接和上述 Eino 符号已核对；main 会演进，学习时记录阅读版本。</p></section>
-<section><div class="time">80 MIN · BUILD</div><h2>四项连续练习：先预测行为，再对照参考实现</h2>
-<h3>任务一 · 20 分钟：划清三个集合，建立可信主体</h3><p><strong>为什么做：</strong>注册、模型可见和有权执行不是同一个集合。<strong>操作与观察：</strong>5分钟画出三个集合，10分钟阅读 access.go 的输入复制与默认拒绝，5分钟用 reader/writer 两类主体手算授权结果。下列是既有参考实现的接口摘录，不是独立程序：</p><pre><code>type Principal struct { ID string }
-type Authorizer interface {
-    Authorize(context.Context, Call) error
-}
-// 只允许可信宿主在认证后调用：
-// ctx = tool.WithPrincipal(ctx, tool.Principal{ID: session.SubjectID})</code></pre><p><strong>完成证据：</strong>能解释为何不能从模型 Arguments 取 SubjectID；新增工具若没有能力规则会被拒绝；write 不隐式包含 read。修改构造输入后，已经建立的能力快照不改变。</p>
-<h3>任务二 · 20 分钟：将授权放进已有批次边界</h3><p><strong>为什么做：</strong>仅在业务工具里散落检查难以统一失败语义，也可能在后项拒绝前已执行前项。<strong>操作与观察：</strong>10分钟跟踪 agent.go 中名称/ID 检查后的授权循环，再看真正 Execute 所在的第二个循环；5分钟构造 [read,write] 反例；5分钟解释 Authorizer 错误或 context 取消为何终止。</p><p><strong>完成证据：</strong>TestAuthorizationDeniesWholeBatchBeforeExecution 的读取和写入计数都为0，模型只调用一次，RunFailed 恰好一次且没有 ToolStarted。自定义授权器不能通过修改 Arguments 改变实际工具输入。</p>
-<h3>任务三 · 25 分钟：装配真实路径，验证可见性不是授权</h3><p><strong>为什么做：</strong>新增接口必须接回实际 Agent，而不是停留在设计稿。<strong>操作与观察：</strong>10分钟对照 cmd/knowledge 中的能力表、主体注入和原 Day10 包装；10分钟运行 cmd/access 的隐藏写工具反例；5分钟比较“隐藏但权限允许的读取”和“可见但权限拒绝的写入”。现有公开 New/Run、Meta/Invoke 和消息类型均不更换。</p><pre><code>// 摘录，完整装配见 examples/cmd/knowledge/main.go
-authorizer, err := tool.NewCapabilityAuthorizer(
-    map[string]tool.Capability{
-        "search_knowledge": tool.ReadCapability,
-        "get_document": tool.ReadCapability,
-    },
-    map[string][]tool.Capability{
-        "knowledge-reader": {tool.ReadCapability},
-    },
+<header class="hero"><div class="eyebrow">DAY 11 / 56 · 第 2 周 · 图解与 TDD</div><h1>模型能看到，不等于用户能执行</h1><p>可信主体、默认拒绝、整批授权与决策审计。</p><div class="chips"><span>阅读 20 分钟</span><span>实现 80 分钟</span><span>测试复盘 20 分钟</span></div></header>
+<nav aria-label="本页学习路线"><strong>一次只做一小步，答案最后看</strong><div class="toplinks"><a href="#goal">① 今天做什么</a><a href="#concepts">② 概念与图解</a><a href="#design">③ 设计理由</a><a href="#contract">④ 行为契约</a><a href="#skeleton">⑤ 骨架</a><a href="#tests">⑥ 完整测试</a><a href="#tasks">⑦ 动手步骤</a><a href="#review">⑧ 验收</a></div></nav>
+<section id="goal"><h2>今天只解决什么？</h2><div class="goal">实现 CapabilityAuthorizer 和整批授权插槽，让没有许可的调用在工具执行前被拒绝。</div><p>reader 只能读取资料。即使模型在请求里写“我是管理员”，或者请求一个没有展示的写工具，Runtime 也必须按可信会话判断。</p><p>只在提示词里隐藏写工具不够，模型仍可能返回该名称。权限要基于宿主确认的身份，在实际 Execute 之前检查。</p><div class="note">只实现静态工具级 read/write 能力，不做登录、资源/租户 ACL、审批或实时撤权。审计是同步事件，不是可靠落盘。</div></section>
+<section id="concepts"><h2>先把概念说清楚</h2><article class="card"><h3>Principal：宿主确认的请求主体</h3><p>Principal.ID 是可信会话提供的标识。</p><p>WithPrincipal 只传递已有身份，不完成认证，也不保存令牌。</p></article><article class="card"><h3>Capability：宿主定义的工具能力</h3><p>rules 把工具名映射为 read 或 write；grants 把主体 ID 映射为允许的能力。</p><p>write 不自动包含 read。</p></article><article class="card"><h3>授权与可见性是两个集合</h3><p>WithVisibleTools 决定描述是否给模型看；Authorizer 决定收到请求后能否执行。</p><p>隐藏但已授权可以执行，可见但未授权仍拒绝。</p></article><h3>图 1 · 模块职责与数据去向</h3><figure class="flow" aria-label="图 1 · 模块职责与数据去向"><div class="node"><strong>可信宿主</strong>认证后注入 Principal，并配置工具规则与主体授权。</div><div class="arrow">↓ 可信主体与规则</div><div class="node"><strong>CapabilityAuthorizer</strong>基于快照判断一个 Call 是否允许；不执行工具。</div><div class="arrow">↓ 允许决定或终止错误</div><div class="node"><strong>authorizeBatch → Loop</strong>逐项判断并审计；任一失败，整批不进入 Execute。</div><figcaption class="muted">沿箭头从上到下读；每个框说明负责的事或当前输入输出。</figcaption></figure><details><summary>展开这张图的逐步文字说明</summary><ol><li><strong>可信宿主</strong>：认证后注入 Principal，并配置工具规则与主体授权。</li><li><strong>CapabilityAuthorizer</strong>：基于快照判断一个 Call 是否允许；不执行工具。</li><li><strong>authorizeBatch → Loop</strong>：逐项判断并审计；任一失败，整批不进入 Execute。</li></ol></details></section>
+<section id="walkthrough"><h2>沿同一个例子走一遍</h2><h3>图 2 · 一次完整过程</h3><figure class="flow" aria-label="图 2 · 一次完整过程"><div class="node"><strong>① 宿主建立 reader 请求</strong>ctx = WithPrincipal(ctx, Principal{ID:&quot;reader&quot;})，只授予 read。</div><div class="arrow">↓ 主体 context 与调用列表</div><div class="node"><strong>② 模型请求 [read, write]</strong>名称/ID 检查先通过；可见描述并不决定权限。</div><div class="arrow">↓ read 允许 / write 拒绝</div><div class="node"><strong>③ 整批授权</strong>read 发布 authorized；write 发布 denied，errors.Is(err,ErrForbidden)=true。</div><div class="arrow">↓ ErrForbidden，整批零执行</div><div class="node"><strong>④ Run 失败</strong>read=0 次，write=0 次，模型只调用一轮；没有 ToolStarted。</div><figcaption class="muted">沿箭头从上到下读；每个框说明负责的事或当前输入输出。</figcaption></figure><details><summary>展开这张图的逐步文字说明</summary><ol><li><strong>① 宿主建立 reader 请求</strong>：ctx = WithPrincipal(ctx, Principal{ID:&quot;reader&quot;})，只授予 read。</li><li><strong>② 模型请求 [read, write]</strong>：名称/ID 检查先通过；可见描述并不决定权限。</li><li><strong>③ 整批授权</strong>：read 发布 authorized；write 发布 denied，errors.Is(err,ErrForbidden)=true。</li><li><strong>④ Run 失败</strong>：read=0 次，write=0 次，模型只调用一轮；没有 ToolStarted。</li></ol></details><h3>失败时停在哪里？</h3><div class="node branch">“read 允许”的审计事件不是执行承诺。后项拒绝、服务故障或取消都可能让整批没有工具执行；后端资源权限仍可能在已授权后拒绝一次操作。</div></section>
+<section id="design"><h2>这些字段、接口和方法为什么存在？</h2><article class="card"><h3>身份为什么放在 context？</h3><p>它属于本次可信请求，而不是模型 Arguments。</p><p>使用私有键类型避免其他包误覆盖；空白 ID 视为没有主体。</p></article><article class="card"><h3>CapabilityAuthorizer 的两个字段</h3><p>rules 是名称到能力的快照；grants 是主体到能力集合的快照。</p><p>构造时复制 map 与切片，外部改配置不能悄悄改变已装配权限。</p></article><article class="card"><h3>NewCapabilityAuthorizer 与 Authorize</h3><p>构造拒绝空白工具名、空白主体和未知能力；nil 配置可构造但默认拒绝。</p><p>Authorize(ctx,Call) 先检查取消，再用主体和 Name 判断，未声明工具/未知主体/未授予能力返回 ErrForbidden。</p></article><article class="card"><h3>authorizeBatch 放在哪里？</h3><p>复用 Day 09：协议检查 → authorizeBatch → Execute。</p><p>整批都通过才执行；后项被拒绝时，前项虽然已有允许事件，仍是零执行。</p></article><article class="card"><h3>为什么复制 Arguments？</h3><p>自定义 Authorizer 可能读取业务参数。</p><p>传独立字节副本，避免它修改即将执行的请求；保留 Name 与调用 ID。</p></article><article class="card"><h3>错误与审计语义</h3><p>拒绝保留 ErrForbidden；授权服务故障保留其原因并终止 Run。</p><p>授权后 ctx 取消优先。</p><p>事件记录主体、工具、调用 ID、Step 和状态，不含原始参数或错误正文。</p></article><article class="card"><h3>兼容选项与同步限制</h3><p>省略 WithAuthorizer 保留历史无授权行为；显式 nil 被既有 New 拒绝。</p><p>不可变授权器可并发查询；自定义授权器和 EventSink 必须满足宿主并发要求。</p></article></section>
+<section id="contract"><h2>行为契约：不用猜参考代码</h2><p>按下面规则实现。内部算法可以不同；未约定的错误文本不必逐字一致，错误链用 errors.Is/As 检查。</p><article class="rule"><h3>R1 · 主体来源</h3><p>WithPrincipal/PrincipalFromContext 用私有键传值；缺失或空白 ID 的 ok=false。模型参数里的身份没有授权效力。</p><p class="muted">对应测试：<code>TestDay11Principal</code></p></article><article class="rule"><h3>R2 · 默认拒绝和快照</h3><p>工具规则与 grants 完整复制；read/write 独立。未知/缺失主体、未知工具、无能力、nil 授权器均返回 ErrForbidden。</p><p class="muted">对应测试：<code>TestCapabilityAuthorizationSnapshot / TestDay11Principal</code></p></article><article class="rule"><h3>R3 · 校验、取消、并发</h3><p>拒绝空白名称/主体或未知能力；Authorize 入场取消保留 context.Canceled，不可变快照并发读无 race。</p><p class="muted">对应测试：<code>TestCapabilityValidationCancellationAndConcurrency</code></p></article><article class="rule"><h3>R4 · 整批零执行</h3><p>按顺序授权整批，任何拒绝、故障、取消均终止 Run，不执行本批任何工具、不再调用模型。参数副本不能污染执行输入。</p><p class="muted">对应测试：<code>TestAuthorizationDeniesWholeBatchBeforeExecution / TestAuthorizationFailureAndArgumentIsolation / TestAuthorizationCancellationAndNilOption</code></p></article><article class="rule"><h3>R5 · 可见性与事件</h3><p>隐藏不删注册；允许路径继续保留 ToolCallID。authorized=ok；拒绝=denied；服务错误=error；取消=cancelled；Run 唯一失败终态，无多余开始事件。</p><p class="muted">对应测试：<code>TestAuthorizationVisibilityIsNotPermission / TestAuthorizationDeniesWholeBatchBeforeExecution / TestDay11AuditStatuses</code></p></article></section>
+<section id="read"><h2>官方阅读 20 分钟：带着问题找证据</h2><article class="card"><div class="time">12 分钟</div><h3><a href="https://github.com/cloudwego/eino/blob/main/compose/tool_node.go">compose/tool_node.go · ToolCallMiddlewares</a></h3><p>定位副作用之前的调用包装点。为什么单工具检查不自动保证“本批后项拒绝、前项零执行”？写出本课批次边界的理由。</p></article><article class="card"><div class="time">8 分钟</div><h3><a href="https://pkg.go.dev/context#WithValue">context.WithValue</a></h3><p>读请求范围值与自定义键类型的说明。解释为什么 context 中的身份必须由可信宿主生成。</p></article><p class="muted">外部链接供源码对照；正文独立可读。本次未重新核对所有远端 main 符号，阅读时记录 commit，名称变化时按职责定位；不把框架默认策略直接视为本课约定。</p></section>
+<section id="continuity"><h2>承接前序设计与本日增量</h2><p>复用 Day 09 authorizeBatch 插槽与 Day 10 策略。修改 internal/tool/access.go 和 internal/agent/authorization_preflight.go；既有 WithAuthorizer 选项与授权事件常量已提供，不重建 Loop。</p><p><strong>路径约定：</strong>练习使用 internal；参考使用 examples/internal。两套包只映射路径前缀，不能混用 model.Message。共用原仓库 go.mod，Go ≥ 1.22.2；没有每日独立 module。</p><p>新增或修改：internal/tool/access.go；已有实现先保留，不把同名定义重复追加。</p><p>新增或修改：internal/agent/authorization_preflight.go；已有实现先保留，不把同名定义重复追加。</p><div class="note"><strong>安全开始：</strong>下面命令只新建仓库外的临时练习副本，复制同一累计模块的前置依赖，再把当天目标换成 TODO。不会修改你当前的 internal/cmd，也不根据你的代码判断进度。</div><pre><code>python3 docs/learning/exercises/prepare.py 11</code></pre><p>在原仓库根运行。脚本打印新副本的绝对路径；进入该目录后再编辑和测试。需要 Python 3.9+ 和 Go 工具链，不需要 API Key。</p><p>副本内包含为兼容累计版本提供的组件；当天任务只编辑上面列出的目标。已经实现过时，也可以只把完整测试应用到自己的版本，无需挖空重做。</p><details><summary>手工应用文件与保留旧实现</summary><p>先备份或在独立工作区操作。按本页路径保存骨架与测试；前序依赖使用同一套累计类型。当天测试文件若已存在，比较后更新，不与旧版重复定义。不要自动覆盖当前项目；参考基线仅用于准备依赖。</p><p>prepare.py 把参考依赖映射到副本 internal；当天方法始终使用未实现骨架。装配脚本不运行用户任务，也不证明你的原实现通过测试。</p></details></section>
+<section id="skeleton"><h2>完整骨架：方法体留给你</h2><p>每个文件的 package、import、类型和签名齐全。panic("TODO: ...") 表示尚未实现；它不是最终错误处理方式。按文件名保存，不只复制某个方法。</p><h3 class="file-label">待实现骨架：internal/tool/access.go</h3><p class="download"><a href="exercises/day11/skeleton/internal/tool/access.go.txt" download="access.go">下载 access.go</a></p><details class="code-file" data-kind="skeleton" data-source="day11/skeleton/internal/tool/access.go.txt"><summary>展开完整文件：access.go</summary><pre id="day11-skeleton-internal-tool-access-go"><code>package tool
+
+import (
+	&quot;context&quot;
+	&quot;errors&quot;
 )
-// 检查 err 后，在原 New 调用增加 agent.WithAuthorizer(authorizer)。
-</code></pre><p><strong>完成证据：</strong>knowledge 仍完成检索 → 读取 → 回答；access 输出授权拒绝且写入次数为0。更换工具可见集合不会自动改变授权结果。</p>
-<h3>任务四 · 15 分钟：读懂决策审计，解释尚未解决的问题</h3><p><strong>为什么做：</strong>权限判断必须能追踪，但“记录允许”不能混同“操作成功”。<strong>操作与观察：</strong>5分钟核对新增 EventToolAuthorized/EventToolDenied；5分钟沿原 ID 看主体、工具名、Step 和 Status；5分钟推演审计 Sink 阻塞、进程崩溃、授权后权限被撤销会怎样。</p><p><strong>完成证据：</strong>事件没有参数、正文、令牌或原始错误；允许/明确拒绝/故障/取消分别为 ok/denied/error/cancelled。只有配置 WithEventSink 才有消费者接收记录，授权测试注入了收集器；共享 Sink 沿用同一 SynchronizedSink 包装。能说明这些同步信号不构成持久审计、权限锁、事务或副作用回滚。</p></section>
-<section><div class="time">20 MIN · TEST &amp; REVIEW</div><h2>用反例验收搭建判断</h2><p><strong>12分钟实作：</strong>从仓库根执行，不建立每日 Module：</p><pre><code>go test ./examples/...
-go test -race ./examples/...
-go run ./examples/cmd/knowledge
-go run ./examples/cmd/access</code></pre>
-<table><thead><tr><th>测试/演示</th><th>对应的不变量</th></tr></thead><tbody>
-<tr><td>TestCapabilityAuthorizationSnapshot</td><td>配置深拷贝；缺失主体、未知工具和未授予能力均拒绝</td></tr>
-<tr><td>TestCapabilityValidationCancellationAndConcurrency</td><td>拒绝非法配置；保留取消；不可变授权器可并发读取</td></tr>
-<tr><td>TestAuthorizationDeniesWholeBatchBeforeExecution</td><td>同批后项拒绝，前项也零执行；审计 ID/主体与 Run 终态正确</td></tr>
-<tr><td>TestAuthorizationVisibilityIsNotPermission</td><td>隐藏描述不删注册；执行许可单独控制；允许路径保持 tool 消息关联</td></tr>
-<tr><td>TestAuthorizationFailureAndArgumentIsolation / CancellationAndNilOption</td><td>授权服务失败也不执行；保留原因链；参数副本；取消优先；显式 nil 被拒绝</td></tr>
-<tr><td>knowledge / access</td><td>离线允许路径完成回答；隐藏写工具请求被拒绝，写入次数为0</td></tr>
-</tbody></table>
-<p class="info"><strong>本次真实验证：</strong>官方 Go 1.22.2 linux/amd64 下，两条 examples 测试命令均通过（退出码0）；knowledge 与 access 入口实际运行成功。累计验收也覆盖 Day10 策略。这里只验证参考示例，不宣称真实登录、后端资源权限、生产审计或模型行为已验证。</p>
-<p><strong>8分钟理解验收：</strong></p><ol><li>不看代码，解释从宿主认证到模型下一轮的完整控制流；拒绝后谁停止了哪一步？</li><li>需求改成按租户隔离文档，工具级 read 能力为什么不够？应改哪个接口实现和哪个后端检查？</li><li>审计出现 read-a 允许、write-b 拒绝，却没有 ToolStarted，是否矛盾？解释批次预检查与执行的区别。</li><li>如果授权后立即撤权，当前快照能保证即时生效吗？后端还需提供什么能力？</li></ol>
-<h3>学习清单</h3><div class="meta"><span>仅记录当前浏览器自评进度</span><span id="count">0 / 8</span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div><div id="checks"></div></section>
-<section><h2>Definition of Done 与 Day 12 衔接</h2><p>理解上：能分清可见性、策略、执行授权与后端资源 ACL，能说明审计信号的含义和局限。实现上：允许路径保留原 ID/历史，拒绝/故障/取消路径零执行，配置快照与并发测试通过；New/Run 和原工具适配保持兼容。本次参考示例已按上述命令完成验证。</p><p>Day 12 学习 MCP 的初始化、能力协商、tools/list 与 tools/call。远端公布了工具，仍不表示本次用户有权执行；新的协议适配将继续复用今天明确的授权边界，下一步先理解协议而不复制业务工具。</p></section>
-<footer>Agent Runtime · Day 11 / 56 · 离线学习内容 · <a href="../../index.html">返回学习首页</a></footer></main>
+
+// Principal is supplied by the trusted host after authentication, not by the model.
+type Principal struct{ ID string }
+type principalContextKey struct{}
+
+func WithPrincipal(ctx context.Context, p Principal) context.Context { panic(&quot;TODO: WithPrincipal&quot;) }
+
+func PrincipalFromContext(ctx context.Context) (Principal, bool) { panic(&quot;TODO: PrincipalFromContext&quot;) }
+
+var ErrForbidden = errors.New(&quot;tool: execution forbidden&quot;)
+
+type Capability string
+
+const (
+	ReadCapability  Capability = &quot;read&quot;
+	WriteCapability Capability = &quot;write&quot;
+)
+
+type Authorizer interface {
+	Authorize(context.Context, Call) error
+}
+
+// CapabilityAuthorizer is an immutable, tool-level teaching policy.
+// It is not an authentication service or a resource/tenant-level ACL.
+type CapabilityAuthorizer struct {
+	rules  map[string]Capability
+	grants map[string]map[Capability]bool
+}
+
+func validCapability(c Capability) bool { panic(&quot;TODO: validCapability&quot;) }
+
+// NewCapabilityAuthorizer copies its inputs. Unknown tools/principals are denied.
+// Read and write are independent capabilities; write does not imply read.
+func NewCapabilityAuthorizer(rules map[string]Capability, grants map[string][]Capability) (*CapabilityAuthorizer, error) {
+	panic(&quot;TODO: NewCapabilityAuthorizer&quot;)
+}
+
+func (a *CapabilityAuthorizer) Authorize(ctx context.Context, call Call) error {
+	panic(&quot;TODO: Authorize&quot;)
+}
+</code></pre><button type="button" data-copy="day11-skeleton-internal-tool-access-go">复制本文件</button></details><h3 class="file-label">待实现骨架：internal/agent/authorization_preflight.go</h3><p class="download"><a href="exercises/day11/skeleton/internal/agent/authorization_preflight.go.txt" download="authorization_preflight.go">下载 authorization_preflight.go</a></p><details class="code-file" data-kind="skeleton" data-source="day11/skeleton/internal/agent/authorization_preflight.go.txt"><summary>展开完整文件：authorization_preflight.go</summary><pre id="day11-skeleton-internal-agent-authorization-preflight-go"><code>package agent
+
+import (
+	&quot;context&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+)
+
+// authorizeBatch runs after protocol validation, before the first tool executes.
+func (a *Agent) authorizeBatch(ctx context.Context, calls []model.ToolCall, step int) error {
+	panic(&quot;TODO: authorizeBatch&quot;)
+}
+</code></pre><button type="button" data-copy="day11-skeleton-internal-agent-authorization-preflight-go">复制本文件</button></details></section>
+<section id="tests"><h2>完整测试：夹具和断言都已提供</h2><p>下面是全部测试文件，不需要补 fake、fixture 或断言。测试调用练习的 internal 包，不是已完成的 examples 答案。</p><h3 class="file-label">完整测试：internal/tool/access_test.go</h3><p class="download"><a href="exercises/day11/tests/internal/tool/access_test.go.txt" download="access_test.go">下载 access_test.go</a></p><details class="code-file" data-kind="tests" data-source="day11/tests/internal/tool/access_test.go.txt"><summary>展开完整文件：access_test.go</summary><pre id="day11-tests-internal-tool-access-test-go"><code>package tool
+
+import (
+	&quot;context&quot;
+	&quot;errors&quot;
+	&quot;sync&quot;
+	&quot;testing&quot;
+)
+
+func TestCapabilityAuthorizationSnapshot(t *testing.T) {
+	rules := map[string]Capability{&quot;search&quot;: ReadCapability, &quot;publish&quot;: WriteCapability}
+	grants := map[string][]Capability{&quot;reader&quot;: {ReadCapability}, &quot;writer&quot;: {WriteCapability}}
+	a, err := NewCapabilityAuthorizer(rules, grants)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules[&quot;publish&quot;] = ReadCapability
+	grants[&quot;reader&quot;][0] = WriteCapability
+	cases := []struct {
+		id, name string
+		allow    bool
+	}{
+		{&quot;reader&quot;, &quot;search&quot;, true}, {&quot;reader&quot;, &quot;publish&quot;, false},
+		{&quot;writer&quot;, &quot;publish&quot;, true}, {&quot;writer&quot;, &quot;search&quot;, false},
+		{&quot;missing&quot;, &quot;search&quot;, false}, {&quot;reader&quot;, &quot;unknown&quot;, false}, {&quot;&quot;, &quot;search&quot;, false},
+	}
+	for _, tc := range cases {
+		ctx := WithPrincipal(context.Background(), Principal{ID: tc.id})
+		err := a.Authorize(ctx, Call{Name: tc.name})
+		if tc.allow &amp;&amp; err != nil {
+			t.Errorf(&quot;%+v: %v&quot;, tc, err)
+		}
+		if !tc.allow &amp;&amp; !errors.Is(err, ErrForbidden) {
+			t.Errorf(&quot;%+v: %v&quot;, tc, err)
+		}
+	}
+	if !errors.Is(a.Authorize(context.Background(), Call{Name: &quot;search&quot;}), ErrForbidden) {
+		t.Fatal(&quot;missing principal accepted&quot;)
+	}
+}
+
+func TestCapabilityValidationCancellationAndConcurrency(t *testing.T) {
+	for _, c := range []struct {
+		rules  map[string]Capability
+		grants map[string][]Capability
+	}{
+		{map[string]Capability{&quot;&quot;: ReadCapability}, nil},
+		{map[string]Capability{&quot;x&quot;: &quot;unknown&quot;}, nil},
+		{nil, map[string][]Capability{&quot;&quot;: {ReadCapability}}},
+		{nil, map[string][]Capability{&quot;reader&quot;: {&quot;unknown&quot;}}},
+	} {
+		if _, err := NewCapabilityAuthorizer(c.rules, c.grants); err == nil {
+			t.Fatal(&quot;invalid config accepted&quot;)
+		}
+	}
+	a, _ := NewCapabilityAuthorizer(map[string]Capability{&quot;read&quot;: ReadCapability}, map[string][]Capability{&quot;reader&quot;: {ReadCapability}})
+	ctx, cancel := context.WithCancel(WithPrincipal(context.Background(), Principal{ID: &quot;reader&quot;}))
+	cancel()
+	if !errors.Is(a.Authorize(ctx, Call{Name: &quot;read&quot;}), context.Canceled) {
+		t.Fatal(&quot;cancel ignored&quot;)
+	}
+	var wg sync.WaitGroup
+	for i := 0; i &lt; 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j &lt; 50; j++ {
+				ctx := WithPrincipal(context.Background(), Principal{ID: &quot;reader&quot;})
+				if err := a.Authorize(ctx, Call{Name: &quot;read&quot;}); err != nil {
+					t.Error(err)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func TestDay11Principal(t *testing.T) {
+	if _, ok := PrincipalFromContext(context.Background()); ok {
+		t.Fatal(&quot;invented identity&quot;)
+	}
+	for _, id := range []string{&quot;&quot;, &quot; \t&quot;} {
+		if _, ok := PrincipalFromContext(WithPrincipal(context.Background(), Principal{ID: id})); ok {
+			t.Fatal(&quot;blank principal accepted&quot;)
+		}
+	}
+	ctx := WithPrincipal(context.Background(), Principal{ID: &quot;reader&quot;})
+	got, ok := PrincipalFromContext(ctx)
+	if !ok || got.ID != &quot;reader&quot; {
+		t.Fatal(got, ok)
+	}
+	var nilAuth *CapabilityAuthorizer
+	if !errors.Is(nilAuth.Authorize(ctx, Call{Name: &quot;read&quot;}), ErrForbidden) {
+		t.Fatal(&quot;nil policy must deny&quot;)
+	}
+}
+</code></pre><button type="button" data-copy="day11-tests-internal-tool-access-test-go">复制本文件</button></details><h3 class="file-label">完整测试：internal/agent/authorization_test.go</h3><p class="download"><a href="exercises/day11/tests/internal/agent/authorization_test.go.txt" download="authorization_test.go">下载 authorization_test.go</a></p><details class="code-file" data-kind="tests" data-source="day11/tests/internal/agent/authorization_test.go.txt"><summary>展开完整文件：authorization_test.go</summary><pre id="day11-tests-internal-agent-authorization-test-go"><code>package agent
+
+import (
+	&quot;context&quot;
+	&quot;encoding/json&quot;
+	&quot;errors&quot;
+	&quot;fmt&quot;
+	&quot;strings&quot;
+	&quot;testing&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool&quot;
+)
+
+type accessCounter struct {
+	name  string
+	calls int
+	seen  string
+}
+
+func (c *accessCounter) Name() string                     { return c.name }
+func (c *accessCounter) Definition() model.ToolDefinition { return model.ToolDefinition{Name: c.name} }
+func (c *accessCounter) Execute(_ context.Context, args json.RawMessage) (string, error) {
+	c.calls++
+	c.seen = string(args)
+	return &quot;ok&quot;, nil
+}
+
+type accessModel struct {
+	first   []model.ToolCall
+	calls   int
+	history []model.Message
+	defs    []model.ToolDefinition
+}
+
+func (m *accessModel) WithTools(defs []model.ToolDefinition) (model.Model, error) {
+	m.defs = defs
+	return m, nil
+}
+func (m *accessModel) Generate(_ context.Context, ms []model.Message) (*model.Response, error) {
+	m.calls++
+	m.history = append([]model.Message(nil), ms...)
+	if m.calls == 1 {
+		return &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, ToolCalls: m.first}}, nil
+	}
+	return &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, Content: &quot;done&quot;}}, nil
+}
+func accessPolicy(t *testing.T) *tool.CapabilityAuthorizer {
+	t.Helper()
+	a, err := tool.NewCapabilityAuthorizer(
+		map[string]tool.Capability{&quot;read&quot;: tool.ReadCapability, &quot;write&quot;: tool.WriteCapability},
+		map[string][]tool.Capability{&quot;reader&quot;: {tool.ReadCapability}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return a
+}
+
+func TestAuthorizationDeniesWholeBatchBeforeExecution(t *testing.T) {
+	read, write := &amp;accessCounter{name: &quot;read&quot;}, &amp;accessCounter{name: &quot;write&quot;}
+	m := &amp;accessModel{first: []model.ToolCall{{ID: &quot;r&quot;, Name: &quot;read&quot;}, {ID: &quot;w&quot;, Name: &quot;write&quot;}}}
+	events := &amp;day11Sink{}
+	a, err := New(m, map[string]tool.Tool{&quot;read&quot;: read, &quot;write&quot;: write}, 2, WithVisibleTools(), WithAuthorizer(accessPolicy(t)), WithEventSink(events))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := tool.WithPrincipal(context.Background(), tool.Principal{ID: &quot;reader&quot;})
+	_, err = a.Run(ctx, &quot;model can request hidden tools&quot;)
+	if !errors.Is(err, tool.ErrForbidden) || read.calls != 0 || write.calls != 0 || m.calls != 1 || len(m.defs) != 0 {
+		t.Fatalf(&quot;err=%v read=%d write=%d model=%d defs=%v&quot;, err, read.calls, write.calls, m.calls, m.defs)
+	}
+	denied, finished, failed, started := 0, 0, 0, 0
+	for _, e := range events.events {
+		switch e.Type {
+		case EventToolDenied:
+			denied++
+			if e.ToolCallID != &quot;w&quot; || e.PrincipalID != &quot;reader&quot; || e.Status != &quot;denied&quot; {
+				t.Fatalf(&quot;%+v&quot;, e)
+			}
+		case EventRunFinished:
+			finished++
+		case EventRunFailed:
+			failed++
+		case EventToolStarted:
+			started++
+		}
+	}
+	if denied != 1 || finished != 0 || failed != 1 || started != 0 {
+		t.Fatalf(&quot;events=%+v&quot;, events.events)
+	}
+}
+
+func TestAuthorizationVisibilityIsNotPermission(t *testing.T) {
+	read := &amp;accessCounter{name: &quot;read&quot;}
+	m := &amp;accessModel{first: []model.ToolCall{{ID: &quot;r&quot;, Name: &quot;read&quot;, Arguments: json.RawMessage(&quot;{}&quot;)}}}
+	a, err := New(m, map[string]tool.Tool{&quot;read&quot;: read}, 2, WithVisibleTools(), WithAuthorizer(accessPolicy(t)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := a.Run(tool.WithPrincipal(context.Background(), tool.Principal{ID: &quot;reader&quot;}), &quot;read&quot;)
+	if err != nil || out != &quot;done&quot; || read.calls != 1 || len(m.defs) != 0 {
+		t.Fatalf(&quot;%q %v count=%d&quot;, out, err, read.calls)
+	}
+	if len(m.history) != 3 || m.history[2].ToolCallID != &quot;r&quot; || m.history[2].Role != &quot;tool&quot; {
+		t.Fatalf(&quot;%+v&quot;, m.history)
+	}
+}
+
+type authorizerFunc func(context.Context, tool.Call) error
+
+func (f authorizerFunc) Authorize(ctx context.Context, c tool.Call) error { return f(ctx, c) }
+
+func TestAuthorizationFailureAndArgumentIsolation(t *testing.T) {
+	cause := errors.New(&quot;private policy backend failure&quot;)
+	for _, missing := range []bool{false, true} {
+		target := &amp;accessCounter{name: &quot;read&quot;}
+		m := &amp;accessModel{first: []model.ToolCall{{ID: &quot;r&quot;, Name: &quot;read&quot;}}}
+		var auth tool.Authorizer = authorizerFunc(func(context.Context, tool.Call) error { return cause })
+		if missing {
+			auth = accessPolicy(t)
+		}
+		a, _ := New(m, map[string]tool.Tool{&quot;read&quot;: target}, 2, WithAuthorizer(auth))
+		_, err := a.Run(context.Background(), &quot;&quot;)
+		if err == nil || target.calls != 0 || m.calls != 1 {
+			t.Fatalf(&quot;%v %d&quot;, err, target.calls)
+		}
+		if !missing &amp;&amp; !errors.Is(err, cause) {
+			t.Fatal(&quot;lost cause&quot;)
+		}
+		if missing &amp;&amp; !errors.Is(err, tool.ErrForbidden) {
+			t.Fatal(&quot;missing principal not denied&quot;)
+		}
+	}
+	target := &amp;accessCounter{name: &quot;read&quot;}
+	m := &amp;accessModel{first: []model.ToolCall{{ID: &quot;r&quot;, Name: &quot;read&quot;, Arguments: json.RawMessage(&quot;{}&quot;)}}}
+	auth := authorizerFunc(func(_ context.Context, c tool.Call) error { c.Arguments[0] = &#x27;x&#x27;; return nil })
+	a, _ := New(m, map[string]tool.Tool{&quot;read&quot;: target}, 2, WithAuthorizer(auth))
+	if _, err := a.Run(context.Background(), &quot;&quot;); err != nil || target.seen != &quot;{}&quot; {
+		t.Fatalf(&quot;%v args=%q&quot;, err, target.seen)
+	}
+}
+
+func TestAuthorizationCancellationAndNilOption(t *testing.T) {
+	if _, err := New(&amp;accessModel{}, nil, 1, WithAuthorizer(nil)); err == nil {
+		t.Fatal(&quot;nil authorizer accepted&quot;)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	target := &amp;accessCounter{name: &quot;read&quot;}
+	m := &amp;accessModel{first: []model.ToolCall{{ID: &quot;r&quot;, Name: &quot;read&quot;}}}
+	auth := authorizerFunc(func(context.Context, tool.Call) error { cancel(); return nil })
+	a, _ := New(m, map[string]tool.Tool{&quot;read&quot;: target}, 2, WithAuthorizer(auth))
+	_, err := a.Run(ctx, &quot;&quot;)
+	if !errors.Is(err, context.Canceled) || target.calls != 0 || m.calls != 1 {
+		t.Fatalf(&quot;%v calls=%d&quot;, err, target.calls)
+	}
+}
+
+type day11Sink struct{ events []Event }
+
+func (s *day11Sink) Emit(_ context.Context, e Event) { s.events = append(s.events, e) }
+
+func TestDay11AuditStatuses(t *testing.T) {
+	for _, tc := range []struct{ name, want string }{{&quot;allow&quot;, &quot;ok&quot;}, {&quot;deny&quot;, &quot;denied&quot;}, {&quot;failure&quot;, &quot;error&quot;}, {&quot;cancel&quot;, &quot;cancelled&quot;}} {
+		t.Run(tc.name, func(t *testing.T) {
+			parent, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ctx := tool.WithPrincipal(parent, tool.Principal{ID: &quot;reader&quot;})
+			target := &amp;accessCounter{name: &quot;read&quot;}
+			m := &amp;accessModel{first: []model.ToolCall{{ID: &quot;r&quot;, Name: &quot;read&quot;, Arguments: json.RawMessage(`{&quot;token&quot;:&quot;PRIVATE&quot;}`)}}}
+			trace := &amp;day11Sink{}
+			auth := authorizerFunc(func(context.Context, tool.Call) error {
+				switch tc.name {
+				case &quot;deny&quot;:
+					return tool.ErrForbidden
+				case &quot;failure&quot;:
+					return errors.New(&quot;PRIVATE service error&quot;)
+				case &quot;cancel&quot;:
+					cancel()
+				}
+				return nil
+			})
+			a, err := New(m, map[string]tool.Tool{&quot;read&quot;: target}, 2, WithAuthorizer(auth), WithEventSink(trace))
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, runErr := a.Run(ctx, &quot;&quot;)
+			if (runErr == nil) != (tc.name == &quot;allow&quot;) {
+				t.Fatal(runErr)
+			}
+			decisions := 0
+			for _, event := range trace.events {
+				if event.Type == EventToolAuthorized || event.Type == EventToolDenied {
+					decisions++
+					if event.Status != tc.want || event.PrincipalID != &quot;reader&quot; || event.ToolName != &quot;read&quot; || event.ToolCallID != &quot;r&quot; || event.Step != 1 || event.At.IsZero() {
+						t.Fatal(event)
+					}
+					if strings.Contains(fmt.Sprintf(&quot;%+v&quot;, event), &quot;PRIVATE&quot;) {
+						t.Fatal(&quot;private data in decision&quot;, event)
+					}
+				}
+			}
+			if decisions != 1 {
+				t.Fatal(trace.events)
+			}
+		})
+	}
+}
+</code></pre><button type="button" data-copy="day11-tests-internal-agent-authorization-test-go">复制本文件</button></details><h3>先编译，再看到明确红灯</h3><pre><code>go test ./internal/tool ./internal/agent -run &#x27;^$&#x27; -timeout 20s
+go test ./internal/tool ./internal/agent -run &#x27;^(TestCapability|TestAuthorization|TestDay11)&#x27; -count=1 -v -timeout 20s</code></pre><p>编译命令预期退出码 0，“no tests to run”在这一步是正常的。第二条必须实际运行用例，并在当天方法的 TODO 处失败；缺包、语法错误、命令未匹配到测试都不算行为红灯。</p><p>已有实现可能直接全绿。保留这些结果，再用契约检查设计；不要为了制造红灯破坏已完成代码。</p></section>
+<section id="tasks"><h2>分步实现：一次只改变一组行为</h2><div class="time">编码 80 分钟 · 每次只看当前任务卡</div><article class="step"><h3>1 · 15 分钟</h3><p><strong>为什么做：</strong>区分可信宿主身份与模型自报身份。</p><p><strong>位置：</strong>WithPrincipal / PrincipalFromContext</p><p><strong>动作：</strong>用私有键保存主体，缺失和空白身份返回 false。</p><pre><code>go test ./internal/tool -run &#x27;^TestDay11Principal$&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>主体不会从模型参数生成；nil 授权器应安全拒绝。</p><details><summary>卡住时再看提示</summary><p>该测试最后也检查 nil Authorize；先加 nil 接收者的拒绝分支。</p></details></article><article class="step"><h3>2 · 25 分钟</h3><p><strong>为什么做：</strong>默认拒绝且固定配置，避免权限随外部修改漂移。</p><p><strong>位置：</strong>NewCapabilityAuthorizer / Authorize</p><p><strong>动作：</strong>校验并复制两份配置；实现 read/write 独立与默认拒绝。</p><pre><code>go test ./internal/tool -run &#x27;^TestCapability&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>外部改 map/slice 不改权限，已取消调用与并发读有明确结果。</p><details><summary>卡住时再看提示</summary><p>先查主体，再查工具规则，再查能力集合；不存在不能默认为允许。</p></details></article><article class="step"><h3>3 · 25 分钟</h3><p><strong>为什么做：</strong>后项拒绝时前项也不能提前执行。</p><p><strong>位置：</strong>authorizeBatch</p><p><strong>动作：</strong>复制参数，逐项授权并发送决策事件；首个错误保留原因返回，取消优先。</p><pre><code>go test ./internal/agent -run &#x27;^TestAuthorization&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>后项拒绝时读写计数都为 0，权限服务故障不会被当作普通 tool 结果。</p><details><summary>卡住时再看提示</summary><p>只做授权，不在此循环 Execute；实际执行循环在方法返回 nil 之后。</p></details></article><article class="step"><h3>4 · 15 分钟</h3><p><strong>为什么做：</strong>审计应说明决定发生了什么，不能冒充执行结果。</p><p><strong>位置：</strong>审计状态与集成回归</p><p><strong>动作：</strong>核对允许/拒绝/故障/取消的状态、主体与调用关联，运行 race。</p><pre><code>go test ./internal/agent -run &#x27;^TestDay11AuditStatuses$&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>事件只包含决定的元信息，不暴露参数/令牌；决策不冒充业务成功。</p><details><summary>卡住时再看提示</summary><p>先分类 ErrForbidden，再分类 context；服务故障仍应是 error。</p></details></article></section>
+<section id="review"><h2>测试与复盘 20 分钟</h2><div class="time">12 分钟 · 从目标到累计回归</div><pre><code>go test ./internal/tool ./internal/agent -run &#x27;^(TestCapability|TestAuthorization|TestDay11)&#x27; -count=1 -v -timeout 20s
+go test -race ./internal/tool ./internal/agent -run &#x27;^(TestCapability|TestAuthorization|TestDay11)&#x27; -count=1 -timeout 30s
+go test ./internal/... -timeout 60s
+go test ./examples/... -timeout 60s
+go test -race ./examples/... -timeout 60s</code></pre><p>先让当天目标全绿，再运行累计回归。examples 验证参考基线，不能替代对 internal 练习的测试。若前序练习接口不同，先按迁移说明对齐，不通过修改测试 import 绕到答案。</p><p>重构时保持同一套断言，整理重复逻辑后再运行；不要通过删测试、跳过用例或改预期来“变绿”。</p><div class="time">8 分钟 · 合上代码回答</div><ol><li>模型说自己是管理员，为什么不采用？</li><li>reader 只有 read，write 是否暗含 read？</li><li>同步 Sink 发出了允许事件，能证明执行了吗？</li></ol><details><summary>完成回答后，再看参考思路</summary><article class="card"><h3>模型说自己是管理员，为什么不采用？</h3><p>模型文本不是认证来源；权限身份由可信宿主通过 context 提供。</p></article><article class="card"><h3>reader 只有 read，write 是否暗含 read？</h3><p>能力独立，没有继承；按 grants 显式配置。</p></article><article class="card"><h3>同步 Sink 发出了允许事件，能证明执行了吗？</h3><p>不能。</p><p>后项拒绝或取消可阻止执行；同步事件也没有持久化保证。</p></article></details><h3>完成定义</h3><p><strong>实现验收：</strong>当天完整目标用例与 race 通过，记录累计回归的实际结果；失败时记录阶段、原因与未验证范围。</p><p><strong>理解验收：</strong>不看代码，用本日例子讲清输入、职责、结果和失败出口；再说出一个需求变化应该修改哪一层。</p><h3>本次发布验证</h3><div class="note"><p>Go 1.22.2 linux/amd64：原样骨架编译通过；目标测试在 TODO 处按预期失败；同一套测试对兼容参考实现通过（含 race）。</p><p>目标包含 8 个顶层通过测试及其子场景；完整输出见验证记录。</p><p>验证在临时副本中完成，不代表你的当前实现已通过。真实网络、模型或崩溃恢复不在本次验证范围。</p><p><a href="exercises/README.md">查看准备方法与验证范围</a> · <a href="exercises/verification.json">查看原始红绿测试记录</a></p></div><h3>学习清单</h3><div class="meta"><span>本浏览器自评进度；新版清单单独保存</span><span id="count">0 / 8</span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="fill" class="fill"></div></div><div id="checks"></div><noscript><p>未启用脚本仍可展开全文和手动复制；清单不自动保存。</p></noscript></section>
+<section id="answer"><h2>最后再看参考答案</h2><p>这些实现与骨架签名一致，保留相同契约。内部写法可以不同；先按规则和测试独立完成，再对照取舍。</p><h3 class="file-label">参考实现：internal/tool/access.go</h3><p class="download"><a href="exercises/day11/reference/internal/tool/access.go.txt" download="access.go">下载 access.go</a></p><details class="code-file" data-kind="reference" data-source="day11/reference/internal/tool/access.go.txt"><summary>展开完整文件：access.go</summary><pre id="day11-reference-internal-tool-access-go"><code>package tool
+
+import (
+	&quot;context&quot;
+	&quot;errors&quot;
+	&quot;fmt&quot;
+	&quot;strings&quot;
+)
+
+// Principal is supplied by the trusted host after authentication, not by the model.
+type Principal struct{ ID string }
+type principalContextKey struct{}
+
+func WithPrincipal(ctx context.Context, p Principal) context.Context {
+	return context.WithValue(ctx, principalContextKey{}, p)
+}
+func PrincipalFromContext(ctx context.Context) (Principal, bool) {
+	p, ok := ctx.Value(principalContextKey{}).(Principal)
+	return p, ok &amp;&amp; strings.TrimSpace(p.ID) != &quot;&quot;
+}
+
+var ErrForbidden = errors.New(&quot;tool: execution forbidden&quot;)
+
+type Capability string
+
+const (
+	ReadCapability  Capability = &quot;read&quot;
+	WriteCapability Capability = &quot;write&quot;
+)
+
+type Authorizer interface {
+	Authorize(context.Context, Call) error
+}
+
+// CapabilityAuthorizer is an immutable, tool-level teaching policy.
+// It is not an authentication service or a resource/tenant-level ACL.
+type CapabilityAuthorizer struct {
+	rules  map[string]Capability
+	grants map[string]map[Capability]bool
+}
+
+func validCapability(c Capability) bool { return c == ReadCapability || c == WriteCapability }
+
+// NewCapabilityAuthorizer copies its inputs. Unknown tools/principals are denied.
+// Read and write are independent capabilities; write does not imply read.
+func NewCapabilityAuthorizer(rules map[string]Capability, grants map[string][]Capability) (*CapabilityAuthorizer, error) {
+	a := &amp;CapabilityAuthorizer{rules: make(map[string]Capability), grants: make(map[string]map[Capability]bool)}
+	for name, capability := range rules {
+		if strings.TrimSpace(name) == &quot;&quot; || !validCapability(capability) {
+			return nil, fmt.Errorf(&quot;tool: invalid capability rule&quot;)
+		}
+		a.rules[name] = capability
+	}
+	for id, capabilities := range grants {
+		if strings.TrimSpace(id) == &quot;&quot; {
+			return nil, fmt.Errorf(&quot;tool: empty principal&quot;)
+		}
+		a.grants[id] = make(map[Capability]bool)
+		for _, capability := range capabilities {
+			if !validCapability(capability) {
+				return nil, fmt.Errorf(&quot;tool: invalid grant&quot;)
+			}
+			a.grants[id][capability] = true
+		}
+	}
+	return a, nil
+}
+func (a *CapabilityAuthorizer) Authorize(ctx context.Context, call Call) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	principal, ok := PrincipalFromContext(ctx)
+	if !ok || a == nil {
+		return ErrForbidden
+	}
+	capability, registered := a.rules[call.Name]
+	if !registered || !a.grants[principal.ID][capability] {
+		return ErrForbidden
+	}
+	return nil
+}
+</code></pre><button type="button" data-copy="day11-reference-internal-tool-access-go">复制本文件</button></details><h3 class="file-label">参考实现：internal/agent/authorization_preflight.go</h3><p class="download"><a href="exercises/day11/reference/internal/agent/authorization_preflight.go.txt" download="authorization_preflight.go">下载 authorization_preflight.go</a></p><details class="code-file" data-kind="reference" data-source="day11/reference/internal/agent/authorization_preflight.go.txt"><summary>展开完整文件：authorization_preflight.go</summary><pre id="day11-reference-internal-agent-authorization-preflight-go"><code>package agent
+
+import (
+	&quot;context&quot;
+	&quot;errors&quot;
+	&quot;fmt&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool&quot;
+)
+
+// authorizeBatch runs after protocol validation, before the first tool executes.
+func (a *Agent) authorizeBatch(ctx context.Context, calls []model.ToolCall, step int) error {
+	// Authorization is a whole-batch preflight, before any side effects.
+	// A custom authorizer receives a copy of arguments, not the executable buffer.
+	if a.authorizer != nil {
+		principal, _ := tool.PrincipalFromContext(ctx)
+		for _, call := range calls {
+			check := call
+			check.Arguments = append([]byte(nil), call.Arguments...)
+			err := a.authorizer.Authorize(ctx, check)
+			if ctx.Err() != nil {
+				err = ctx.Err()
+			}
+			kind := EventToolAuthorized
+			decisionStatus := &quot;ok&quot;
+			if err != nil {
+				kind = EventToolDenied
+				decisionStatus = status(err)
+				if errors.Is(err, tool.ErrForbidden) {
+					decisionStatus = &quot;denied&quot;
+				}
+			}
+			a.emit(ctx, Event{Type: kind, Step: step, ToolName: call.Name, ToolCallID: call.ID, PrincipalID: principal.ID, Status: decisionStatus})
+			if err != nil {
+				return fmt.Errorf(&quot;agent: authorization failed: %w&quot;, err)
+			}
+		}
+	}
+	return nil
+}
+</code></pre><button type="button" data-copy="day11-reference-internal-agent-authorization-preflight-go">复制本文件</button></details><h3>为什么接着学下一天？</h3><p>今天明确执行许可与描述可见、只读策略的区别。Day 12 学习远端 MCP 协议；发现远端能力同样不代表有权执行。</p></section>
+<footer><a href="agent-runtime-day-10.html">前一天 Day 10</a> · <a href="agent-runtime-day-12.html">下一天 Day 12</a> · <a href="../../index.html">返回学习首页</a><p>Day 11 / 56 · 正文、图示、骨架与测试离线可读</p></footer></main>
 <script>
-const items=["说明注册、可见与执行授权的区别","对照 Eino 调用包装与本课批次边界","理解可信主体来源和默认拒绝","预测同批读取允许、写入拒绝时的零执行","运行 knowledge 与 access 演示","检查授权事件的ID、主体和脱敏边界","运行两条examples验收并记录实际结果","不看代码完成资源权限与撤权需求推演"];
-const key="agent-runtime-day11-v1";let saved=[];try{const v=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(v))saved=v}catch(_){}const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const p=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=p+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(p))}items.forEach((s,i)=>{const r=document.createElement("div");r.className="check";const c=document.createElement("input");c.type="checkbox";c.id="task-"+i;c.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=c.id;label.textContent=s;r.append(c,label);box.append(r);c.onchange=()=>{saved[i]=c.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+const items=["用自己的话解释当天三个概念", "根据两张图讲清输入、职责和返回", "完成官方阅读并写下问题答案", "确认骨架可编译且目标出现预期红灯", "按任务卡逐步完成当天实现", "完整目标与 race 测试通过", "记录累计回归实际结果和未验证项", "合上代码完成需求变化与失败边界复盘"];const key="mini-agent-runtime-day-11-tdd-v3";
+let saved=[];try{const value=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(value))saved=value}catch(_){}
+const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const percent=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=percent+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(percent))}
+items.forEach((s,i)=>{const row=document.createElement("div");row.className="check";const input=document.createElement("input");input.type="checkbox";input.id="task-"+i;input.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=input.id;label.textContent=s;row.append(input,label);box.append(row);input.onchange=()=>{saved[i]=input.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+document.querySelectorAll("button[data-copy]").forEach(button=>button.addEventListener("click",async()=>{const target=document.getElementById(button.dataset.copy);try{await navigator.clipboard.writeText(target.textContent);button.textContent="已复制"}catch(_){const range=document.createRange();range.selectNodeContents(target);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);button.textContent="已选中，请手动复制"}}));
 </script></body></html>

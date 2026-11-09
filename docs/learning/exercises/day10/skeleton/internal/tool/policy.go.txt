@@ -1,0 +1,36 @@
+package tool
+
+import (
+	"context"
+	"encoding/json"
+
+	"time"
+
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+)
+
+// Policy applies to the whole logical call, including all retries and waits.
+// ReadOnly is an explicit application assertion, never inferred from a model.
+type Policy struct {
+	Timeout        time.Duration
+	MaxAttempts    int
+	ReadOnly       bool
+	Retryable      func(error) bool
+	RetryDelay     time.Duration
+	MaxResultBytes int
+}
+
+// WithPolicy preserves the legacy described-tool boundary used by Agent.
+// No automatic retry occurs unless both ReadOnly and Retryable permit it.
+func WithPolicy(t DescribedTool, p Policy) (DescribedTool, error) { panic("TODO: WithPolicy") }
+
+type policyTool struct {
+	target DescribedTool
+	policy Policy
+}
+
+func (t *policyTool) Name() string                     { panic("TODO: Name") }
+func (t *policyTool) Definition() model.ToolDefinition { panic("TODO: Definition") }
+func (t *policyTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
+	panic("TODO: Execute")
+}

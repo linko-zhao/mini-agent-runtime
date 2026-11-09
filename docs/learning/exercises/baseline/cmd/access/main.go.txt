@@ -1,0 +1,52 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+
+	"github.com/linko-zhao/mini-agent-runtime/internal/agent"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
+)
+
+type simulatedWrite struct{ calls int }
+
+func (*simulatedWrite) Name() string { return "publish_document" }
+func (w *simulatedWrite) Execute(context.Context, json.RawMessage) (string, error) {
+	w.calls++
+	return "published", nil
+}
+
+func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+func run() error {
+	// An offline demonstration principal, not a replacement for real authentication.
+	ctx := tool.WithPrincipal(context.Background(), tool.Principal{ID: "reader"})
+	policy, err := tool.NewCapabilityAuthorizer(
+		map[string]tool.Capability{"publish_document": tool.WriteCapability},
+		map[string][]tool.Capability{"reader": {tool.ReadCapability}})
+	if err != nil {
+		return err
+	}
+	writer := &simulatedWrite{}
+	m := model.NewMock([]model.Response{{Message: model.Message{Role: "assistant", ToolCalls: []model.ToolCall{{ID: "publish-1", Name: "publish_document", Arguments: json.RawMessage("{}")}}}}})
+	a, err := agent.New(m, map[string]tool.Tool{"publish_document": writer}, 2, agent.WithVisibleTools(), agent.WithAuthorizer(policy))
+	if err != nil {
+		return err
+	}
+	_, err = a.Run(ctx, "model requests a hidden write capability")
+	if !errors.Is(err, tool.ErrForbidden) {
+		return fmt.Errorf("expected authorization denial, got %v", err)
+	}
+	if writer.calls != 0 {
+		return fmt.Errorf("denied tool was executed")
+	}
+	fmt.Println("授权拒绝；写入次数:", writer.calls)
+	return nil
+}

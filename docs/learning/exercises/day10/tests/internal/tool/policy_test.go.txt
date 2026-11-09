@@ -1,0 +1,176 @@
+package tool
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+	"sync"
+	"testing"
+	"time"
+)
+
+type policyFake struct {
+	fn func(context.Context, json.RawMessage) (string, error)
+}
+
+func (f policyFake) Name() string                     { return "lookup" }
+func (f policyFake) Definition() model.ToolDefinition { return model.ToolDefinition{Name: "lookup"} }
+func (f policyFake) Execute(ctx context.Context, a json.RawMessage) (string, error) {
+	return f.fn(ctx, a)
+}
+
+func TestPolicyReadRetryAndBudget(t *testing.T) {
+	transient := errors.New("transient")
+	calls := 0
+	wrapped, err := WithPolicy(policyFake{func(_ context.Context, a json.RawMessage) (string, error) {
+		calls++
+		if string(a) != "{}" {
+			t.Fatalf("mutated args: %s", a)
+		}
+		a[0] = 'x'
+		if calls == 1 {
+			return "", transient
+		}
+		return "ok", nil
+	}}, Policy{MaxAttempts: 2, ReadOnly: true, Retryable: func(e error) bool { return errors.Is(e, transient) }, MaxResultBytes: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := wrapped.Execute(context.Background(), json.RawMessage("{}"))
+	if err != nil || out != "ok" || calls != 2 || wrapped.Name() != "lookup" || wrapped.Definition().Name != "lookup" {
+		t.Fatalf("%q %v calls=%d", out, err, calls)
+	}
+	budget, _ := WithPolicy(policyFake{func(context.Context, json.RawMessage) (string, error) { return "中文", nil }}, Policy{MaxResultBytes: 5})
+	out, err = budget.Execute(context.Background(), nil)
+	var known *Error
+	if out != "" || !errors.As(err, &known) || known.Kind != ExecutionError {
+		t.Fatalf("%q %v", out, err)
+	}
+}
+
+func TestPolicyNoUnsafeRetry(t *testing.T) {
+	for _, p := range []Policy{{MaxAttempts: 2}, {MaxAttempts: 2, ReadOnly: true}, {Timeout: -1}, {RetryDelay: -1}, {MaxResultBytes: -1}} {
+		if _, err := WithPolicy(policyFake{}, p); err == nil {
+			t.Fatalf("accepted %+v", p)
+		}
+	}
+	for _, failure := range []error{&Error{Kind: ValidationError, Message: "bad input"}, context.Canceled, context.DeadlineExceeded, errors.New("permanent")} {
+		calls := 0
+		wrapped, _ := WithPolicy(policyFake{func(context.Context, json.RawMessage) (string, error) { calls++; return "", failure }}, Policy{MaxAttempts: 3, ReadOnly: true, Retryable: func(e error) bool { return e != failure || failure.Error() != "permanent" }})
+		_, err := wrapped.Execute(context.Background(), nil)
+		if !errors.Is(err, failure) || calls != 1 {
+			t.Fatalf("%v calls=%d", err, calls)
+		}
+	}
+}
+
+func TestPolicyCancellationAndTimeout(t *testing.T) {
+	calls := 0
+	wrapped, _ := WithPolicy(policyFake{func(ctx context.Context, _ json.RawMessage) (string, error) {
+		calls++
+		<-ctx.Done()
+		return "late", nil
+	}}, Policy{Timeout: 5 * time.Millisecond})
+	_, err := wrapped.Execute(context.Background(), nil)
+	if !errors.Is(err, context.DeadlineExceeded) || calls != 1 {
+		t.Fatalf("%v calls=%d", err, calls)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err = wrapped.Execute(ctx, nil)
+	if !errors.Is(err, context.Canceled) || calls != 1 {
+		t.Fatalf("%v calls=%d", err, calls)
+	}
+}
+
+func TestPolicyCancellationDuringRetryWait(t *testing.T) {
+	parent, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ctx := &policyWaitContext{Context: parent, entered: make(chan struct{})}
+	go func() { <-ctx.entered; cancel() }()
+	calls := 0
+	failure := errors.New("temporary")
+	wrapped, _ := WithPolicy(policyFake{func(context.Context, json.RawMessage) (string, error) {
+		calls++
+		return "", failure
+	}}, Policy{MaxAttempts: 3, ReadOnly: true, Retryable: func(error) bool { return true }, RetryDelay: time.Hour})
+	_, err := wrapped.Execute(ctx, nil)
+	if !errors.Is(err, context.Canceled) || calls != 1 {
+		t.Fatalf("%v calls=%d", err, calls)
+	}
+}
+
+func TestPolicyDefaultNoRetry(t *testing.T) {
+	calls := 0
+	cause := errors.New("transient")
+	wrapped, _ := WithPolicy(policyFake{func(context.Context, json.RawMessage) (string, error) { calls++; return "", cause }}, Policy{})
+	_, err := wrapped.Execute(context.Background(), nil)
+	if !errors.Is(err, cause) || calls != 1 {
+		t.Fatalf("%v calls=%d", err, calls)
+	}
+}
+
+// Done 被重试等待观察到后才取消，避免用 sleep 猜时序。
+type policyWaitContext struct {
+	context.Context
+	entered chan struct{}
+	once    sync.Once
+}
+
+func (c *policyWaitContext) Done() <-chan struct{} {
+	c.once.Do(func() { close(c.entered) })
+	return c.Context.Done()
+}
+func TestDay10PolicyConfig(t *testing.T) {
+	if _, err := WithPolicy(nil, Policy{}); err == nil {
+		t.Fatal("nil accepted")
+	}
+	if _, err := WithPolicy(policyFake{}, Policy{MaxAttempts: -1}); err == nil {
+		t.Fatal("negative attempts accepted")
+	}
+	for _, p := range []Policy{{}, {MaxAttempts: 1}, {ReadOnly: true, MaxAttempts: 2, Retryable: func(error) bool { return true }}} {
+		if got, err := WithPolicy(policyFake{}, p); err != nil || got == nil {
+			t.Fatal(p, err)
+		}
+	}
+}
+func TestDay10AttemptLimitAndSharedDeadline(t *testing.T) {
+	failure := errors.New("temporary")
+	n := 0
+	var deadline time.Time
+	wrapped, err := WithPolicy(policyFake{func(ctx context.Context, _ json.RawMessage) (string, error) {
+		n++
+		d, ok := ctx.Deadline()
+		if !ok {
+			t.Fatal("missing deadline")
+		}
+		if n == 1 {
+			deadline = d
+		} else if !d.Equal(deadline) {
+			t.Fatal("timeout restarted between attempts")
+		}
+		return "", failure
+	}}, Policy{Timeout: time.Hour, ReadOnly: true, MaxAttempts: 2, Retryable: func(error) bool { return true }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = wrapped.Execute(context.Background(), nil)
+	if !errors.Is(err, failure) || n != 2 {
+		t.Fatalf("%v attempts=%d", err, n)
+	}
+}
+
+func TestDay10ParentDeadline(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	defer cancel()
+	target := policyFake{func(c context.Context, _ json.RawMessage) (string, error) { <-c.Done(); return "late", nil }}
+	wrapped, err := WithPolicy(target, Policy{Timeout: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := wrapped.Execute(ctx, nil)
+	if out != "" || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("%q %v", out, err)
+	}
+}

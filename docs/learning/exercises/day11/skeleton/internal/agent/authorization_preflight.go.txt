@@ -1,0 +1,12 @@
+package agent
+
+import (
+	"context"
+
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+)
+
+// authorizeBatch runs after protocol validation, before the first tool executes.
+func (a *Agent) authorizeBatch(ctx context.Context, calls []model.ToolCall, step int) error {
+	panic("TODO: authorizeBatch")
+}

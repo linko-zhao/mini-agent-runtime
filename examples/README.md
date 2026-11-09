@@ -112,3 +112,9 @@ Day 08 的接口映射、旧接口兼容及边界见 [工具设计说明](intern
 从仓库根运行 `go test ./examples/integration -run TestWeek02EndToEndMatrix -v`，先预测计数，再观察正常、授权拒绝、模型ID冲突、结果预算、远端业务失败、执行后响应损坏和超时7个场景。分别检查实际工具调用、模型第二轮历史、错误摘要和唯一Run终态；脚本模型最后返回文本不等于用户任务已正确完成。
 
 官方Go1.22.2下目标矩阵7个子场景、累计examples普通测试和race均通过。所有协议交互使用内存传输与FakeStore，不宣称真实网络/模型或恢复能力通过。下一周才开始Run状态与Checkpoint设计。
+
+## Day 09–15：图解、骨架与完整测试
+
+[课程首页](../index.html) 已更新 Day 09–15；练习附件、隔离准备与可重跑验证见 [交付说明](../docs/learning/exercises/README.md)。练习测试指向学习者 internal，参考仍在 examples，两套 model 类型不混用。
+
+Day 09 的批次授权段提取为私有 authorizeBatch 插槽，Day 11 使用同一位置练习，公开 API 不变。Day 14 新增 internal/assembly 的宿主 Build 与七场景验收；原 integration/week02_test.go 保留。Day 15 新增 internal/runstate 的纯状态转换和快照测试；未修改旧 Agent.Run，也没有新增持久化恢复能力。

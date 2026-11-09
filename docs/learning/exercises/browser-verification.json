@@ -1,0 +1,77 @@
+{
+  "engine": "Chromium",
+  "results": [
+    {
+      "day": 9,
+      "offline": true,
+      "widths": [
+        1280,
+        390
+      ],
+      "exact_files": 4,
+      "keyboard_copy_progress": true
+    },
+    {
+      "day": 10,
+      "offline": true,
+      "widths": [
+        1280,
+        390
+      ],
+      "exact_files": 3,
+      "keyboard_copy_progress": true
+    },
+    {
+      "day": 11,
+      "offline": true,
+      "widths": [
+        1280,
+        390
+      ],
+      "exact_files": 6,
+      "keyboard_copy_progress": true
+    },
+    {
+      "day": 12,
+      "offline": true,
+      "widths": [
+        1280,
+        390
+      ],
+      "exact_files": 5,
+      "keyboard_copy_progress": true
+    },
+    {
+      "day": 13,
+      "offline": true,
+      "widths": [
+        1280,
+        390
+      ],
+      "exact_files": 6,
+      "keyboard_copy_progress": true
+    },
+    {
+      "day": 14,
+      "offline": true,
+      "widths": [
+        1280,
+        390
+      ],
+      "exact_files": 3,
+      "keyboard_copy_progress": true
+    },
+    {
+      "day": 15,
+      "offline": true,
+      "widths": [
+        1280,
+        390
+      ],
+      "exact_files": 3,
+      "keyboard_copy_progress": true
+    }
+  ],
+  "js_errors": [],
+  "external_requests": []
+}

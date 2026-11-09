@@ -1,0 +1,208 @@
+package agent_test
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/linko-zhao/mini-agent-runtime/internal/agent"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
+)
+
+type day09Model func(context.Context, []model.Message) (*model.Response, error)
+
+func (f day09Model) Generate(c context.Context, ms []model.Message) (*model.Response, error) {
+	return f(c, ms)
+}
+
+type day09Tool struct {
+	name string
+	fn   func(context.Context, json.RawMessage) (string, error)
+}
+
+func (f day09Tool) Name() string                                                 { return f.name }
+func (f day09Tool) Execute(c context.Context, a json.RawMessage) (string, error) { return f.fn(c, a) }
+
+type day09Sink struct{ events []agent.Event }
+
+func (s *day09Sink) Emit(_ context.Context, e agent.Event) { s.events = append(s.events, e) }
+func day09Calls() []model.ToolCall {
+	return []model.ToolCall{{ID: "read-1", Name: "read", Arguments: json.RawMessage(`{"id":"a"}`)}, {ID: "read-2", Name: "read", Arguments: json.RawMessage(`{"id":"b"}`)}}
+}
+func day09New(t *testing.T, m model.Model, ts map[string]tool.Tool, opts ...agent.Option) *agent.Agent {
+	t.Helper()
+	a, err := agent.New(m, ts, 3, opts...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return a
+}
+
+func TestDay09BatchRoundTrip(t *testing.T) {
+	calls := day09Calls()
+	rounds := 0
+	var seen []string
+	sink := &day09Sink{}
+	m := day09Model(func(_ context.Context, ms []model.Message) (*model.Response, error) {
+		rounds++
+		if rounds == 1 {
+			return &model.Response{Message: model.Message{Role: "assistant", ToolCalls: calls}}, nil
+		}
+		if len(ms) != 4 || ms[1].Role != "assistant" || len(ms[1].ToolCalls) != 2 {
+			t.Fatalf("missing assistant: %+v", ms)
+		}
+		for i, id := range []string{"read-1", "read-2"} {
+			if ms[i+2].Role != "tool" || ms[i+2].ToolCallID != id || ms[i+2].Content != []string{"a", "b"}[i] {
+				t.Fatalf("wrong pairing: %+v", ms)
+			}
+		}
+		return &model.Response{Message: model.Message{Role: "assistant", Content: "done"}}, nil
+	})
+	target := day09Tool{"read", func(_ context.Context, args json.RawMessage) (string, error) {
+		var p struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(args, &p); err != nil {
+			t.Fatal(err)
+		}
+		seen = append(seen, p.ID)
+		return p.ID, nil
+	}}
+	a := day09New(t, m, map[string]tool.Tool{"read": target}, agent.WithEventSink(sink))
+	out, err := a.Run(context.Background(), "read a and b")
+	if err != nil || out != "done" || rounds != 2 || !reflect.DeepEqual(seen, []string{"a", "b"}) {
+		t.Fatalf("%q %v seen=%v rounds=%d", out, err, seen, rounds)
+	}
+	started, completed, terminal := 0, 0, 0
+	for _, e := range sink.events {
+		switch e.Type {
+		case agent.EventToolStarted:
+			started++
+		case agent.EventToolCompleted:
+			completed++
+			if e.Status != "ok" || e.Step != 1 || e.At.IsZero() {
+				t.Fatal(e)
+			}
+		case agent.EventRunFinished, agent.EventRunFailed:
+			terminal++
+		}
+	}
+	if started != 2 || completed != 2 || terminal != 1 {
+		t.Fatalf("events=%+v", sink.events)
+	}
+}
+func TestDay09BatchPreflight(t *testing.T) {
+	for _, second := range []model.ToolCall{{ID: "x", Name: "missing"}, {ID: "read-1", Name: "read"}, {Name: "read"}} {
+		t.Run(second.ID+"/"+second.Name, func(t *testing.T) {
+			n, rounds := 0, 0
+			calls := []model.ToolCall{day09Calls()[0], second}
+			m := day09Model(func(context.Context, []model.Message) (*model.Response, error) {
+				rounds++
+				return &model.Response{Message: model.Message{Role: "assistant", ToolCalls: calls}}, nil
+			})
+			a := day09New(t, m, map[string]tool.Tool{"read": day09Tool{"read", func(context.Context, json.RawMessage) (string, error) { n++; return "ok", nil }}})
+			out, err := a.Run(context.Background(), "")
+			if err == nil || out != "" || n != 0 || rounds != 1 {
+				t.Fatalf("partial execution: %q %v tool=%d model=%d", out, err, n, rounds)
+			}
+		})
+	}
+}
+func TestDay09ErrorsBecomeSafeMessages(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		failure error
+		want    string
+	}{
+		{"controlled", &tool.Error{Kind: tool.ValidationError, Message: "id required"}, "invalid_arguments: id required"},
+		{"private", errors.New("PRIVATE backend token"), "execution_failed: tool execution failed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rounds := 0
+			m := day09Model(func(_ context.Context, ms []model.Message) (*model.Response, error) {
+				rounds++
+				if rounds == 1 {
+					return &model.Response{Message: model.Message{Role: "assistant", ToolCalls: day09Calls()[:1]}}, nil
+				}
+				if len(ms) != 3 || ms[2].Content != tc.want || strings.Contains(ms[2].Content, "PRIVATE") {
+					t.Fatalf("unsafe history: %+v", ms)
+				}
+				return &model.Response{Message: model.Message{Role: "assistant", Content: "explained"}}, nil
+			})
+			a := day09New(t, m, map[string]tool.Tool{"read": day09Tool{"read", func(context.Context, json.RawMessage) (string, error) { return "must not escape", tc.failure }}})
+			out, err := a.Run(context.Background(), "")
+			if err != nil || out != "explained" || rounds != 2 {
+				t.Fatalf("%q %v", out, err)
+			}
+		})
+	}
+}
+func TestDay09CancellationAndTimeout(t *testing.T) {
+	for _, deadline := range []bool{false, true} {
+		t.Run(map[bool]string{false: "cancel", true: "timeout"}[deadline], func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			n, rounds := 0, 0
+			sink := &day09Sink{}
+			m := day09Model(func(context.Context, []model.Message) (*model.Response, error) {
+				rounds++
+				return &model.Response{Message: model.Message{Role: "assistant", ToolCalls: day09Calls()}}, nil
+			})
+			target := day09Tool{"read", func(c context.Context, _ json.RawMessage) (string, error) {
+				n++
+				if deadline {
+					<-c.Done()
+				} else {
+					cancel()
+				}
+				return "late success", nil
+			}}
+			opts := []agent.Option{agent.WithEventSink(sink)}
+			if deadline {
+				opts = append(opts, agent.WithToolTimeout(time.Millisecond))
+			}
+			a := day09New(t, m, map[string]tool.Tool{"read": target}, opts...)
+			_, err := a.Run(ctx, "")
+			want := context.Canceled
+			if deadline {
+				want = context.DeadlineExceeded
+			}
+			if !errors.Is(err, want) || n != 1 || rounds != 1 {
+				t.Fatalf("%v calls=%d rounds=%d", err, n, rounds)
+			}
+			completed := 0
+			for _, e := range sink.events {
+				if e.Type == agent.EventToolCompleted {
+					completed++
+					if e.Status != "cancelled" {
+						t.Fatal(e)
+					}
+				}
+			}
+			if completed != 1 {
+				t.Fatal(sink.events)
+			}
+		})
+	}
+}
+
+type day09Auth func(context.Context, tool.Call) error
+
+func (f day09Auth) Authorize(c context.Context, call tool.Call) error { return f(c, call) }
+func TestDay09PreflightHook(t *testing.T) {
+	calls, n := 0, 0
+	failure := errors.New("provided preflight rejected")
+	m := day09Model(func(context.Context, []model.Message) (*model.Response, error) {
+		return &model.Response{Message: model.Message{Role: "assistant", ToolCalls: day09Calls()}}, nil
+	})
+	a := day09New(t, m, map[string]tool.Tool{"read": day09Tool{"read", func(context.Context, json.RawMessage) (string, error) { n++; return "", nil }}}, agent.WithAuthorizer(day09Auth(func(context.Context, tool.Call) error { calls++; return failure })))
+	_, err := a.Run(context.Background(), "")
+	if !errors.Is(err, failure) || calls != 1 || n != 0 {
+		t.Fatalf("hook bypassed: %v checks=%d executed=%d", err, calls, n)
+	}
+}

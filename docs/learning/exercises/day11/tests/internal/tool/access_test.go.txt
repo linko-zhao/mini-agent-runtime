@@ -1,0 +1,96 @@
+package tool
+
+import (
+	"context"
+	"errors"
+	"sync"
+	"testing"
+)
+
+func TestCapabilityAuthorizationSnapshot(t *testing.T) {
+	rules := map[string]Capability{"search": ReadCapability, "publish": WriteCapability}
+	grants := map[string][]Capability{"reader": {ReadCapability}, "writer": {WriteCapability}}
+	a, err := NewCapabilityAuthorizer(rules, grants)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules["publish"] = ReadCapability
+	grants["reader"][0] = WriteCapability
+	cases := []struct {
+		id, name string
+		allow    bool
+	}{
+		{"reader", "search", true}, {"reader", "publish", false},
+		{"writer", "publish", true}, {"writer", "search", false},
+		{"missing", "search", false}, {"reader", "unknown", false}, {"", "search", false},
+	}
+	for _, tc := range cases {
+		ctx := WithPrincipal(context.Background(), Principal{ID: tc.id})
+		err := a.Authorize(ctx, Call{Name: tc.name})
+		if tc.allow && err != nil {
+			t.Errorf("%+v: %v", tc, err)
+		}
+		if !tc.allow && !errors.Is(err, ErrForbidden) {
+			t.Errorf("%+v: %v", tc, err)
+		}
+	}
+	if !errors.Is(a.Authorize(context.Background(), Call{Name: "search"}), ErrForbidden) {
+		t.Fatal("missing principal accepted")
+	}
+}
+
+func TestCapabilityValidationCancellationAndConcurrency(t *testing.T) {
+	for _, c := range []struct {
+		rules  map[string]Capability
+		grants map[string][]Capability
+	}{
+		{map[string]Capability{"": ReadCapability}, nil},
+		{map[string]Capability{"x": "unknown"}, nil},
+		{nil, map[string][]Capability{"": {ReadCapability}}},
+		{nil, map[string][]Capability{"reader": {"unknown"}}},
+	} {
+		if _, err := NewCapabilityAuthorizer(c.rules, c.grants); err == nil {
+			t.Fatal("invalid config accepted")
+		}
+	}
+	a, _ := NewCapabilityAuthorizer(map[string]Capability{"read": ReadCapability}, map[string][]Capability{"reader": {ReadCapability}})
+	ctx, cancel := context.WithCancel(WithPrincipal(context.Background(), Principal{ID: "reader"}))
+	cancel()
+	if !errors.Is(a.Authorize(ctx, Call{Name: "read"}), context.Canceled) {
+		t.Fatal("cancel ignored")
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 50; j++ {
+				ctx := WithPrincipal(context.Background(), Principal{ID: "reader"})
+				if err := a.Authorize(ctx, Call{Name: "read"}); err != nil {
+					t.Error(err)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func TestDay11Principal(t *testing.T) {
+	if _, ok := PrincipalFromContext(context.Background()); ok {
+		t.Fatal("invented identity")
+	}
+	for _, id := range []string{"", " \t"} {
+		if _, ok := PrincipalFromContext(WithPrincipal(context.Background(), Principal{ID: id})); ok {
+			t.Fatal("blank principal accepted")
+		}
+	}
+	ctx := WithPrincipal(context.Background(), Principal{ID: "reader"})
+	got, ok := PrincipalFromContext(ctx)
+	if !ok || got.ID != "reader" {
+		t.Fatal(got, ok)
+	}
+	var nilAuth *CapabilityAuthorizer
+	if !errors.Is(nilAuth.Authorize(ctx, Call{Name: "read"}), ErrForbidden) {
+		t.Fatal("nil policy must deny")
+	}
+}

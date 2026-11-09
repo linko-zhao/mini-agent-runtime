@@ -1,0 +1,160 @@
+{
+  "9": {
+    "package": "./internal/agent",
+    "pattern": "^TestDay09",
+    "targets": [
+      {
+        "path": "internal/agent/executor.go",
+        "reference": "day09/reference/internal/agent/executor.go.txt",
+        "skeleton": "day09/skeleton/internal/agent/executor.go.txt"
+      }
+    ],
+    "tests": [
+      {
+        "path": "internal/agent/day09_contract_test.go",
+        "file": "day09/tests/internal/agent/day09_contract_test.go.txt"
+      }
+    ],
+    "support": [
+      {
+        "path": "internal/agent/authorization_preflight.go",
+        "file": "day09/support/internal/agent/authorization_preflight.go.txt"
+      }
+    ]
+  },
+  "10": {
+    "package": "./internal/tool",
+    "pattern": "^(TestPolicy|TestDay10)",
+    "targets": [
+      {
+        "path": "internal/tool/policy.go",
+        "reference": "day10/reference/internal/tool/policy.go.txt",
+        "skeleton": "day10/skeleton/internal/tool/policy.go.txt"
+      }
+    ],
+    "tests": [
+      {
+        "path": "internal/tool/policy_test.go",
+        "file": "day10/tests/internal/tool/policy_test.go.txt"
+      }
+    ],
+    "support": []
+  },
+  "11": {
+    "package": "./internal/tool ./internal/agent",
+    "pattern": "^(TestCapability|TestAuthorization|TestDay11)",
+    "targets": [
+      {
+        "path": "internal/tool/access.go",
+        "reference": "day11/reference/internal/tool/access.go.txt",
+        "skeleton": "day11/skeleton/internal/tool/access.go.txt"
+      },
+      {
+        "path": "internal/agent/authorization_preflight.go",
+        "reference": "day11/reference/internal/agent/authorization_preflight.go.txt",
+        "skeleton": "day11/skeleton/internal/agent/authorization_preflight.go.txt"
+      }
+    ],
+    "tests": [
+      {
+        "path": "internal/tool/access_test.go",
+        "file": "day11/tests/internal/tool/access_test.go.txt"
+      },
+      {
+        "path": "internal/agent/authorization_test.go",
+        "file": "day11/tests/internal/agent/authorization_test.go.txt"
+      }
+    ],
+    "support": []
+  },
+  "12": {
+    "package": "./internal/mcp",
+    "pattern": "^(TestLifecycle|TestInitialize|TestNoTools|TestMalformed|TestPagination|TestCancellationAndQueued|TestCallInput|TestInvalidDescriptors|TestDay12)",
+    "targets": [
+      {
+        "path": "internal/mcp/client.go",
+        "reference": "day12/reference/internal/mcp/client.go.txt",
+        "skeleton": "day12/skeleton/internal/mcp/client.go.txt"
+      }
+    ],
+    "tests": [
+      {
+        "path": "internal/mcp/client_test.go",
+        "file": "day12/tests/internal/mcp/client_test.go.txt"
+      }
+    ],
+    "support": [
+      {
+        "path": "internal/mcp/types.go",
+        "file": "day12/support/internal/mcp/types.go.txt"
+      },
+      {
+        "path": "internal/mcp/fake.go",
+        "file": "day12/support/internal/mcp/fake.go.txt"
+      }
+    ]
+  },
+  "13": {
+    "package": "./internal/tool/mcptool",
+    "pattern": "^(TestMetadata|TestDiscovery|TestResultProjection|TestRemoteErrors|TestAgentRemote|TestRegistryConflict|TestDay13)",
+    "targets": [
+      {
+        "path": "internal/tool/mcptool/adapter.go",
+        "reference": "day13/reference/internal/tool/mcptool/adapter.go.txt",
+        "skeleton": "day13/skeleton/internal/tool/mcptool/adapter.go.txt"
+      },
+      {
+        "path": "internal/tool/mcptool/discovery.go",
+        "reference": "day13/reference/internal/tool/mcptool/discovery.go.txt",
+        "skeleton": "day13/skeleton/internal/tool/mcptool/discovery.go.txt"
+      }
+    ],
+    "tests": [
+      {
+        "path": "internal/tool/mcptool/adapter_test.go",
+        "file": "day13/tests/internal/tool/mcptool/adapter_test.go.txt"
+      },
+      {
+        "path": "internal/tool/mcptool/integration_test.go",
+        "file": "day13/tests/internal/tool/mcptool/integration_test.go.txt"
+      }
+    ],
+    "support": []
+  },
+  "14": {
+    "package": "./internal/assembly",
+    "pattern": "^TestDay14",
+    "targets": [
+      {
+        "path": "internal/assembly/week02.go",
+        "reference": "day14/reference/internal/assembly/week02.go.txt",
+        "skeleton": "day14/skeleton/internal/assembly/week02.go.txt"
+      }
+    ],
+    "tests": [
+      {
+        "path": "internal/assembly/week02_test.go",
+        "file": "day14/tests/internal/assembly/week02_test.go.txt"
+      }
+    ],
+    "support": []
+  },
+  "15": {
+    "package": "./internal/runstate",
+    "pattern": "^TestDay15",
+    "targets": [
+      {
+        "path": "internal/runstate/state.go",
+        "reference": "day15/reference/internal/runstate/state.go.txt",
+        "skeleton": "day15/skeleton/internal/runstate/state.go.txt"
+      }
+    ],
+    "tests": [
+      {
+        "path": "internal/runstate/state_test.go",
+        "file": "day15/tests/internal/runstate/state_test.go.txt"
+      }
+    ],
+    "support": []
+  }
+}

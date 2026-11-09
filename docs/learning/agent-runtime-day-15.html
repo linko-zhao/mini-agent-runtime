@@ -1,0 +1,445 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="description" content="Day 15 图解设计与测试先行学习文档"><title>Day 15 · 运行到哪一步？把进度写成状态机</title><style>
+:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#52617a;--line:#dce4ef;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.85 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:820px;padding:28px 22px 64px;margin:auto}.hero{background:#183561;color:white;border-radius:18px;padding:30px}.hero h1{font-size:30px;line-height:1.45;margin:12px 0}.hero p{color:#e6eefa}.eyebrow,.time{font-size:14px;font-weight:700}.chips{display:flex;flex-wrap:wrap;gap:8px}.chips span{font-size:14px;border:1px solid #9cb5d9;border-radius:20px;padding:3px 12px}section,nav{background:white;border:1px solid var(--line);border-radius:14px;padding:26px;margin-top:20px}h2{font-size:24px;line-height:1.5;margin:0 0 20px}h3{font-size:20px;line-height:1.5;margin:24px 0 10px}p{margin:12px 0}a{color:var(--accent);text-underline-offset:3px}li{margin:10px 0}code{font-size:.88em;background:#edf1f7;padding:2px 4px;border-radius:4px;overflow-wrap:anywhere}pre{background:#142136;color:#e7f3ff;border-radius:10px;padding:18px;overflow:auto;font-size:14px;line-height:1.7;tab-size:4}pre code{background:none;padding:0;font-size:inherit;overflow-wrap:normal}.note,.goal{border-left:4px solid var(--accent);background:var(--pale);padding:14px 18px;border-radius:4px}.warn{border-left-color:#9b6500;background:#fff6e3}.card,.rule,.step{border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:18px 0}.card h3,.step h3{margin-top:0}.muted{color:var(--sub);font-size:15px}.flow{display:flex;flex-direction:column;gap:10px;margin:20px 0}.node{border:2px solid #9eb6db;border-radius:10px;padding:15px;background:#f4f8ff}.node strong{display:block}.arrow{text-align:center;color:#345276;font-size:16px}.branch{border:2px dashed #9b6500;background:#fff7e8}.time{color:var(--accent)}details{border:1px solid var(--line);border-radius:9px;padding:12px 16px;margin:16px 0}summary{cursor:pointer;font-weight:650}summary:focus-visible,a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid #c67800;outline-offset:4px}button{font:inherit;font-size:15px;background:#edf3ff;color:#183561;border:1px solid #9eb6db;border-radius:7px;padding:7px 12px;cursor:pointer}.check{display:flex;gap:12px;margin:14px 0}.check input{width:20px;height:20px;flex-shrink:0;margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer}.done label{color:var(--sub);text-decoration:line-through}.progress{background:#e3e9f2;height:12px;border-radius:8px;overflow:hidden}.fill{background:var(--accent);height:100%;width:0}.meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:15px}footer{font-size:15px;text-align:center;padding:24px}.toplinks{display:flex;flex-wrap:wrap;gap:10px 22px}.download{font-size:15px}.code-actions{display:flex;gap:12px;align-items:center;margin-top:12px}.copy-state{font-size:14px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@media(max-width:600px){main{padding:12px 10px 36px}section,nav{padding:20px 16px}.hero{padding:23px 20px}.hero h1{font-size:26px}h2{font-size:22px}pre{padding:14px;font-size:13px}.card,.rule,.step{padding:14px}body{font-size:18px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+
+figure{margin-inline:0}p,.node,figcaption{overflow-wrap:anywhere}.file-label{overflow-wrap:anywhere}.phase{font-weight:700;color:#183561}.copy-status{font-size:14px;color:#52617a}details>pre{margin-bottom:12px}
+</style></head><body><main>
+<header class="hero"><div class="eyebrow">DAY 15 / 56 · 第 3 周 · 图解与 TDD</div><h1>运行到哪一步？把进度写成状态机</h1><p>先描述允许的变化，再实现无副作用的状态转换。</p><div class="chips"><span>阅读 20 分钟</span><span>实现 80 分钟</span><span>测试复盘 20 分钟</span></div></header>
+<nav aria-label="本页学习路线"><strong>一次只做一小步，答案最后看</strong><div class="toplinks"><a href="#goal">① 今天做什么</a><a href="#concepts">② 概念与图解</a><a href="#design">③ 设计理由</a><a href="#contract">④ 行为契约</a><a href="#skeleton">⑤ 骨架</a><a href="#tests">⑥ 完整测试</a><a href="#tasks">⑦ 动手步骤</a><a href="#review">⑧ 验收</a></div></nav>
+<section id="goal"><h2>今天只解决什么？</h2><div class="goal">实现 runstate.New 与 Advance，让一次运行的位置、待处理调用、消息历史和终态都有明确含义。</div><p>进程停在读取工具之后。只看 messages 不能区分“还没开始调用”“调用进行中”“已经收到结果”，也无法安全决定是否重做。</p><p>把允许的阶段和事件写清楚，才能判断下一步是否合法。今天先建内存状态机，后续再决定保存哪些状态、怎样确认不确定调用。</p><div class="note">不连接真实 Model/Tool，不保存文件，不提供 Checkpoint、重放、幂等或崩溃恢复。已有 Agent.Run 不迁移；新模块是后续演进的语义基线。</div></section>
+<section id="concepts"><h2>先把概念说清楚</h2><article class="card"><h3>状态：此刻已经确认的事实</h3><p>Phase 表示阶段，Messages 是已经进入历史的消息，Pending 是还没收到对应结果的工具请求。</p><p>不能把“准备做”当成“做完了”。</p></article><article class="card"><h3>事件：驱动一次允许的变化</h3><p>StartModel 表示要开始一轮模型请求；ModelReturned 才表示收到响应。</p><p>这不是 Day 05 EventSink 的观测事件，而是状态机输入。</p></article><article class="card"><h3>纯转换：只计算下一状态</h3><p>Advance(current,event) 不联网、不执行工具、不读取 context，返回一个新状态。</p><p>实际 I/O 由宿主在 Start 与 Returned 之间执行。</p></article><h3>图 1 · 模块职责与数据去向</h3><figure class="flow" aria-label="图 1 · 模块职责与数据去向"><div class="node"><strong>宿主驱动 / 未来 Loop 适配</strong>在调用模型前发送 StartModel；响应后发送 ModelReturned；负责真实 ctx 取消与 I/O。</div><div class="arrow">↓ 当前 State 与 Event</div><div class="node"><strong>runstate.Advance</strong>校验允许的阶段变化，复制并追加消息，更新 Step/Pending/Result/Failure。</div><div class="arrow">↓ State 快照（后续才保存）</div><div class="node"><strong>后续 Checkpoint 层</strong>未来保存与恢复明确语义的快照；今天不把连接、context 或锁序列化。</div><figcaption class="muted">沿箭头从上到下读；每个框说明负责的事或当前输入输出。</figcaption></figure><details><summary>展开这张图的逐步文字说明</summary><ol><li><strong>宿主驱动 / 未来 Loop 适配</strong>：在调用模型前发送 StartModel；响应后发送 ModelReturned；负责真实 ctx 取消与 I/O。</li><li><strong>runstate.Advance</strong>：校验允许的阶段变化，复制并追加消息，更新 Step/Pending/Result/Failure。</li><li><strong>后续 Checkpoint 层</strong>：未来保存与恢复明确语义的快照；今天不把连接、context 或锁序列化。</li></ol></details></section>
+<section id="walkthrough"><h2>沿同一个例子走一遍</h2><h3>图 2 · 一次完整过程</h3><figure class="flow" aria-label="图 2 · 一次完整过程"><div class="node"><strong>① New → Ready</strong>run-1，用户文本 read doc-1，Step=0，只有一条 user 消息。</div><div class="arrow">↓ 初始 State</div><div class="node"><strong>② StartModel → ModelRunning</strong>Step=1；宿主调用模型。ModelReturned 携带 read-1 请求后 → ToolsPending，并保存 assistant。</div><div class="arrow">↓ 模型调用与 Pending</div><div class="node"><strong>③ StartTools → ToolsRunning</strong>宿主先完成名称/授权等执行检查，再实际调用；此阶段可能存在不确定副作用。</div><div class="arrow">↓ 工具结果与下一轮事件</div><div class="node"><strong>④ ToolsReturned → Ready</strong>结果 Role=tool、ToolCallID=read-1；追加结果，清空 Pending；下一轮 StartModel 后收到最终文本 → Completed。</div><figcaption class="muted">沿箭头从上到下读；每个框说明负责的事或当前输入输出。</figcaption></figure><details><summary>展开这张图的逐步文字说明</summary><ol><li><strong>① New → Ready</strong>：run-1，用户文本 read doc-1，Step=0，只有一条 user 消息。</li><li><strong>② StartModel → ModelRunning</strong>：Step=1；宿主调用模型。ModelReturned 携带 read-1 请求后 → ToolsPending，并保存 assistant。</li><li><strong>③ StartTools → ToolsRunning</strong>：宿主先完成名称/授权等执行检查，再实际调用；此阶段可能存在不确定副作用。</li><li><strong>④ ToolsReturned → Ready</strong>：结果 Role=tool、ToolCallID=read-1；追加结果，清空 Pending；下一轮 StartModel 后收到最终文本 → Completed。</li></ol></details><h3>失败时停在哪里？</h3><div class="node branch">在 ToolsPending 直接提交 ToolsReturned，或把 read-2 的结果塞给 read-1，均返回 ErrTransition 且不改旧状态。ToolsRunning 崩溃后不能仅凭一个状态对象断言远端未执行。</div></section>
+<section id="design"><h2>这些字段、接口和方法为什么存在？</h2><article class="card"><h3>State 的身份与轮次</h3><p>RunID 是非空白运行标识；Phase 是阶段。</p><p>Step 从 0 开始，每次 StartModel 才 +1；MaxSteps 限制模型轮数，不是工具个数或状态变化次数。</p></article><article class="card"><h3>State 的数据与终态</h3><p>Messages 复用 model.Message；Pending 复用 model.ToolCall。</p><p>Result 只在 Completed 填最终文本；Failure 在 Failed/Cancelled 填安全原因，终态不再接收任何事件。</p></article><article class="card"><h3>Event 的四个字段</h3><p>Kind 决定转换；Response 供 ModelReturned；Results 供 ToolsReturned；Reason 供 Abort。</p><p>其他事件忽略不相关字段；Cancel 使用固定 cancelled 原因。</p></article><article class="card"><h3>New 的边界</h3><p>New(runID,input,maxSteps) 生成 Ready、Step=0、初始 user 消息。</p><p>空用户文本允许；空白 RunID 或非正 maxSteps 返回 ErrTransition。</p></article><article class="card"><h3>Advance 的返回与错误</h3><p>合法转换返回新 State；非法事件、错误阶段或无效数据返回零 State 与 ErrTransition。</p><p>轮次耗尽返回零 State 与 ErrMaxSteps，输入保持原样；宿主可另发 Abort 记录终止。</p></article><article class="card"><h3>为什么区分 ToolsPending 和 ToolsRunning？</h3><p>Pending 表示模型已经提出请求，还没有进入执行；Running 表示执行阶段已开始，可能有外部副作用。</p><p>两者都不自动判断远端是否完成，更不自动重试。</p></article><article class="card"><h3>为什么要深拷贝？</h3><p>Message.ToolCalls 和 Arguments、Pending 都含切片。</p><p>新状态不能与旧状态或事件共享可变字节；Pending 也不能与 Messages 内部共享参数。</p></article><article class="card"><h3>并发与故障边界</h3><p>可对同一只读输入并行计算独立下一状态；调用方不得同时修改输入缓冲区。</p><p>同一 Run 的真实驱动应串行应用事件；导出的 State 要来自 New/Advance，不承诺校验任意伪造状态。</p></article></section>
+<section id="transitions"><h2>先画允许的变化，再写代码</h2><article class="card"><h3>Ready → ModelRunning</h3><p>StartModel；Step +1。</p></article><article class="card"><h3>ModelRunning → ToolsPending / Completed</h3><p>ModelReturned：有 ToolCalls 等待工具；没有 ToolCalls 返回最终文本。</p></article><article class="card"><h3>ToolsPending → ToolsRunning</h3><p>StartTools；表示进入执行边界，不表示已经确认完成。</p></article><article class="card"><h3>ToolsRunning → Ready</h3><p>ToolsReturned；匹配全部结果，追加消息并清空 Pending。</p></article><article class="card"><h3>任意非终态 → Failed / Cancelled</h3><p>Abort 需要安全 Reason；Cancel 使用固定原因。</p><p>终态不再转换。</p></article></section>
+<section id="contract"><h2>行为契约：不用猜参考代码</h2><p>按下面规则实现。内部算法可以不同；未约定的错误文本不必逐字一致，错误链用 errors.Is/As 检查。</p><article class="rule"><h3>R1 · 初始状态</h3><p>RunID 非空白、maxSteps&gt;0；Ready、Step=0、单条 user 消息、空 Pending/Result/Failure。空 input 合法。</p><p class="muted">对应测试：<code>TestDay15New</code></p></article><article class="rule"><h3>R2 · 正常阶段</h3><p>Ready+StartModel→ModelRunning 并 Step+1；ModelRunning+合法 assistant 响应→追加消息，有调用则 ToolsPending，无调用则 Completed 且 Result=Content；ToolsPending+StartTools→ToolsRunning。</p><p class="muted">对应测试：<code>TestDay15RoundTrip</code></p></article><article class="rule"><h3>R3 · 工具与历史</h3><p>ModelReturned 的调用 ID 非空且唯一，Name 非空白；不在状态机里查真实 Registry。ToolsReturned 只能在 ToolsRunning，条数、顺序、Role=tool 和 ToolCallID 与 Pending 精确对应；成功追加结果、清空 Pending、回 Ready，不增加 Step。</p><p class="muted">对应测试：<code>TestDay15InvalidEvents / TestDay15RoundTrip</code></p></article><article class="rule"><h3>R4 · 失败、取消与预算</h3><p>任一非终态可 Abort（Reason 非空白）→Failed，或 Cancel→Cancelled，Failure 固定 cancelled；保留历史和待确认调用。终态拒绝所有事件。Ready 在 Step&gt;=MaxSteps 时拒绝 StartModel，errors.Is=ErrMaxSteps。</p><p class="muted">对应测试：<code>TestDay15TerminalAndBudget</code></p></article><article class="rule"><h3>R5 · 原子转换与副本</h3><p>错误返回零 State，输入不变；成功深拷贝 Messages、ToolCalls、Arguments 和 Pending，事件与前后状态互不污染。只读输入可并行 Advance，各自修改返回值不产生 race。</p><p class="muted">对应测试：<code>TestDay15InvalidEvents / TestDay15SnapshotsAndConcurrency</code></p></article></section>
+<section id="read"><h2>官方阅读 20 分钟：带着问题找证据</h2><article class="card"><div class="time">12 分钟</div><h3><a href="https://github.com/cloudwego/eino/blob/main/flow/agent/react/react.go">flow/agent/react/react.go · state / state.Messages</a></h3><p>跟踪一轮模型、工具消息怎样写入状态。列出哪些是已确认历史，哪些只是待执行工作，不把 state 对象存在等同持久恢复。</p></article><article class="card"><div class="time">8 分钟</div><h3><a href="https://github.com/cloudwego/eino/tree/main/compose">Eino compose · 状态与 Checkpoint 相关实现</a></h3><p>在源码目录中查找 state/checkpoint，区分运行内状态和持久化入口。只产出“未来需要保存什么”的问题清单，不照搬本课未实现的恢复功能。</p></article><p class="muted">外部链接供源码对照；正文独立可读。本次未重新核对所有远端 main 符号，阅读时记录 commit，名称变化时按职责定位；不把框架默认策略直接视为本课约定。</p></section>
+<section id="continuity"><h2>承接前序设计与本日增量</h2><p>复用 Day 01–14 的 model.Message/ToolCall/Response；新增 internal/runstate/state.go。旧 Agent.Run 与 MCP Client 不改接口，不导入另一套 model 类型；Event 是 runstate 的转换输入，不替换 agent.Event。</p><p><strong>路径约定：</strong>练习使用 internal；参考使用 examples/internal。两套包只映射路径前缀，不能混用 model.Message。共用原仓库 go.mod，Go ≥ 1.22.2；没有每日独立 module。</p><p>新增：internal/runstate/state.go；已有实现先保留，不把同名定义重复追加。</p><div class="note"><strong>安全开始：</strong>下面命令只新建仓库外的临时练习副本，复制同一累计模块的前置依赖，再把当天目标换成 TODO。不会修改你当前的 internal/cmd，也不根据你的代码判断进度。</div><pre><code>python3 docs/learning/exercises/prepare.py 15</code></pre><p>在原仓库根运行。脚本打印新副本的绝对路径；进入该目录后再编辑和测试。需要 Python 3.9+ 和 Go 工具链，不需要 API Key。</p><p>副本内包含为兼容累计版本提供的组件；当天任务只编辑上面列出的目标。已经实现过时，也可以只把完整测试应用到自己的版本，无需挖空重做。</p><details><summary>手工应用文件与保留旧实现</summary><p>先备份或在独立工作区操作。按本页路径保存骨架与测试；前序依赖使用同一套累计类型。当天测试文件若已存在，比较后更新，不与旧版重复定义。不要自动覆盖当前项目；参考基线仅用于准备依赖。</p><p>prepare.py 把参考依赖映射到副本 internal；当天方法始终使用未实现骨架。装配脚本不运行用户任务，也不证明你的原实现通过测试。</p></details></section>
+<section id="skeleton"><h2>完整骨架：方法体留给你</h2><p>每个文件的 package、import、类型和签名齐全。panic("TODO: ...") 表示尚未实现；它不是最终错误处理方式。按文件名保存，不只复制某个方法。</p><h3 class="file-label">待实现骨架：internal/runstate/state.go</h3><p class="download"><a href="exercises/day15/skeleton/internal/runstate/state.go.txt" download="state.go">下载 state.go</a></p><details class="code-file" data-kind="skeleton" data-source="day15/skeleton/internal/runstate/state.go.txt"><summary>展开完整文件：state.go</summary><pre id="day15-skeleton-internal-runstate-state-go"><code>// Package runstate models in-memory transitions. It is not a checkpoint store.
+package runstate
+
+import (
+	&quot;errors&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+)
+
+type Phase string
+
+const (
+	Ready        Phase = &quot;ready&quot;
+	ModelRunning Phase = &quot;model_running&quot;
+	ToolsPending Phase = &quot;tools_pending&quot;
+	ToolsRunning Phase = &quot;tools_running&quot;
+	Completed    Phase = &quot;completed&quot;
+	Failed       Phase = &quot;failed&quot;
+	Cancelled    Phase = &quot;cancelled&quot;
+)
+
+type EventKind string
+
+const (
+	StartModel    EventKind = &quot;start_model&quot;
+	ModelReturned EventKind = &quot;model_returned&quot;
+	StartTools    EventKind = &quot;start_tools&quot;
+	ToolsReturned EventKind = &quot;tools_returned&quot;
+	Abort         EventKind = &quot;abort&quot;
+	Cancel        EventKind = &quot;cancel&quot;
+)
+
+var (
+	ErrTransition = errors.New(&quot;runstate: invalid transition&quot;)
+	ErrMaxSteps   = errors.New(&quot;runstate: max model rounds exceeded&quot;)
+)
+
+type State struct {
+	RunID           string
+	Phase           Phase
+	Step, MaxSteps  int
+	Messages        []model.Message
+	Pending         []model.ToolCall
+	Result, Failure string
+}
+type Event struct {
+	Kind     EventKind
+	Response *model.Response
+	Results  []model.Message
+	Reason   string
+}
+
+func New(runID, input string, maxSteps int) (State, error) { panic(&quot;TODO: New&quot;) }
+
+func cloneCalls(calls []model.ToolCall) []model.ToolCall { panic(&quot;TODO: cloneCalls&quot;) }
+
+func cloneMessages(ms []model.Message) []model.Message { panic(&quot;TODO: cloneMessages&quot;) }
+
+func cloneState(s State) State { panic(&quot;TODO: cloneState&quot;) }
+
+func terminal(p Phase) bool { panic(&quot;TODO: terminal&quot;) }
+
+// Advance has no I/O. The host performs calls between start/returned events.
+// It accepts states from New/Advance and never mutates input state/event buffers.
+func Advance(current State, e Event) (State, error) { panic(&quot;TODO: Advance&quot;) }
+</code></pre><button type="button" data-copy="day15-skeleton-internal-runstate-state-go">复制本文件</button></details></section>
+<section id="tests"><h2>完整测试：夹具和断言都已提供</h2><p>下面是全部测试文件，不需要补 fake、fixture 或断言。测试调用练习的 internal 包，不是已完成的 examples 答案。</p><h3 class="file-label">完整测试：internal/runstate/state_test.go</h3><p class="download"><a href="exercises/day15/tests/internal/runstate/state_test.go.txt" download="state_test.go">下载 state_test.go</a></p><details class="code-file" data-kind="tests" data-source="day15/tests/internal/runstate/state_test.go.txt"><summary>展开完整文件：state_test.go</summary><pre id="day15-tests-internal-runstate-state-test-go"><code>package runstate_test
+
+import (
+	&quot;encoding/json&quot;
+	&quot;errors&quot;
+	&quot;reflect&quot;
+	&quot;sync&quot;
+	&quot;testing&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/runstate&quot;
+)
+
+func day15New(t *testing.T, max int) runstate.State {
+	t.Helper()
+	s, err := runstate.New(&quot;run-1&quot;, &quot;read doc-1&quot;, max)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+func day15Apply(t *testing.T, s runstate.State, e runstate.Event) runstate.State {
+	t.Helper()
+	next, err := runstate.Advance(s, e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return next
+}
+func day15Response() *model.Response {
+	return &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, ToolCalls: []model.ToolCall{{ID: &quot;read-1&quot;, Name: &quot;get_document&quot;, Arguments: json.RawMessage(`{&quot;id&quot;:&quot;doc-1&quot;}`)}}}}
+}
+func day15Pending(t *testing.T) runstate.State {
+	s := day15Apply(t, day15New(t, 2), runstate.Event{Kind: runstate.StartModel})
+	return day15Apply(t, s, runstate.Event{Kind: runstate.ModelReturned, Response: day15Response()})
+}
+
+func TestDay15New(t *testing.T) {
+	s := day15New(t, 2)
+	if s.RunID != &quot;run-1&quot; || s.Phase != runstate.Ready || s.Step != 0 || s.MaxSteps != 2 || len(s.Messages) != 1 || s.Messages[0].Role != &quot;user&quot; || s.Messages[0].Content != &quot;read doc-1&quot; || len(s.Pending) != 0 || s.Result != &quot;&quot; || s.Failure != &quot;&quot; {
+		t.Fatalf(&quot;%+v&quot;, s)
+	}
+	for _, tc := range []struct {
+		id  string
+		max int
+	}{{&quot;&quot;, 2}, {&quot; \t&quot;, 2}, {&quot;x&quot;, 0}, {&quot;x&quot;, -1}} {
+		if _, err := runstate.New(tc.id, &quot;&quot;, tc.max); !errors.Is(err, runstate.ErrTransition) {
+			t.Fatal(tc, err)
+		}
+	}
+	if _, err := runstate.New(&quot;x&quot;, &quot;&quot;, 1); err != nil {
+		t.Fatal(&quot;empty user content is allowed&quot;, err)
+	}
+}
+func TestDay15RoundTrip(t *testing.T) {
+	s := day15New(t, 2)
+	s = day15Apply(t, s, runstate.Event{Kind: runstate.StartModel})
+	if s.Phase != runstate.ModelRunning || s.Step != 1 {
+		t.Fatal(s)
+	}
+	s = day15Apply(t, s, runstate.Event{Kind: runstate.ModelReturned, Response: day15Response()})
+	if s.Phase != runstate.ToolsPending || len(s.Pending) != 1 || len(s.Messages) != 2 {
+		t.Fatal(s)
+	}
+	s = day15Apply(t, s, runstate.Event{Kind: runstate.StartTools})
+	if s.Phase != runstate.ToolsRunning || s.Step != 1 {
+		t.Fatal(s)
+	}
+	s = day15Apply(t, s, runstate.Event{Kind: runstate.ToolsReturned, Results: []model.Message{{Role: &quot;tool&quot;, ToolCallID: &quot;read-1&quot;, Content: &quot;body&quot;}}})
+	if s.Phase != runstate.Ready || s.Step != 1 || len(s.Pending) != 0 || len(s.Messages) != 3 {
+		t.Fatal(s)
+	}
+	s = day15Apply(t, s, runstate.Event{Kind: runstate.StartModel})
+	s = day15Apply(t, s, runstate.Event{Kind: runstate.ModelReturned, Response: &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, Content: &quot;answer&quot;}}})
+	if s.Phase != runstate.Completed || s.Step != 2 || s.Result != &quot;answer&quot; || len(s.Messages) != 4 {
+		t.Fatal(s)
+	}
+}
+func TestDay15InvalidEvents(t *testing.T) {
+	ready := day15New(t, 2)
+	running := day15Apply(t, ready, runstate.Event{Kind: runstate.StartModel})
+	pending := day15Pending(t)
+	tools := day15Apply(t, pending, runstate.Event{Kind: runstate.StartTools})
+	for _, tc := range []struct {
+		name string
+		s    runstate.State
+		e    runstate.Event
+	}{
+		{&quot;start-tools-too-early&quot;, ready, runstate.Event{Kind: runstate.StartTools}},
+		{&quot;model-twice&quot;, running, runstate.Event{Kind: runstate.StartModel}},
+		{&quot;nil-response&quot;, running, runstate.Event{Kind: runstate.ModelReturned}},
+		{&quot;wrong-role&quot;, running, runstate.Event{Kind: runstate.ModelReturned, Response: &amp;model.Response{Message: model.Message{Role: &quot;user&quot;}}}},
+		{&quot;results-before-start&quot;, pending, runstate.Event{Kind: runstate.ToolsReturned}},
+		{&quot;missing-results&quot;, tools, runstate.Event{Kind: runstate.ToolsReturned}},
+		{&quot;wrong-result-id&quot;, tools, runstate.Event{Kind: runstate.ToolsReturned, Results: []model.Message{{Role: &quot;tool&quot;, ToolCallID: &quot;wrong&quot;}}}},
+		{&quot;wrong-result-role&quot;, tools, runstate.Event{Kind: runstate.ToolsReturned, Results: []model.Message{{Role: &quot;assistant&quot;, ToolCallID: &quot;read-1&quot;}}}},
+		{&quot;empty-reason&quot;, ready, runstate.Event{Kind: runstate.Abort}},
+		{&quot;unknown-event&quot;, ready, runstate.Event{Kind: &quot;unknown&quot;}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			before, _ := json.Marshal(tc.s)
+			got, err := runstate.Advance(tc.s, tc.e)
+			after, _ := json.Marshal(tc.s)
+			if !errors.Is(err, runstate.ErrTransition) || !reflect.DeepEqual(got, runstate.State{}) || string(before) != string(after) {
+				t.Fatalf(&quot;mutation or accepted event: %+v %v&quot;, got, err)
+			}
+		})
+	}
+	for _, calls := range [][]model.ToolCall{{{Name: &quot;read&quot;}}, {{ID: &quot;a&quot;, Name: &quot; &quot;}}, {{ID: &quot;a&quot;, Name: &quot;read&quot;}, {ID: &quot;a&quot;, Name: &quot;read&quot;}}} {
+		r := &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, ToolCalls: calls}}
+		if _, err := runstate.Advance(running, runstate.Event{Kind: runstate.ModelReturned, Response: r}); !errors.Is(err, runstate.ErrTransition) {
+			t.Fatal(err)
+		}
+	}
+	// 两条结果必须与原始请求的顺序和 ID 一一对应。
+	r := day15Response()
+	r.Message.ToolCalls = append(r.Message.ToolCalls, model.ToolCall{ID: &quot;read-2&quot;, Name: &quot;read&quot;})
+	two := day15Apply(t, running, runstate.Event{Kind: runstate.ModelReturned, Response: r})
+	two = day15Apply(t, two, runstate.Event{Kind: runstate.StartTools})
+	reversed := []model.Message{{Role: &quot;tool&quot;, ToolCallID: &quot;read-2&quot;}, {Role: &quot;tool&quot;, ToolCallID: &quot;read-1&quot;}}
+	if _, err := runstate.Advance(two, runstate.Event{Kind: runstate.ToolsReturned, Results: reversed}); !errors.Is(err, runstate.ErrTransition) {
+		t.Fatal(&quot;accepted reversed results&quot;, err)
+	}
+}
+func TestDay15TerminalAndBudget(t *testing.T) {
+	ready := day15New(t, 1)
+	failed := day15Apply(t, ready, runstate.Event{Kind: runstate.Abort, Reason: &quot;safe model failure&quot;})
+	cancelled := day15Apply(t, ready, runstate.Event{Kind: runstate.Cancel})
+	running := day15Apply(t, ready, runstate.Event{Kind: runstate.StartModel})
+	done := day15Apply(t, running, runstate.Event{Kind: runstate.ModelReturned, Response: &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, Content: &quot;done&quot;}}})
+	if failed.Failure != &quot;safe model failure&quot; || cancelled.Failure != &quot;cancelled&quot; || cancelled.Phase != runstate.Cancelled {
+		t.Fatal(failed, cancelled)
+	}
+	for _, state := range []runstate.State{failed, cancelled, done} {
+		for _, kind := range []runstate.EventKind{runstate.StartModel, runstate.Cancel, runstate.Abort, runstate.StartTools, runstate.ModelReturned, runstate.ToolsReturned} {
+			if _, err := runstate.Advance(state, runstate.Event{Kind: kind, Reason: &quot;x&quot;}); !errors.Is(err, runstate.ErrTransition) {
+				t.Fatal(state.Phase, kind, err)
+			}
+		}
+	}
+	pending := day15Apply(t, running, runstate.Event{Kind: runstate.ModelReturned, Response: day15Response()})
+	tools := day15Apply(t, pending, runstate.Event{Kind: runstate.StartTools})
+	back := day15Apply(t, tools, runstate.Event{Kind: runstate.ToolsReturned, Results: []model.Message{{Role: &quot;tool&quot;, ToolCallID: &quot;read-1&quot;}}})
+	if _, err := runstate.Advance(back, runstate.Event{Kind: runstate.StartModel}); !errors.Is(err, runstate.ErrMaxSteps) {
+		t.Fatal(err)
+	}
+	if back.Phase != runstate.Ready || back.Step != 1 {
+		t.Fatal(&quot;budget check mutated input&quot;)
+	}
+	for _, state := range []runstate.State{running, pending, tools} {
+		if got, err := runstate.Advance(state, runstate.Event{Kind: runstate.Cancel}); err != nil || got.Phase != runstate.Cancelled {
+			t.Fatal(got, err)
+		}
+	}
+}
+func TestDay15SnapshotsAndConcurrency(t *testing.T) {
+	original := day15New(t, 2)
+	running := day15Apply(t, original, runstate.Event{Kind: runstate.StartModel})
+	r := day15Response()
+	pending := day15Apply(t, running, runstate.Event{Kind: runstate.ModelReturned, Response: r})
+	r.Message.ToolCalls[0].Arguments[0] = &#x27;x&#x27;
+	if !json.Valid(pending.Pending[0].Arguments) || !json.Valid(pending.Messages[1].ToolCalls[0].Arguments) {
+		t.Fatal(&quot;aliases event&quot;)
+	}
+	next := day15Apply(t, pending, runstate.Event{Kind: runstate.StartTools})
+	next.Pending[0].Arguments[0] = &#x27;x&#x27;
+	next.Messages[1].ToolCalls[0].Arguments[0] = &#x27;x&#x27;
+	if !json.Valid(pending.Pending[0].Arguments) || !json.Valid(pending.Messages[1].ToolCalls[0].Arguments) {
+		t.Fatal(&quot;aliases old state&quot;)
+	}
+	copied := day15Apply(t, pending, runstate.Event{Kind: runstate.StartTools})
+	copied.Pending[0].Arguments[0] = &#x27;y&#x27;
+	if !json.Valid(copied.Messages[1].ToolCalls[0].Arguments) {
+		t.Fatal(&quot;Pending aliases Messages&quot;)
+	}
+	var wg sync.WaitGroup
+	for i := 0; i &lt; 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s, err := runstate.Advance(pending, runstate.Event{Kind: runstate.StartTools})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			s.Pending[0].Arguments[0] = &#x27;z&#x27;
+		}()
+	}
+	wg.Wait()
+	if !json.Valid(pending.Pending[0].Arguments) {
+		t.Fatal(&quot;concurrent transition changed original&quot;)
+	}
+}
+</code></pre><button type="button" data-copy="day15-tests-internal-runstate-state-test-go">复制本文件</button></details><h3>先编译，再看到明确红灯</h3><pre><code>go test ./internal/runstate -run &#x27;^$&#x27; -timeout 20s
+go test ./internal/runstate -run &#x27;^TestDay15&#x27; -count=1 -v -timeout 20s</code></pre><p>编译命令预期退出码 0，“no tests to run”在这一步是正常的。第二条必须实际运行用例，并在当天方法的 TODO 处失败；缺包、语法错误、命令未匹配到测试都不算行为红灯。</p><p>已有实现可能直接全绿。保留这些结果，再用契约检查设计；不要为了制造红灯破坏已完成代码。</p></section>
+<section id="tasks"><h2>分步实现：一次只改变一组行为</h2><div class="time">编码 80 分钟 · 每次只看当前任务卡</div><article class="step"><h3>1 · 15 分钟</h3><p><strong>为什么做：</strong>先定义确认了什么事实，才能判断下一步是否合法。</p><p><strong>位置：</strong>Phase / EventKind / State / Event / New</p><p><strong>动作：</strong>先在纸上画阶段与事件；建立初始 user 消息，校验 RunID 和轮次预算。</p><pre><code>go test ./internal/runstate -run &#x27;^TestDay15New$&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>初始 Ready、Step=0；空 input 与非法运行身份被区别处理。</p><details><summary>卡住时再看提示</summary><p>状态名表示事实，事件名表示发生了什么，不要都叫 running。</p></details></article><article class="step"><h3>2 · 25 分钟</h3><p><strong>为什么做：</strong>把一条正常往返变成可验证的状态变化。</p><p><strong>位置：</strong>Advance 的正常路径</p><p><strong>动作：</strong>实现模型开始/响应、工具开始/结果、文本完成；严格保留消息顺序和 ID。</p><pre><code>go test ./internal/runstate -run &#x27;^TestDay15RoundTrip$&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>一轮工具往返后回 Ready，只有模型开始事件增加 Step。</p><details><summary>卡住时再看提示</summary><p>先写允许的“当前 Phase + Kind → 下一 Phase”，再写消息更新。</p></details></article><article class="step"><h3>3 · 20 分钟</h3><p><strong>为什么做：</strong>拒绝不可能的事件，明确终态和模型轮次边界。</p><p><strong>位置：</strong>Advance 的拒绝、终态与预算</p><p><strong>动作：</strong>补齐缺失响应、错误角色、非法调用 ID、错序结果、失败/取消和终态门禁。</p><pre><code>go test ./internal/runstate -run &#x27;^(TestDay15InvalidEvents|TestDay15TerminalAndBudget)$&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>非法变化不修改旧状态；超预算原因可识别，终态不可重开。</p><details><summary>卡住时再看提示</summary><p>ErrMaxSteps 不自动执行 Abort；由宿主决定是否记录安全失败原因。</p></details></article><article class="step"><h3>4 · 20 分钟</h3><p><strong>为什么做：</strong>保存快照前必须先防止状态之间共享可变字节。</p><p><strong>位置：</strong>cloneCalls / cloneMessages / cloneState</p><p><strong>动作：</strong>深拷贝嵌套字节，确保 Pending 与历史也不互相引用；验证只读输入并行转换。</p><pre><code>go test ./internal/runstate -run &#x27;^TestDay15SnapshotsAndConcurrency$&#x27; -count=1 -v -timeout 20s</code></pre><p><strong>完成证据：</strong>改新状态或事件缓冲区不影响旧状态，race 通过。</p><details><summary>卡住时再看提示</summary><p>只复制最外层 State 不够；Message 里面还有 ToolCalls 和 Arguments。</p></details></article></section>
+<section id="review"><h2>测试与复盘 20 分钟</h2><div class="time">12 分钟 · 从目标到累计回归</div><pre><code>go test ./internal/runstate -run &#x27;^TestDay15&#x27; -count=1 -v -timeout 20s
+go test -race ./internal/runstate -run &#x27;^TestDay15&#x27; -count=1 -timeout 30s
+go test ./internal/... -timeout 60s
+go test ./examples/... -timeout 60s
+go test -race ./examples/... -timeout 60s</code></pre><p>先让当天目标全绿，再运行累计回归。examples 验证参考基线，不能替代对 internal 练习的测试。若前序练习接口不同，先按迁移说明对齐，不通过修改测试 import 绕到答案。</p><p>重构时保持同一套断言，整理重复逻辑后再运行；不要通过删测试、跳过用例或改预期来“变绿”。</p><div class="time">8 分钟 · 合上代码回答</div><ol><li>ToolsPending 与 ToolsRunning 为什么不能合并？</li><li>为什么 Advance 不自己执行 Tool？</li><li>把 State 保存为 JSON，就等于能安全恢复吗？</li></ol><details><summary>完成回答后，再看参考思路</summary><article class="card"><h3>ToolsPending 与 ToolsRunning 为什么不能合并？</h3><p>一个尚未进入执行，一个已经可能发生副作用；恢复时需要保留这个不确定边界。</p></article><article class="card"><h3>为什么 Advance 不自己执行 Tool？</h3><p>它只描述合法变化；I/O 和取消由宿主控制，纯转换更容易验证原子性。</p></article><article class="card"><h3>把 State 保存为 JSON，就等于能安全恢复吗？</h3><p>不等于。</p><p>还缺持久化一致性、外部调用确认、幂等与恢复协议。</p></article></details><h3>完成定义</h3><p><strong>实现验收：</strong>当天完整目标用例与 race 通过，记录累计回归的实际结果；失败时记录阶段、原因与未验证范围。</p><p><strong>理解验收：</strong>不看代码，用本日例子讲清输入、职责、结果和失败出口；再说出一个需求变化应该修改哪一层。</p><h3>本次发布验证</h3><div class="note"><p>Go 1.22.2 linux/amd64：原样骨架编译通过；目标测试在 TODO 处按预期失败；同一套测试对兼容参考实现通过（含 race）。</p><p>目标包含 5 个顶层通过测试及其子场景；完整输出见验证记录。</p><p>验证在临时副本中完成，不代表你的当前实现已通过。真实网络、模型或崩溃恢复不在本次验证范围。</p><p><a href="exercises/README.md">查看准备方法与验证范围</a> · <a href="exercises/verification.json">查看原始红绿测试记录</a></p></div><h3>学习清单</h3><div class="meta"><span>本浏览器自评进度；新版清单单独保存</span><span id="count">0 / 8</span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="fill" class="fill"></div></div><div id="checks"></div><noscript><p>未启用脚本仍可展开全文和手动复制；清单不自动保存。</p></noscript></section>
+<section id="answer"><h2>最后再看参考答案</h2><p>这些实现与骨架签名一致，保留相同契约。内部写法可以不同；先按规则和测试独立完成，再对照取舍。</p><h3 class="file-label">参考实现：internal/runstate/state.go</h3><p class="download"><a href="exercises/day15/reference/internal/runstate/state.go.txt" download="state.go">下载 state.go</a></p><details class="code-file" data-kind="reference" data-source="day15/reference/internal/runstate/state.go.txt"><summary>展开完整文件：state.go</summary><pre id="day15-reference-internal-runstate-state-go"><code>// Package runstate models in-memory transitions. It is not a checkpoint store.
+package runstate
+
+import (
+	&quot;errors&quot;
+	&quot;strings&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+)
+
+type Phase string
+
+const (
+	Ready        Phase = &quot;ready&quot;
+	ModelRunning Phase = &quot;model_running&quot;
+	ToolsPending Phase = &quot;tools_pending&quot;
+	ToolsRunning Phase = &quot;tools_running&quot;
+	Completed    Phase = &quot;completed&quot;
+	Failed       Phase = &quot;failed&quot;
+	Cancelled    Phase = &quot;cancelled&quot;
+)
+
+type EventKind string
+
+const (
+	StartModel    EventKind = &quot;start_model&quot;
+	ModelReturned EventKind = &quot;model_returned&quot;
+	StartTools    EventKind = &quot;start_tools&quot;
+	ToolsReturned EventKind = &quot;tools_returned&quot;
+	Abort         EventKind = &quot;abort&quot;
+	Cancel        EventKind = &quot;cancel&quot;
+)
+
+var (
+	ErrTransition = errors.New(&quot;runstate: invalid transition&quot;)
+	ErrMaxSteps   = errors.New(&quot;runstate: max model rounds exceeded&quot;)
+)
+
+type State struct {
+	RunID           string
+	Phase           Phase
+	Step, MaxSteps  int
+	Messages        []model.Message
+	Pending         []model.ToolCall
+	Result, Failure string
+}
+type Event struct {
+	Kind     EventKind
+	Response *model.Response
+	Results  []model.Message
+	Reason   string
+}
+
+func New(runID, input string, maxSteps int) (State, error) {
+	if strings.TrimSpace(runID) == &quot;&quot; || maxSteps &lt;= 0 {
+		return State{}, ErrTransition
+	}
+	return State{RunID: runID, Phase: Ready, MaxSteps: maxSteps, Messages: []model.Message{{Role: &quot;user&quot;, Content: input}}}, nil
+}
+func cloneCalls(calls []model.ToolCall) []model.ToolCall {
+	if calls == nil {
+		return nil
+	}
+	out := append([]model.ToolCall{}, calls...)
+	for i := range out {
+		out[i].Arguments = append([]byte(nil), out[i].Arguments...)
+	}
+	return out
+}
+func cloneMessages(ms []model.Message) []model.Message {
+	if ms == nil {
+		return nil
+	}
+	out := append([]model.Message{}, ms...)
+	for i := range out {
+		out[i].ToolCalls = cloneCalls(out[i].ToolCalls)
+	}
+	return out
+}
+func cloneState(s State) State {
+	s.Messages = cloneMessages(s.Messages)
+	s.Pending = cloneCalls(s.Pending)
+	return s
+}
+func terminal(p Phase) bool { return p == Completed || p == Failed || p == Cancelled }
+
+// Advance has no I/O. The host performs calls between start/returned events.
+// It accepts states from New/Advance and never mutates input state/event buffers.
+func Advance(current State, e Event) (State, error) {
+	if terminal(current.Phase) {
+		return State{}, ErrTransition
+	}
+	next := cloneState(current)
+	switch e.Kind {
+	case StartModel:
+		if current.Phase != Ready {
+			return State{}, ErrTransition
+		}
+		if current.Step &gt;= current.MaxSteps {
+			return State{}, ErrMaxSteps
+		}
+		next.Step++
+		next.Phase = ModelRunning
+	case ModelReturned:
+		if current.Phase != ModelRunning || e.Response == nil || e.Response.Message.Role != &quot;assistant&quot; {
+			return State{}, ErrTransition
+		}
+		msg := e.Response.Message
+		ids := map[string]bool{}
+		for _, call := range msg.ToolCalls {
+			if call.ID == &quot;&quot; || strings.TrimSpace(call.Name) == &quot;&quot; || ids[call.ID] {
+				return State{}, ErrTransition
+			}
+			ids[call.ID] = true
+		}
+		next.Messages = append(next.Messages, cloneMessages([]model.Message{msg})...)
+		if len(msg.ToolCalls) == 0 {
+			next.Phase = Completed
+			next.Result = msg.Content
+		} else {
+			next.Phase = ToolsPending
+			next.Pending = cloneCalls(msg.ToolCalls)
+		}
+	case StartTools:
+		if current.Phase != ToolsPending {
+			return State{}, ErrTransition
+		}
+		next.Phase = ToolsRunning
+	case ToolsReturned:
+		if current.Phase != ToolsRunning || len(e.Results) != len(current.Pending) {
+			return State{}, ErrTransition
+		}
+		for i, msg := range e.Results {
+			if msg.Role != &quot;tool&quot; || msg.ToolCallID != current.Pending[i].ID {
+				return State{}, ErrTransition
+			}
+		}
+		next.Messages = append(next.Messages, cloneMessages(e.Results)...)
+		next.Pending = nil
+		next.Phase = Ready
+	case Abort:
+		if strings.TrimSpace(e.Reason) == &quot;&quot; {
+			return State{}, ErrTransition
+		}
+		next.Phase = Failed
+		next.Failure = e.Reason
+	case Cancel:
+		next.Phase = Cancelled
+		next.Failure = &quot;cancelled&quot;
+	default:
+		return State{}, ErrTransition
+	}
+	return next, nil
+}
+</code></pre><button type="button" data-copy="day15-reference-internal-runstate-state-go">复制本文件</button></details><h3>为什么接着学下一天？</h3><p>今天明确了运行状态和合法转换。后续按第三周路线把状态接入驱动与 Checkpoint，先定义保存/确认边界，再讨论恢复。</p></section>
+<footer><a href="agent-runtime-day-14.html">前一天 Day 14</a> · <a href="../../index.html">返回学习首页</a><p>Day 15 / 56 · 正文、图示、骨架与测试离线可读</p></footer></main>
+<script>
+const items=["用自己的话解释当天三个概念", "根据两张图讲清输入、职责和返回", "完成官方阅读并写下问题答案", "确认骨架可编译且目标出现预期红灯", "按任务卡逐步完成当天实现", "完整目标与 race 测试通过", "记录累计回归实际结果和未验证项", "合上代码完成需求变化与失败边界复盘"];const key="mini-agent-runtime-day-15-tdd-v3";
+let saved=[];try{const value=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(value))saved=value}catch(_){}
+const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const percent=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=percent+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(percent))}
+items.forEach((s,i)=>{const row=document.createElement("div");row.className="check";const input=document.createElement("input");input.type="checkbox";input.id="task-"+i;input.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=input.id;label.textContent=s;row.append(input,label);box.append(row);input.onchange=()=>{saved[i]=input.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+document.querySelectorAll("button[data-copy]").forEach(button=>button.addEventListener("click",async()=>{const target=document.getElementById(button.dataset.copy);try{await navigator.clipboard.writeText(target.textContent);button.textContent="已复制"}catch(_){const range=document.createRange();range.selectNodeContents(target);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);button.textContent="已选中，请手动复制"}}));
+</script></body></html>
