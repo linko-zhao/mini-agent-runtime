@@ -156,5 +156,206 @@
       }
     ],
     "support": []
+  },
+  "1": {
+    "package": "./internal/agent ./internal/model",
+    "pattern": "^TestDay01",
+    "targets": [
+      {
+        "path": "internal/agent/agent.go",
+        "reference": "day01/reference/internal/agent/agent.go.txt",
+        "skeleton": "day01/skeleton/internal/agent/agent.go.txt"
+      },
+      {
+        "path": "internal/model/mock.go",
+        "reference": "day01/reference/internal/model/mock.go.txt",
+        "skeleton": "day01/skeleton/internal/model/mock.go.txt"
+      }
+    ],
+    "support": [
+      {
+        "path": "internal/model/model.go",
+        "file": "day01/support/internal/model/model.go.txt"
+      },
+      {
+        "path": "internal/tool/tool.go",
+        "file": "day01/support/internal/tool/tool.go.txt"
+      }
+    ],
+    "tests": [
+      {
+        "path": "internal/agent/day01_contract_test.go",
+        "file": "day01/tests/internal/agent/day01_contract_test.go.txt"
+      },
+      {
+        "path": "internal/model/day01_contract_test.go",
+        "file": "day01/tests/internal/model/day01_contract_test.go.txt"
+      }
+    ]
+  },
+  "2": {
+    "package": "./internal/model/openai",
+    "pattern": "^TestDay02",
+    "targets": [
+      {
+        "path": "internal/model/openai/adapter.go",
+        "reference": "day02/reference/internal/model/openai/adapter.go.txt",
+        "skeleton": "day02/skeleton/internal/model/openai/adapter.go.txt"
+      },
+      {
+        "path": "internal/model/openai/convert.go",
+        "reference": "day02/reference/internal/model/openai/convert.go.txt",
+        "skeleton": "day02/skeleton/internal/model/openai/convert.go.txt"
+      }
+    ],
+    "support": [
+      {
+        "path": "internal/model/model.go",
+        "file": "day02/support/internal/model/model.go.txt"
+      }
+    ],
+    "tests": [
+      {
+        "path": "internal/model/openai/day02_contract_test.go",
+        "file": "day02/tests/internal/model/openai/day02_contract_test.go.txt"
+      }
+    ]
+  },
+  "3": {
+    "package": "./internal/agent ./internal/model/openai",
+    "pattern": "^TestDay03",
+    "targets": [
+      {
+        "path": "internal/model/openai/binding.go",
+        "reference": "day03/reference/internal/model/openai/binding.go.txt",
+        "skeleton": "day03/skeleton/internal/model/openai/binding.go.txt"
+      },
+      {
+        "path": "internal/agent/new.go",
+        "reference": "day03/reference/internal/agent/new.go.txt",
+        "skeleton": "day03/skeleton/internal/agent/new.go.txt"
+      }
+    ],
+    "support": [
+      {
+        "path": "internal/agent/agent.go",
+        "file": "day03/support/internal/agent/agent.go.txt"
+      },
+      {
+        "path": "internal/tool/tool.go",
+        "file": "day03/support/internal/tool/tool.go.txt"
+      }
+    ],
+    "tests": [
+      {
+        "path": "internal/model/openai/day03_contract_test.go",
+        "file": "day03/tests/internal/model/openai/day03_contract_test.go.txt"
+      },
+      {
+        "path": "internal/agent/day03_contract_test.go",
+        "file": "day03/tests/internal/agent/day03_contract_test.go.txt"
+      }
+    ]
+  },
+  "4": {
+    "package": "./internal/agent",
+    "pattern": "^TestDay04",
+    "targets": [
+      {
+        "path": "internal/agent/run.go",
+        "reference": "day04/reference/internal/agent/run.go.txt",
+        "skeleton": "day04/skeleton/internal/agent/run.go.txt"
+      },
+      {
+        "path": "internal/agent/options.go",
+        "reference": "day04/reference/internal/agent/options.go.txt",
+        "skeleton": "day04/skeleton/internal/agent/options.go.txt"
+      }
+    ],
+    "support": [
+      {
+        "path": "internal/agent/agent.go",
+        "file": "day04/support/internal/agent/agent.go.txt"
+      },
+      {
+        "path": "internal/agent/new.go",
+        "file": "day04/support/internal/agent/new.go.txt"
+      }
+    ],
+    "tests": [
+      {
+        "path": "internal/agent/day04_contract_test.go",
+        "file": "day04/tests/internal/agent/day04_contract_test.go.txt"
+      }
+    ]
+  },
+  "5": {
+    "package": "./internal/agent",
+    "pattern": "^TestDay05",
+    "targets": [
+      {
+        "path": "internal/agent/run.go",
+        "reference": "day05/reference/internal/agent/run.go.txt",
+        "skeleton": "day05/skeleton/internal/agent/run.go.txt"
+      },
+      {
+        "path": "internal/agent/event.go",
+        "reference": "day05/reference/internal/agent/event.go.txt",
+        "skeleton": "day05/skeleton/internal/agent/event.go.txt"
+      },
+      {
+        "path": "internal/agent/options.go",
+        "reference": "day05/reference/internal/agent/options.go.txt",
+        "skeleton": "day05/skeleton/internal/agent/options.go.txt"
+      }
+    ],
+    "support": [
+      {
+        "path": "internal/agent/agent.go",
+        "file": "day05/support/internal/agent/agent.go.txt"
+      }
+    ],
+    "tests": [
+      {
+        "path": "internal/agent/day05_contract_test.go",
+        "file": "day05/tests/internal/agent/day05_contract_test.go.txt"
+      }
+    ]
+  },
+  "6": {
+    "package": "./internal/agent",
+    "pattern": "^TestDay06",
+    "targets": [
+      {
+        "path": "internal/agent/synchronized_sink.go",
+        "reference": "day06/reference/internal/agent/synchronized_sink.go.txt",
+        "skeleton": "day06/skeleton/internal/agent/synchronized_sink.go.txt"
+      }
+    ],
+    "support": [],
+    "tests": [
+      {
+        "path": "internal/agent/day06_contract_test.go",
+        "file": "day06/tests/internal/agent/day06_contract_test.go.txt"
+      }
+    ]
+  },
+  "7": {
+    "package": "./internal/assembly",
+    "pattern": "^TestDay07",
+    "targets": [
+      {
+        "path": "internal/assembly/week01.go",
+        "reference": "day07/reference/internal/assembly/week01.go.txt",
+        "skeleton": "day07/skeleton/internal/assembly/week01.go.txt"
+      }
+    ],
+    "support": [],
+    "tests": [
+      {
+        "path": "internal/assembly/day07_contract_test.go",
+        "file": "day07/tests/internal/assembly/day07_contract_test.go.txt"
+      }
+    ]
   }
 }

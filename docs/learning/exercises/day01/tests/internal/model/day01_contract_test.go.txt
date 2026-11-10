@@ -1,0 +1,24 @@
+package model_test
+
+import (
+	"context"
+	"errors"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+	"testing"
+)
+
+func TestDay01Mock(t *testing.T) {
+	m := model.NewMock([]model.Response{{Message: model.Message{Role: "assistant", Content: "已读取"}}})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, e := m.Generate(ctx, nil); !errors.Is(e, context.Canceled) {
+		t.Fatal(e)
+	}
+	r, e := m.Generate(context.Background(), nil)
+	if e != nil || r.Message.Content != "已读取" {
+		t.Fatal(r, e)
+	}
+	if _, e = m.Generate(context.Background(), nil); e == nil {
+		t.Fatal("exhausted")
+	}
+}

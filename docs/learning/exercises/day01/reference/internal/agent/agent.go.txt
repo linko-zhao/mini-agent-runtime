@@ -1,0 +1,62 @@
+package agent
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
+)
+
+var ErrMaxSteps = errors.New("agent: max steps exceeded")
+
+type Agent struct {
+	model    model.Model
+	tools    map[string]tool.Tool
+	maxSteps int
+}
+
+func New(m model.Model, tools map[string]tool.Tool, maxSteps int) (*Agent, error) {
+	if m == nil || maxSteps <= 0 {
+		return nil, fmt.Errorf("agent: model and positive maxSteps required")
+	}
+	a := &Agent{model: m, tools: make(map[string]tool.Tool), maxSteps: maxSteps}
+	for n, t := range tools {
+		if t == nil || n == "" || n != t.Name() {
+			return nil, fmt.Errorf("agent: invalid registration")
+		}
+		a.tools[n] = t
+	}
+	return a, nil
+}
+func (a *Agent) Run(ctx context.Context, input string) (string, error) {
+	messages := []model.Message{{Role: "user", Content: input}}
+	for step := 1; step <= a.maxSteps; step++ {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		r, err := a.model.Generate(ctx, messages)
+		if err != nil {
+			return "", err
+		}
+		if r == nil || r.Message.Role != "assistant" {
+			return "", fmt.Errorf("agent: invalid model response")
+		}
+		messages = append(messages, r.Message)
+		if len(r.Message.ToolCalls) == 0 {
+			return r.Message.Content, nil
+		}
+		for _, call := range r.Message.ToolCalls {
+			t, ok := a.tools[call.Name]
+			if !ok {
+				return "", fmt.Errorf("agent: unknown tool")
+			}
+			out, err := t.Execute(ctx, call.Arguments)
+			if err != nil {
+				return "", err
+			}
+			messages = append(messages, model.Message{Role: "tool", Content: out, ToolCallID: call.ID})
+		}
+	}
+	return "", ErrMaxSteps
+}

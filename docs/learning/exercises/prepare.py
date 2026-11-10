@@ -31,10 +31,22 @@ def prepare(day, destination=None, reference=False):
         if (out / directory).exists():
             shutil.rmtree(out / directory)
         (out / directory).mkdir()
-    for source in (BASE / "baseline").rglob("*.go.txt"):
-        target = out / str(source.relative_to(BASE / "baseline"))[:-4]
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(source.read_bytes())
+    if day <= 7:
+        # Apply only earlier lessons, in course order. No future implementation
+        # or learner source is used as a prerequisite for the first week.
+        for previous in range(1, day):
+            prior = manifest[str(previous)]
+            for group in (prior["support"], prior["targets"], prior["tests"]):
+                for item in group:
+                    source = item.get("reference", item.get("file"))
+                    target = out / item["path"]
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes((BASE / source).read_bytes())
+    else:
+        for source in (BASE / "baseline").rglob("*.go.txt"):
+            target = out / str(source.relative_to(BASE / "baseline"))[:-4]
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(source.read_bytes())
     for group in (lesson["support"], lesson["targets"], lesson["tests"]):
         for item in group:
             key = ("reference" if reference else "skeleton") if "skeleton" in item else "file"
@@ -46,7 +58,7 @@ def prepare(day, destination=None, reference=False):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("day", type=int, choices=range(9, 16))
+    parser.add_argument("day", type=int, choices=[*range(1, 8), *range(9, 16)])
     parser.add_argument("--output", help="可选：尚不存在、位于原仓库外的新目录")
     args = parser.parse_args()
     directory, lesson = prepare(args.day, args.output)

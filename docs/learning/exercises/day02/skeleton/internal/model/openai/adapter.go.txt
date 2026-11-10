@@ -1,0 +1,24 @@
+// Package openai translates the course Runtime model contract to the
+// non-streaming Chat Completions HTTP protocol described on Day 02/03.
+package openai
+
+import (
+	"context"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+	"net/http"
+)
+
+type Config struct {
+	APIKey, Model, BaseURL string
+	Client                 *http.Client
+}
+type Adapter struct {
+	config      Config
+	definitions []model.ToolDefinition
+}
+
+func New(config Config) (*Adapter, error) { panic("TODO: New") }
+func (a *Adapter) Generate(ctx context.Context, messages []model.Message) (*model.Response, error) {
+	panic("TODO: Generate")
+}
+func httpError(status int) error { panic("TODO: httpError") }

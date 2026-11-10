@@ -1,0 +1,199 @@
+package agent_test
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"github.com/linko-zhao/mini-agent-runtime/internal/agent"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
+	"reflect"
+	"testing"
+	"time"
+)
+
+type events struct{ all []agent.Event }
+
+func (s *events) Emit(_ context.Context, e agent.Event) { s.all = append(s.all, e) }
+
+type day05Model func(context.Context, []model.Message) (*model.Response, error)
+
+func (f day05Model) Generate(c context.Context, m []model.Message) (*model.Response, error) {
+	return f(c, m)
+}
+
+type day05Tool struct {
+	f func(context.Context, json.RawMessage) (string, error)
+}
+
+func (day05Tool) Name() string                                                   { return "get_document" }
+func (f day05Tool) Execute(c context.Context, a json.RawMessage) (string, error) { return f.f(c, a) }
+func day05Answer(s string) *model.Response {
+	return &model.Response{Message: model.Message{Role: "assistant", Content: s}}
+}
+func day05Request() *model.Response {
+	return &model.Response{Message: model.Message{Role: "assistant", ToolCalls: []model.ToolCall{{ID: "read-1", Name: "get_document", Arguments: json.RawMessage(`{"id":"doc-1"}`)}}}}
+}
+func day05Must(t *testing.T, m model.Model, tools map[string]tool.Tool, n int) *agent.Agent {
+	t.Helper()
+	a, e := agent.New(m, tools, n)
+	if e != nil {
+		t.Fatal(e)
+	}
+	return a
+}
+
+func TestDay05Sequence(t *testing.T) {
+	s := &events{}
+	round := 0
+	m := day05Model(func(context.Context, []model.Message) (*model.Response, error) {
+		round++
+		if round == 1 {
+			return day05Request(), nil
+		}
+		return day05Answer("已读取"), nil
+	})
+	a, e := agent.New(m, map[string]tool.Tool{"get_document": day05Tool{func(context.Context, json.RawMessage) (string, error) { return "正文", nil }}}, 2, agent.WithEventSink(s))
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = a.Run(context.Background(), "读取 doc-1"); e != nil {
+		t.Fatal(e)
+	}
+	want := []agent.EventType{agent.EventRunStarted, agent.EventStepStarted, agent.EventModelCompleted, agent.EventToolStarted, agent.EventToolCompleted, agent.EventStepStarted, agent.EventModelCompleted, agent.EventRunFinished}
+	var got []agent.EventType
+	for _, ev := range s.all {
+		got = append(got, ev.Type)
+		if ev.At.IsZero() || ev.Duration < 0 || ev.Status != "ok" {
+			t.Fatal(ev)
+		}
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatal(got)
+	}
+	for _, i := range []int{3, 4} {
+		ev := s.all[i]
+		if ev.Step != 1 || ev.ToolName != "get_document" || ev.ToolCallID != "read-1" {
+			t.Fatal(ev)
+		}
+	}
+	if s.all[len(s.all)-1].Step != 2 {
+		t.Fatal("terminal step")
+	}
+}
+func TestDay05Terminal(t *testing.T) {
+	sentinel := errors.New("provider")
+	for _, tc := range []struct {
+		name   string
+		m      day05Model
+		cancel bool
+		want   string
+	}{
+		{"error", func(context.Context, []model.Message) (*model.Response, error) { return nil, sentinel }, false, "error"},
+		{"nil", func(context.Context, []model.Message) (*model.Response, error) { return nil, nil }, false, "error"},
+		{"cancelled", func(context.Context, []model.Message) (*model.Response, error) {
+			t.Fatal("day05Must not call")
+			return nil, nil
+		}, true, "cancelled"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &events{}
+			a, e := agent.New(tc.m, nil, 1, agent.WithEventSink(s))
+			if e != nil {
+				t.Fatal(e)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if tc.cancel {
+				cancel()
+			}
+			if _, e = a.Run(ctx, "secret prompt"); e == nil {
+				t.Fatal("want failure")
+			}
+			n := 0
+			for _, v := range s.all {
+				if v.Type == agent.EventRunFinished || v.Type == agent.EventRunFailed {
+					n++
+					if v.Type != agent.EventRunFailed || v.Status != tc.want {
+						t.Fatal(v)
+					}
+				}
+			}
+			if n != 1 {
+				t.Fatal(s.all)
+			}
+		})
+	}
+	// A nil sink disables observation without changing results.
+	a, e := agent.New(day05Model(func(context.Context, []model.Message) (*model.Response, error) { return day05Answer("ok"), nil }), nil, 1, agent.WithEventSink(nil))
+	if e != nil {
+		t.Fatal(e)
+	}
+	if s, e := a.Run(context.Background(), ""); e != nil || s != "ok" {
+		t.Fatal(s, e)
+	}
+}
+
+func TestDay05ToolFailuresAndBudget(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		status  string
+		timeout bool
+		max     int
+		want    error
+	}{
+		{"tool_error", "error", false, 2, errors.New("tool failure")},
+		{"timeout", "cancelled", true, 2, context.DeadlineExceeded},
+		{"budget", "error", false, 1, agent.ErrMaxSteps},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &events{}
+			m := day05Model(func(context.Context, []model.Message) (*model.Response, error) { return day05Request(), nil })
+			r := day05Tool{func(c context.Context, _ json.RawMessage) (string, error) {
+				if tc.timeout {
+					<-c.Done()
+					return "late", nil
+				}
+				if tc.name == "tool_error" {
+					return "", tc.want
+				}
+				return "正文", nil
+			}}
+			a, e := agent.New(m, map[string]tool.Tool{"get_document": r}, tc.max, agent.WithEventSink(s), agent.WithToolTimeout(func() time.Duration {
+				if tc.timeout {
+					return time.Nanosecond
+				}
+				return 0
+			}()))
+			if e != nil {
+				t.Fatal(e)
+			}
+			_, e = a.Run(context.Background(), "读取 doc-1")
+			if !errors.Is(e, tc.want) {
+				t.Fatal(e)
+			}
+			completed, terminal := 0, 0
+			for _, ev := range s.all {
+				if ev.Type == agent.EventToolCompleted {
+					completed++
+					want := "ok"
+					if tc.name != "budget" {
+						want = tc.status
+					}
+					if ev.Status != want {
+						t.Fatal(ev)
+					}
+				}
+				if ev.Type == agent.EventRunFailed || ev.Type == agent.EventRunFinished {
+					terminal++
+					if ev.Type != agent.EventRunFailed || ev.Status != tc.status {
+						t.Fatal(ev)
+					}
+				}
+			}
+			if completed != 1 || terminal != 1 {
+				t.Fatal(s.all)
+			}
+		})
+	}
+}

@@ -1,0 +1,27 @@
+package openai
+
+import (
+	"encoding/json"
+	"fmt"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+)
+
+func (a *Adapter) WithTools(defs []model.ToolDefinition) (model.Model, error) {
+	copyDefs := make([]model.ToolDefinition, 0, len(defs))
+	seen := map[string]bool{}
+	for _, d := range defs {
+		var schema map[string]any
+		if d.Name == "" || seen[d.Name] {
+			return nil, fmt.Errorf("openai adapter: empty or duplicate tool name %q", d.Name)
+		}
+		if err := json.Unmarshal(d.Parameters, &schema); err != nil || schema["type"] != "object" {
+			return nil, fmt.Errorf("openai adapter: tool %q requires an object schema", d.Name)
+		}
+		seen[d.Name] = true
+		d.Parameters = append(json.RawMessage(nil), d.Parameters...)
+		copyDefs = append(copyDefs, d)
+	}
+	next := *a
+	next.definitions = copyDefs
+	return &next, nil
+}

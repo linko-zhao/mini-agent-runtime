@@ -1,0 +1,32 @@
+package assembly
+
+import (
+	"fmt"
+	"github.com/linko-zhao/mini-agent-runtime/internal/agent"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
+	"time"
+)
+
+type Week01Config struct {
+	Model       model.Model
+	Tools       []tool.Tool
+	MaxSteps    int
+	ToolTimeout time.Duration
+	Sink        agent.EventSink
+}
+
+func BuildWeek01(c Week01Config) (*agent.Agent, error) {
+	tools := map[string]tool.Tool{}
+	for _, t := range c.Tools {
+		if t == nil {
+			return nil, fmt.Errorf("nil tool")
+		}
+		n := t.Name()
+		if _, ok := tools[n]; ok {
+			return nil, fmt.Errorf("duplicate tool")
+		}
+		tools[n] = t
+	}
+	return agent.New(c.Model, tools, c.MaxSteps, agent.WithToolTimeout(c.ToolTimeout), agent.WithEventSink(c.Sink))
+}

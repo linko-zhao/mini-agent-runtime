@@ -1,0 +1,18 @@
+package assembly
+
+import (
+	"github.com/linko-zhao/mini-agent-runtime/internal/agent"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
+	"time"
+)
+
+type Week01Config struct {
+	Model       model.Model
+	Tools       []tool.Tool
+	MaxSteps    int
+	ToolTimeout time.Duration
+	Sink        agent.EventSink
+}
+
+func BuildWeek01(c Week01Config) (*agent.Agent, error) { panic("TODO: BuildWeek01") }

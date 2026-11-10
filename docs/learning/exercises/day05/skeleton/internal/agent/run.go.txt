@@ -1,0 +1,20 @@
+package agent
+
+import (
+	"context"
+	"errors"
+)
+
+func (a *Agent) Run(ctx context.Context, input string) (output string, runErr error) {
+	panic("TODO: Run")
+}
+
+func status(e error) string {
+	if errors.Is(e, context.Canceled) || errors.Is(e, context.DeadlineExceeded) {
+		return "cancelled"
+	}
+	if e != nil {
+		return "error"
+	}
+	return "ok"
+}

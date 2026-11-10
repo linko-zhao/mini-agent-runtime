@@ -1,0 +1,121 @@
+package agent_test
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"github.com/linko-zhao/mini-agent-runtime/internal/agent"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
+	"testing"
+	"time"
+)
+
+type day04Model func(context.Context, []model.Message) (*model.Response, error)
+
+func (f day04Model) Generate(c context.Context, m []model.Message) (*model.Response, error) {
+	return f(c, m)
+}
+
+type day04Tool struct {
+	f func(context.Context, json.RawMessage) (string, error)
+}
+
+func (day04Tool) Name() string                                                   { return "get_document" }
+func (f day04Tool) Execute(c context.Context, a json.RawMessage) (string, error) { return f.f(c, a) }
+func day04Answer(s string) *model.Response {
+	return &model.Response{Message: model.Message{Role: "assistant", Content: s}}
+}
+func day04Request() *model.Response {
+	return &model.Response{Message: model.Message{Role: "assistant", ToolCalls: []model.ToolCall{{ID: "read-1", Name: "get_document", Arguments: json.RawMessage(`{"id":"doc-1"}`)}}}}
+}
+func day04Must(t *testing.T, m model.Model, tools map[string]tool.Tool, n int) *agent.Agent {
+	t.Helper()
+	a, e := agent.New(m, tools, n)
+	if e != nil {
+		t.Fatal(e)
+	}
+	return a
+}
+
+func TestDay04Cancellation(t *testing.T) {
+	calls := 0
+	m := day04Model(func(context.Context, []model.Message) (*model.Response, error) {
+		calls++
+		return day04Answer("late"), nil
+	})
+	a, e := agent.New(m, nil, 1)
+	if e != nil {
+		t.Fatal(e)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, e = a.Run(ctx, "")
+	if !errors.Is(e, context.Canceled) || calls != 0 {
+		t.Fatal(e, calls)
+	}
+	ctx, cancel = context.WithCancel(context.Background())
+	m = day04Model(func(context.Context, []model.Message) (*model.Response, error) {
+		cancel()
+		return day04Answer("late"), nil
+	})
+	a, _ = agent.New(m, nil, 1)
+	if _, e = a.Run(ctx, ""); !errors.Is(e, context.Canceled) {
+		t.Fatal(e)
+	}
+	ctx, cancel = context.WithCancel(context.Background())
+	reads := 0
+	rounds := 0
+	m = day04Model(func(context.Context, []model.Message) (*model.Response, error) {
+		rounds++
+		r := day04Request()
+		r.Message.ToolCalls = append(r.Message.ToolCalls, model.ToolCall{ID: "read-2", Name: "get_document", Arguments: json.RawMessage(`{}`)})
+		return r, nil
+	})
+	a, e = agent.New(m, map[string]tool.Tool{"get_document": day04Tool{func(c context.Context, _ json.RawMessage) (string, error) {
+		reads++
+		if c != ctx {
+			t.Fatal("parent ctx lost")
+		}
+		cancel()
+		return "late", nil
+	}}}, 2)
+	if e != nil {
+		t.Fatal(e)
+	}
+	_, e = a.Run(ctx, "")
+	if !errors.Is(e, context.Canceled) || reads != 1 || rounds != 1 {
+		t.Fatal(e, reads, rounds)
+	}
+}
+func TestDay04Timeout(t *testing.T) {
+	m := day04Model(func(context.Context, []model.Message) (*model.Response, error) { return day04Request(), nil })
+	if _, e := agent.New(m, nil, 1, agent.WithToolTimeout(-1)); e == nil {
+		t.Fatal("negative timeout")
+	}
+	reads := 0
+	a, e := agent.New(m, map[string]tool.Tool{"get_document": day04Tool{func(c context.Context, _ json.RawMessage) (string, error) {
+		reads++
+		if _, ok := c.Deadline(); !ok {
+			t.Fatal("missing deadline")
+		}
+		<-c.Done()
+		return "late", nil
+	}}}, 2, agent.WithToolTimeout(time.Nanosecond))
+	if e != nil {
+		t.Fatal(e)
+	}
+	_, e = a.Run(context.Background(), "")
+	if !errors.Is(e, context.DeadlineExceeded) || reads != 1 {
+		t.Fatal(e, reads)
+	}
+	a, e = agent.New(day04Model(func(context.Context, []model.Message) (*model.Response, error) { return day04Answer("ok"), nil }), nil, 1, agent.WithToolTimeout(0))
+	if e != nil {
+		t.Fatal(e)
+	}
+	for i := 0; i < 2; i++ {
+		if s, e := a.Run(context.Background(), ""); e != nil || s != "ok" {
+			t.Fatal(s, e)
+		}
+	}
+}

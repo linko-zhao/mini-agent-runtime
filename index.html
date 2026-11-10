@@ -14,15 +14,15 @@
 </head>
 <body><main>
 <header class="hero"><div class="eyebrow">MINI AGENT RUNTIME · LEARNING PATH</div><h1>Agent Runtime 学习文档</h1><p>八周、56 天，从 Runtime 与 Agent Loop 出发，逐步完成工具编排、状态恢复、记忆、调度、评估与部署。每天 20 分钟阅读、80 分钟编码、20 分钟测试与复盘。</p><div class="chips"><span class="chip">8 周 · 56 天</span><span class="chip">Go 实战</span><span class="chip">独立离线 HTML</span><span class="chip">周日集成复盘</span></div></header>
-<section class="intro"><p><strong>怎么使用：</strong>新版课程按“具体例子 → 图解设计 → 代码骨架 → 完整测试 → 自己实现”学习。先运行测试看到预期失败，每次补一个方法，最后回归并讲清数据流。编写要求见 <a href="docs/learning/daily-lesson-standard.md">每日教学交付规范</a>；Day 08–15 已采用新规范；Day 01–07 仍保留旧版。清单进度保存在浏览器 localStorage 中；前序练习未完成时，可借助 examples 累计参考基线继续学习。</p></section>
+<section class="intro"><p><strong>怎么使用：</strong>新版课程按“具体例子 → 图解设计 → 代码骨架 → 完整测试 → 自己实现”学习。先运行测试看到预期失败，每次补一个方法，最后回归并讲清数据流。编写要求见 <a href="docs/learning/daily-lesson-standard.md">每日教学交付规范</a>；Day 01–15 已采用新规范；Day 01–07 补齐了图解、骨架、完整测试与隔离验证。清单进度保存在浏览器 localStorage 中；前序练习未完成时，可借助 examples 累计参考基线继续学习。</p></section>
 <section class="week"><div class="week-head"><h2>第 1 周 · Runtime 与 Agent Loop</h2><span>Day 01–07 · 基础、模型接口、执行闭环</span></div><div class="cards">
-<a class="card" href="docs/learning/agent-runtime-day-01.html"><div class="card-top"><span class="day">DAY 01</span><span class="status">学习计划</span></div><h3>Runtime 核心抽象与最小 Agent Loop</h3><p>模型、工具与 Agent 执行闭环</p></a>
-<a class="card" href="docs/learning/agent-runtime-day-02.html"><div class="card-top"><span class="day">DAY 02</span><span class="status">学习计划</span></div><h3>Agent Runtime 迭代与工具调用</h3><p>沿着既有实现推进接口与行为</p></a>
-<a class="card" href="docs/learning/agent-runtime-day-03.html"><div class="card-top"><span class="day">DAY 03</span><span class="status">学习计划</span></div><h3>OpenAI 兼容模型适配器</h3><p>HTTP 请求、响应映射与错误处理</p></a>
-<a class="card" href="docs/learning/agent-runtime-day-04.html"><div class="card-top"><span class="day">DAY 04</span><span class="status">学习计划</span></div><h3>Agent 生命周期与运行可靠性</h3><p>边界条件、上下文取消与回归验证</p></a>
-<a class="card" href="docs/learning/agent-runtime-day-05.html"><div class="card-top"><span class="day">DAY 05</span><span class="status">学习计划</span></div><h3>执行事件与生命周期回归</h3><p>事件顺序、终态与运行过程观察</p></a>
-<a class="card" href="docs/learning/agent-runtime-day-06.html"><div class="card-top"><span class="day">DAY 06</span><span class="status">学习计划</span></div><h3>Agent Event Sink 与取消边界</h3><p>同步事件、Run 隔离与取消传播</p></a>
-<a class="card" href="docs/learning/agent-runtime-day-07.html"><div class="card-top"><span class="day">DAY 07</span><span class="status">学习计划</span></div><h3>第一周集成复盘</h3><p>Runtime、Model、Agent Loop 与工具交互验收</p></a>
+<a class="card" href="docs/learning/agent-runtime-day-01.html"><div class="card-top"><span class="day">DAY 01</span><span class="status">图解 · TDD</span></div><h3>Runtime 核心抽象与最小 Agent Loop</h3><p>今天实现最小 Agent Loop，让“读取 doc-1”的请求能够经历模型 → 工具 → 模型并返回回答。</p></a>
+<a class="card" href="docs/learning/agent-runtime-day-02.html"><div class="card-top"><span class="day">DAY 02</span><span class="status">图解 · TDD</span></div><h3>模型适配层与响应规范化</h3><p>今天实现 HTTP 模型适配层，让 Runtime 能消费 Provider 的非流式 Chat Completions 响应。</p></a>
+<a class="card" href="docs/learning/agent-runtime-day-03.html"><div class="card-top"><span class="day">DAY 03</span><span class="status">图解 · TDD</span></div><h3>工具定义绑定与 Agent 装配</h3><p>今天实现工具说明绑定，让模型在执行前知道 get_document 能做什么，同时保留独立的执行对象。</p></a>
+<a class="card" href="docs/learning/agent-runtime-day-04.html"><div class="card-top"><span class="day">DAY 04</span><span class="status">图解 · TDD</span></div><h3>生命周期：取消、超时与步数</h3><p>今天实现合作式取消和单工具超时，让取消后的读取流程停止继续推进。</p></a>
+<a class="card" href="docs/learning/agent-runtime-day-05.html"><div class="card-top"><span class="day">DAY 05</span><span class="status">图解 · TDD</span></div><h3>执行事件与唯一终态</h3><p>今天实现同步执行事件，让宿主能观察读取过程的顺序、耗时和结束状态。</p></a>
+<a class="card" href="docs/learning/agent-runtime-day-06.html"><div class="card-top"><span class="day">DAY 06</span><span class="status">图解 · TDD</span></div><h3>共享 Event Sink 与取消边界</h3><p>今天实现共享 Sink 的串行包装，让多个执行者能够安全地写入同一个普通接收器。</p></a>
+<a class="card" href="docs/learning/agent-runtime-day-07.html"><div class="card-top"><span class="day">DAY 07</span><span class="status">图解 · TDD</span></div><h3>第一周装配、集成与复盘</h3><p>今天实现宿主装配函数，让第一周的模型、工具、生命周期与事件通过同一组集成场景。</p></a>
 </div></section>
 <section class="week"><div class="week-head"><h2>第 2 周 · Tools 与 MCP</h2><span>Day 08–14 · 工具协议、MCP 客户端与集成复盘</span></div><div class="cards">
 <a class="card" href="docs/learning/agent-runtime-day-08.html"><div class="card-top"><span class="day">DAY 08</span><span class="status">图解 · TDD</span></div><h3>图解工具设计，自己实现注册表</h3><p>设计理由、完整骨架与测试、五步独立实现任务</p></a>

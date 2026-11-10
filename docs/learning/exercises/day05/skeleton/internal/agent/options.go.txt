@@ -1,0 +1,9 @@
+package agent
+
+import "time"
+
+type Option func(*Agent)
+
+func WithToolTimeout(d time.Duration) Option { return func(a *Agent) { a.toolTimeout = d } }
+
+func WithEventSink(s EventSink) Option { panic("TODO: WithEventSink") }

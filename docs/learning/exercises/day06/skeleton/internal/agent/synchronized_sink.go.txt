@@ -1,0 +1,16 @@
+package agent
+
+import (
+	"context"
+	"sync"
+)
+
+// SynchronizedSink 可被多个 Agent 共享；所有调用必须经同一个包装器。
+// 下游不得重入此包装器，否则会死锁。
+type SynchronizedSink struct {
+	mu   sync.Mutex
+	sink EventSink
+}
+
+func NewSynchronizedSink(s EventSink) *SynchronizedSink       { panic("TODO: NewSynchronizedSink") }
+func (s *SynchronizedSink) Emit(ctx context.Context, e Event) { panic("TODO: Emit") }

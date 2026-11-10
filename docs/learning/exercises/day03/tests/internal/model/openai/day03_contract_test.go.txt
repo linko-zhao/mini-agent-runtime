@@ -1,0 +1,68 @@
+package openai_test
+
+import (
+	"context"
+	"encoding/json"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model/openai"
+	"io"
+	"net/http"
+	"strings"
+	"testing"
+)
+
+type day03Transport func(*http.Request) (*http.Response, error)
+
+func (f day03Transport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+func day03Adapter(t *testing.T, f day03Transport) *openai.Adapter {
+	t.Helper()
+	a, e := openai.New(openai.Config{APIKey: "test", Model: "course", BaseURL: "https://provider.invalid/chat", Client: &http.Client{Transport: f}})
+	if e != nil {
+		t.Fatal(e)
+	}
+	return a
+}
+func day03Response(status int, s string) *http.Response {
+	return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(s)), Header: make(http.Header)}
+}
+
+func TestDay03Binding(t *testing.T) {
+	var bodies []map[string]any
+	a := day03Adapter(t, func(r *http.Request) (*http.Response, error) {
+		var b map[string]any
+		if e := json.NewDecoder(r.Body).Decode(&b); e != nil {
+			t.Fatal(e)
+		}
+		bodies = append(bodies, b)
+		return day03Response(200, `{"choices":[{"message":{"role":"assistant","content":"已读取"}}]}`), nil
+	})
+	defs := []model.ToolDefinition{{Name: "get_document", Description: "读取文档", Parameters: json.RawMessage(`{"type":"object"}`)}}
+	bound, e := a.WithTools(defs)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defs[0].Name = "changed"
+	defs[0].Parameters[0] = 'x'
+	if _, e = a.Generate(context.Background(), nil); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = bound.Generate(context.Background(), nil); e != nil {
+		t.Fatal(e)
+	}
+	if _, ok := bodies[0]["tools"]; ok {
+		t.Fatal("original mutated")
+	}
+	ts := bodies[1]["tools"].([]any)
+	f := ts[0].(map[string]any)["function"].(map[string]any)
+	if len(ts) != 1 || ts[0].(map[string]any)["type"] != "function" || f["name"] != "get_document" || f["description"] != "读取文档" || f["parameters"].(map[string]any)["type"] != "object" {
+		t.Fatal(ts)
+	}
+	for _, ds := range [][]model.ToolDefinition{{{Name: "", Parameters: json.RawMessage(`{}`)}}, {{Name: "a", Parameters: json.RawMessage(`[]`)}}, {{Name: "a", Parameters: json.RawMessage(`{"type":"array"}`)}}, {{Name: "a", Parameters: json.RawMessage(`bad`)}}, {{Name: "a", Parameters: json.RawMessage(`{"type":"object"}`)}, {Name: "a", Parameters: json.RawMessage(`{"type":"object"}`)}}} {
+		if _, e := a.WithTools(ds); e == nil {
+			t.Fatal("invalid definition")
+		}
+	}
+	if b, e := a.WithTools(nil); e != nil || b == nil {
+		t.Fatal(b, e)
+	}
+}

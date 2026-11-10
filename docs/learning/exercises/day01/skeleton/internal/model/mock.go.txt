@@ -1,0 +1,14 @@
+package model
+
+import (
+	"context"
+)
+
+// Mock 是单个 Run 的脚本模型；并发 Run 应分别创建 Mock。
+type Mock struct {
+	responses []Response
+	i         int
+}
+
+func NewMock(responses []Response) *Mock                                     { panic("TODO: NewMock") }
+func (m *Mock) Generate(ctx context.Context, _ []Message) (*Response, error) { panic("TODO: Generate") }

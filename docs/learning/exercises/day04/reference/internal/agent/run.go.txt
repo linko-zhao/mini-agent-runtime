@@ -1,0 +1,54 @@
+package agent
+
+import (
+	"context"
+	"fmt"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+)
+
+func (a *Agent) Run(ctx context.Context, input string) (string, error) {
+	messages := []model.Message{{Role: "user", Content: input}}
+	for step := 1; step <= a.maxSteps; step++ {
+		if e := ctx.Err(); e != nil {
+			return "", e
+		}
+		r, e := a.model.Generate(ctx, messages)
+		if ctx.Err() != nil {
+			e = ctx.Err()
+		}
+		if e != nil {
+			return "", e
+		}
+		if r == nil || r.Message.Role != "assistant" {
+			return "", fmt.Errorf("agent: invalid response")
+		}
+		messages = append(messages, r.Message)
+		if len(r.Message.ToolCalls) == 0 {
+			return r.Message.Content, nil
+		}
+		for _, call := range r.Message.ToolCalls {
+			if e := ctx.Err(); e != nil {
+				return "", e
+			}
+			t, ok := a.tools[call.Name]
+			if !ok {
+				return "", fmt.Errorf("agent: unknown tool")
+			}
+			tc := ctx
+			cancel := func() {}
+			if a.toolTimeout > 0 {
+				tc, cancel = context.WithTimeout(ctx, a.toolTimeout)
+			}
+			out, e := t.Execute(tc, call.Arguments)
+			if tc.Err() != nil {
+				e = tc.Err()
+			}
+			cancel()
+			if e != nil {
+				return "", e
+			}
+			messages = append(messages, model.Message{Role: "tool", Content: out, ToolCallID: call.ID})
+		}
+	}
+	return "", ErrMaxSteps
+}

@@ -1,0 +1,87 @@
+package agent_test
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"github.com/linko-zhao/mini-agent-runtime/internal/agent"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
+	"testing"
+)
+
+type day03Model func(context.Context, []model.Message) (*model.Response, error)
+
+func (f day03Model) Generate(c context.Context, m []model.Message) (*model.Response, error) {
+	return f(c, m)
+}
+
+type day03Tool struct {
+	f func(context.Context, json.RawMessage) (string, error)
+}
+
+func (day03Tool) Name() string                                                   { return "get_document" }
+func (f day03Tool) Execute(c context.Context, a json.RawMessage) (string, error) { return f.f(c, a) }
+func day03Answer(s string) *model.Response {
+	return &model.Response{Message: model.Message{Role: "assistant", Content: s}}
+}
+func day03Request() *model.Response {
+	return &model.Response{Message: model.Message{Role: "assistant", ToolCalls: []model.ToolCall{{ID: "read-1", Name: "get_document", Arguments: json.RawMessage(`{"id":"doc-1"}`)}}}}
+}
+func day03Must(t *testing.T, m model.Model, tools map[string]tool.Tool, n int) *agent.Agent {
+	t.Helper()
+	a, e := agent.New(m, tools, n)
+	if e != nil {
+		t.Fatal(e)
+	}
+	return a
+}
+
+type described struct {
+	day03Tool
+	name string
+}
+
+func (d described) Name() string { return d.name }
+func (d described) Definition() model.ToolDefinition {
+	return model.ToolDefinition{Name: d.name, Parameters: json.RawMessage(`{"type":"object"}`)}
+}
+
+type binder struct {
+	calls int
+	defs  []model.ToolDefinition
+	bound model.Model
+	err   error
+}
+
+func (b *binder) Generate(context.Context, []model.Message) (*model.Response, error) {
+	panic("unbound model")
+}
+func (b *binder) WithTools(d []model.ToolDefinition) (model.Model, error) {
+	b.calls++
+	b.defs = d
+	return b.bound, b.err
+}
+func TestDay03HostBinding(t *testing.T) {
+	b := &binder{bound: day03Model(func(context.Context, []model.Message) (*model.Response, error) { return day03Answer("已读取"), nil })}
+	a := day03Must(t, b, map[string]tool.Tool{"z": described{name: "z"}, "a": described{name: "a"}}, 1)
+	if b.calls != 1 || len(b.defs) != 2 || b.defs[0].Name != "a" || b.defs[1].Name != "z" {
+		t.Fatal(b)
+	}
+	for i := 0; i < 2; i++ {
+		if s, e := a.Run(context.Background(), ""); e != nil || s != "已读取" {
+			t.Fatal(s, e)
+		}
+	}
+	if b.calls != 1 {
+		t.Fatal("rebound during Run")
+	}
+	sentinel := errors.New("bind failed")
+	b = &binder{err: sentinel}
+	if _, e := agent.New(b, nil, 1); !errors.Is(e, sentinel) {
+		t.Fatal(e)
+	}
+	if _, e := agent.New(&binder{}, nil, 1); e == nil {
+		t.Fatal("nil bound model")
+	}
+}

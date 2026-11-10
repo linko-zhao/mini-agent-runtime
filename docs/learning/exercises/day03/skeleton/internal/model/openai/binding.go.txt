@@ -1,0 +1,9 @@
+package openai
+
+import (
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+)
+
+func (a *Adapter) WithTools(defs []model.ToolDefinition) (model.Model, error) {
+	panic("TODO: WithTools")
+}

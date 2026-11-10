@@ -1,0 +1,53 @@
+package agent
+
+import (
+	"fmt"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
+	"sort"
+)
+
+func New(m model.Model, tools map[string]tool.Tool, maxSteps int, opts ...Option) (*Agent, error) {
+	if m == nil || maxSteps <= 0 {
+		return nil, fmt.Errorf("agent: model and positive maxSteps required")
+	}
+	a := &Agent{model: m, tools: make(map[string]tool.Tool), maxSteps: maxSteps}
+	for _, o := range opts {
+		if o != nil {
+			o(a)
+		}
+	}
+	if a.toolTimeout < 0 {
+		return nil, fmt.Errorf("agent: negative timeout")
+	}
+	names := []string{}
+	for n, t := range tools {
+		if t == nil || n == "" || n != t.Name() {
+			return nil, fmt.Errorf("agent: invalid registration")
+		}
+		a.tools[n] = t
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	var defs []model.ToolDefinition
+	for _, n := range names {
+		if t, ok := a.tools[n].(tool.DescribedTool); ok {
+			d := t.Definition()
+			if d.Name != n {
+				return nil, fmt.Errorf("agent: definition name mismatch")
+			}
+			defs = append(defs, d)
+		}
+	}
+	if b, ok := m.(model.ToolBinder); ok {
+		bound, err := b.WithTools(defs)
+		if err != nil {
+			return nil, err
+		}
+		if bound == nil {
+			return nil, fmt.Errorf("agent: nil bound model")
+		}
+		a.model = bound
+	}
+	return a, nil
+}

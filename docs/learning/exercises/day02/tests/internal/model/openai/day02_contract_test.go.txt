@@ -1,0 +1,137 @@
+package openai_test
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model/openai"
+	"io"
+	"net/http"
+	"strings"
+	"testing"
+)
+
+type transport func(*http.Request) (*http.Response, error)
+
+func (f transport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+func newAdapter(t *testing.T, f transport) *openai.Adapter {
+	t.Helper()
+	a, e := openai.New(openai.Config{APIKey: "test", Model: "course", BaseURL: "https://provider.invalid/chat", Client: &http.Client{Transport: f}})
+	if e != nil {
+		t.Fatal(e)
+	}
+	return a
+}
+func response(status int, s string) *http.Response {
+	return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(s)), Header: make(http.Header)}
+}
+func TestDay02Normalize(t *testing.T) {
+	a := newAdapter(t, func(r *http.Request) (*http.Response, error) {
+		if r.Method != "POST" || r.Header.Get("Authorization") != "Bearer test" || r.Header.Get("Content-Type") != "application/json" {
+			t.Fatal("headers")
+		}
+		var body map[string]any
+		if e := json.NewDecoder(r.Body).Decode(&body); e != nil {
+			t.Fatal(e)
+		}
+		ms := body["messages"].([]any)
+		if body["model"] != "course" || len(ms) != 1 || ms[0].(map[string]any)["content"] != "读取 doc-1" {
+			t.Fatal(body)
+		}
+		return response(200, `{"choices":[{"message":{"role":"assistant","content":null,"tool_calls":[{"id":"read-1","type":"function","function":{"name":"get_document","arguments":"{\"id\":\"doc-1\"}"}}]},"finish_reason":"future_reason"}],"usage":{"prompt_tokens":3,"completion_tokens":4}}`), nil
+	})
+	r, e := a.Generate(context.Background(), []model.Message{{Role: "user", Content: "读取 doc-1"}})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if r.Message.Role != "assistant" || r.Message.Content != "" || len(r.Message.ToolCalls) != 1 || r.Message.ToolCalls[0].ID != "read-1" || r.Message.ToolCalls[0].Name != "get_document" || string(r.Message.ToolCalls[0].Arguments) != `{"id":"doc-1"}` || r.FinishReason != "future_reason" || r.Usage.InputTokens != 3 || r.Usage.OutputTokens != 4 {
+		t.Fatal(r)
+	}
+	a = newAdapter(t, func(*http.Request) (*http.Response, error) {
+		return response(200, `{"choices":[{"message":{"role":"assistant","content":"已读取"}}]}`), nil
+	})
+	r, e = a.Generate(context.Background(), nil)
+	if e != nil || r.Usage != (model.Usage{}) || r.FinishReason != "" {
+		t.Fatal(r, e)
+	}
+}
+func TestDay02Failures(t *testing.T) {
+	for _, cfg := range []openai.Config{{}, {APIKey: "test"}, {APIKey: "test", Model: "course"}} {
+		if _, e := openai.New(cfg); e == nil {
+			t.Fatal("config")
+		}
+	}
+	for _, tc := range []struct {
+		status int
+		code   string
+		retry  bool
+	}{{401, "unauthorized", false}, {429, "rate_limited", true}, {503, "provider_unavailable", true}, {400, "provider_error", false}} {
+		a := newAdapter(t, func(*http.Request) (*http.Response, error) { return response(tc.status, "private provider body"), nil })
+		_, e := a.Generate(context.Background(), nil)
+		var me *model.ModelError
+		if !errors.As(e, &me) || me.StatusCode != tc.status || me.Code != tc.code || me.Retryable != tc.retry {
+			t.Fatal(e)
+		}
+	}
+	sentinel := errors.New("offline")
+	a := newAdapter(t, func(*http.Request) (*http.Response, error) { return nil, sentinel })
+	_, e := a.Generate(context.Background(), nil)
+	if !errors.Is(e, sentinel) {
+		t.Fatal(e)
+	}
+	for _, s := range []string{`broken`, `{"choices":[]}`, `{"choices":[{"message":{"role":"user"}}]}`, `{"choices":[{"message":{"role":"assistant","tool_calls":[{"id":"","function":{"name":"get_document","arguments":"{}"}}]}}]}`, `{"choices":[{"message":{"role":"assistant","tool_calls":[{"id":"read-1","function":{"name":"get_document","arguments":"bad"}}]}}]}`, strings.Repeat("x", (4<<20)+1)} {
+		a := newAdapter(t, func(*http.Request) (*http.Response, error) { return response(200, s), nil })
+		if r, e := a.Generate(context.Background(), nil); e == nil || r != nil {
+			t.Fatal("invalid response accepted")
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	a = newAdapter(t, func(r *http.Request) (*http.Response, error) { return nil, r.Context().Err() })
+	_, e = a.Generate(ctx, nil)
+	if !errors.Is(e, context.Canceled) {
+		t.Fatal(e)
+	}
+	calls := 0
+	a = newAdapter(t, func(*http.Request) (*http.Response, error) { calls++; return response(200, `{}`), nil })
+	_, e = a.Generate(context.Background(), []model.Message{{Role: "assistant", ToolCalls: []model.ToolCall{{Arguments: json.RawMessage(`bad`)}}}})
+	if e == nil || calls != 0 {
+		t.Fatal("invalid request sent")
+	}
+}
+
+func TestDay02HistoryEncoding(t *testing.T) {
+	a := newAdapter(t, func(r *http.Request) (*http.Response, error) {
+		var body struct {
+			Messages []struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+				ID      string `json:"tool_call_id"`
+				Calls   []struct {
+					ID       string `json:"id"`
+					Type     string `json:"type"`
+					Function struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					} `json:"function"`
+				} `json:"tool_calls"`
+			} `json:"messages"`
+		}
+		if e := json.NewDecoder(r.Body).Decode(&body); e != nil {
+			t.Fatal(e)
+		}
+		if len(body.Messages) != 3 {
+			t.Fatal(body)
+		}
+		call := body.Messages[1].Calls[0]
+		if body.Messages[0].Role != "user" || body.Messages[1].Role != "assistant" || call.ID != "read-1" || call.Type != "function" || call.Function.Name != "get_document" || call.Function.Arguments != `{"id":"doc-1"}` || body.Messages[2].Role != "tool" || body.Messages[2].ID != "read-1" || body.Messages[2].Content != "正文" {
+			t.Fatal(body)
+		}
+		return response(200, `{"choices":[{"message":{"role":"assistant","content":"已读取"}}]}`), nil
+	})
+	_, e := a.Generate(context.Background(), []model.Message{{Role: "user", Content: "读取 doc-1"}, {Role: "assistant", ToolCalls: []model.ToolCall{{ID: "read-1", Name: "get_document", Arguments: json.RawMessage(`{"id":"doc-1"}`)}}}, {Role: "tool", ToolCallID: "read-1", Content: "正文"}})
+	if e != nil {
+		t.Fatal(e)
+	}
+}

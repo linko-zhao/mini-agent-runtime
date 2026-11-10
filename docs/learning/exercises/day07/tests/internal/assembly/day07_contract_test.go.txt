@@ -1,0 +1,129 @@
+package assembly_test
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"github.com/linko-zhao/mini-agent-runtime/internal/agent"
+	"github.com/linko-zhao/mini-agent-runtime/internal/assembly"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
+	"testing"
+	"time"
+)
+
+type script struct {
+	round int
+	mode  string
+	t     *testing.T
+}
+
+func (m *script) Generate(c context.Context, ms []model.Message) (*model.Response, error) {
+	m.round++
+	if m.mode == "model_error" {
+		return nil, errModel
+	}
+	if m.mode == "text" || m.round == 2 {
+		if m.round == 2 && (len(ms) != 3 || ms[2].ToolCallID != "read-1" || ms[2].Content != "正文") {
+			m.t.Fatal(ms)
+		}
+		return &model.Response{Message: model.Message{Role: "assistant", Content: "已读取"}}, nil
+	}
+	name := "get_document"
+	if m.mode == "unknown" {
+		name = "missing"
+	}
+	return &model.Response{Message: model.Message{Role: "assistant", ToolCalls: []model.ToolCall{{ID: "read-1", Name: name, Arguments: json.RawMessage(`{"id":"doc-1"}`)}}}}, nil
+}
+
+var errModel = errors.New("model failed")
+
+type reader struct {
+	calls   int
+	timeout bool
+}
+
+func (*reader) Name() string { return "get_document" }
+func (r *reader) Execute(c context.Context, a json.RawMessage) (string, error) {
+	r.calls++
+	if string(a) != `{"id":"doc-1"}` {
+		return "", errors.New("args")
+	}
+	if r.timeout {
+		<-c.Done()
+		return "late", nil
+	}
+	return "正文", nil
+}
+
+type sink struct{ es []agent.Event }
+
+func (s *sink) Emit(_ context.Context, e agent.Event) { s.es = append(s.es, e) }
+func TestDay07Matrix(t *testing.T) {
+	for _, tc := range []struct {
+		mode               string
+		max, reads, rounds int
+		want               error
+		timeout, cancel    bool
+	}{
+		{"text", 2, 0, 1, nil, false, false}, {"roundtrip", 2, 1, 2, nil, false, false}, {"unknown", 2, 0, 1, nil, false, false}, {"model_error", 2, 0, 1, errModel, false, false}, {"cancel", 2, 0, 0, context.Canceled, false, true}, {"timeout", 2, 1, 1, context.DeadlineExceeded, true, false}, {"max", 1, 1, 1, agent.ErrMaxSteps, false, false},
+	} {
+		t.Run(tc.mode, func(t *testing.T) {
+			m := &script{mode: tc.mode, t: t}
+			r := &reader{timeout: tc.timeout}
+			s := &sink{}
+			cfg := assembly.Week01Config{Model: m, Tools: []tool.Tool{r}, MaxSteps: tc.max, Sink: s}
+			if tc.timeout {
+				cfg.ToolTimeout = time.Nanosecond
+			}
+			a, e := assembly.BuildWeek01(cfg)
+			if e != nil {
+				t.Fatal(e)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if tc.cancel {
+				cancel()
+			}
+			out, e := a.Run(ctx, "读取 doc-1")
+			failed := tc.want != nil || tc.mode == "unknown"
+			if failed {
+				if e == nil || out != "" {
+					t.Fatal(out, e)
+				}
+				if tc.want != nil && !errors.Is(e, tc.want) {
+					t.Fatal(e)
+				}
+			} else if e != nil || out != "已读取" {
+				t.Fatal(out, e)
+			}
+			if r.calls != tc.reads || m.round != tc.rounds {
+				t.Fatal(r.calls, m.round)
+			}
+			terminal := 0
+			for _, ev := range s.es {
+				if ev.Type == agent.EventRunFailed || ev.Type == agent.EventRunFinished {
+					terminal++
+					if (ev.Type == agent.EventRunFailed) != failed {
+						t.Fatal(ev)
+					}
+				}
+			}
+			if terminal != 1 {
+				t.Fatal(s.es)
+			}
+		})
+	}
+}
+func TestDay07Build(t *testing.T) {
+	r := &reader{}
+	m := &script{mode: "text", t: t}
+	for _, c := range []assembly.Week01Config{{Model: m, MaxSteps: 1, Tools: []tool.Tool{r, r}}, {Model: m, MaxSteps: 1, Tools: []tool.Tool{nil}}, {MaxSteps: 1}, {Model: m}, {Model: m, MaxSteps: 1, ToolTimeout: -1}} {
+		if a, e := assembly.BuildWeek01(c); e == nil || a != nil {
+			t.Fatal(a, e)
+		}
+	}
+	if m.round != 0 || r.calls != 0 {
+		t.Fatal("build caused execution")
+	}
+}

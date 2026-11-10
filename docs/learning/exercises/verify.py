@@ -21,11 +21,11 @@ def run(command, cwd, env):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--go", default="go")
-    parser.add_argument("--days", type=int, nargs="+", default=list(range(9, 16)))
+    parser.add_argument("--days", type=int, nargs="+", default=[*range(1, 8), *range(9, 16)])
     parser.add_argument("--report", help="可选：写入 JSON 验证记录")
     args = parser.parse_args()
-    if not args.days or any(day not in range(9, 16) for day in args.days):
-        parser.error("days must be between 9 and 15")
+    if not args.days or any(day not in [*range(1, 8), *range(9, 16)] for day in args.days):
+        parser.error("days must be 1–7 or 9–15")
     go = str(Path(args.go).resolve()) if "/" in args.go else args.go
     work = Path(tempfile.mkdtemp(prefix="learning-verify-"))
     env = dict(os.environ)

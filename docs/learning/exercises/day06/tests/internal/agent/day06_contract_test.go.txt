@@ -1,0 +1,47 @@
+package agent_test
+
+import (
+	"context"
+	"github.com/linko-zhao/mini-agent-runtime/internal/agent"
+	"sync"
+	"testing"
+)
+
+type unsafeSink struct {
+	count int
+	ctx   context.Context
+	last  agent.Event
+}
+
+func (s *unsafeSink) Emit(c context.Context, e agent.Event) { s.count++; s.ctx = c; s.last = e }
+func TestDay06SharedSink(t *testing.T) {
+	raw := &unsafeSink{}
+	sink := agent.NewSynchronizedSink(raw)
+	var wg sync.WaitGroup
+	ctx := context.WithValue(context.Background(), struct{}{}, "trace")
+	ev := agent.Event{Type: agent.EventRunStarted, Step: 1, Status: "ok"}
+	for i := 0; i < 32; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 10; j++ {
+				sink.Emit(ctx, ev)
+			}
+		}()
+	}
+	wg.Wait()
+	if raw.count != 320 || raw.ctx != ctx || raw.last != ev {
+		t.Fatal(raw.count)
+	}
+}
+func TestDay06NilAndCancelled(t *testing.T) {
+	agent.NewSynchronizedSink(nil).Emit(context.Background(), agent.Event{})
+	raw := &unsafeSink{}
+	sink := agent.NewSynchronizedSink(raw)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	sink.Emit(ctx, agent.Event{Type: agent.EventRunFailed, Status: "cancelled"})
+	if raw.count != 1 || raw.ctx != ctx || raw.last.Status != "cancelled" {
+		t.Fatal(raw)
+	}
+}

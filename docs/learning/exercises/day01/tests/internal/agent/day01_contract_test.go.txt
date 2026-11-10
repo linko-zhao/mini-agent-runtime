@@ -1,0 +1,120 @@
+package agent_test
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"github.com/linko-zhao/mini-agent-runtime/internal/agent"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
+	"testing"
+)
+
+type dModel func(context.Context, []model.Message) (*model.Response, error)
+
+func (f dModel) Generate(c context.Context, m []model.Message) (*model.Response, error) {
+	return f(c, m)
+}
+
+type dTool struct {
+	f func(context.Context, json.RawMessage) (string, error)
+}
+
+func (dTool) Name() string                                                   { return "get_document" }
+func (f dTool) Execute(c context.Context, a json.RawMessage) (string, error) { return f.f(c, a) }
+func answer(s string) *model.Response {
+	return &model.Response{Message: model.Message{Role: "assistant", Content: s}}
+}
+func request() *model.Response {
+	return &model.Response{Message: model.Message{Role: "assistant", ToolCalls: []model.ToolCall{{ID: "read-1", Name: "get_document", Arguments: json.RawMessage(`{"id":"doc-1"}`)}}}}
+}
+func must(t *testing.T, m model.Model, tools map[string]tool.Tool, n int) *agent.Agent {
+	t.Helper()
+	a, e := agent.New(m, tools, n)
+	if e != nil {
+		t.Fatal(e)
+	}
+	return a
+}
+
+func TestDay01RoundTrip(t *testing.T) {
+	calls, reads := 0, 0
+	m := dModel(func(c context.Context, ms []model.Message) (*model.Response, error) {
+		calls++
+		if calls == 1 {
+			if len(ms) != 1 || ms[0].Role != "user" || ms[0].Content != "读取 doc-1" {
+				t.Fatal(ms)
+			}
+			return request(), nil
+		}
+		if len(ms) != 3 || ms[1].Role != "assistant" || ms[2].Role != "tool" || ms[2].ToolCallID != "read-1" || ms[2].Content != "正文" {
+			t.Fatal(ms)
+		}
+		return answer("已读取"), nil
+	})
+	tools := map[string]tool.Tool{"get_document": dTool{func(c context.Context, a json.RawMessage) (string, error) {
+		reads++
+		if string(a) != `{"id":"doc-1"}` {
+			t.Fatal(string(a))
+		}
+		return "正文", nil
+	}}}
+	a := must(t, m, tools, 2)
+	delete(tools, "get_document")
+	out, e := a.Run(context.Background(), "读取 doc-1")
+	if e != nil || out != "已读取" || calls != 2 || reads != 1 {
+		t.Fatalf("%q %v calls=%d reads=%d", out, e, calls, reads)
+	}
+}
+func TestDay01Boundaries(t *testing.T) {
+	m := dModel(func(context.Context, []model.Message) (*model.Response, error) { return answer("完成"), nil })
+	for _, n := range []int{0, -1} {
+		if _, e := agent.New(m, nil, n); e == nil {
+			t.Fatal("maxSteps")
+		}
+	}
+	if _, e := agent.New(nil, nil, 1); e == nil {
+		t.Fatal("nil model")
+	}
+	if _, e := agent.New(m, map[string]tool.Tool{"bad": dTool{}}, 1); e == nil {
+		t.Fatal("name mismatch")
+	}
+	if _, e := agent.New(m, map[string]tool.Tool{"get_document": nil}, 1); e == nil {
+		t.Fatal("nil tool")
+	}
+	for _, tc := range []struct {
+		name string
+		f    dModel
+	}{
+		{"nil", func(context.Context, []model.Message) (*model.Response, error) { return nil, nil }},
+		{"role", func(context.Context, []model.Message) (*model.Response, error) {
+			return &model.Response{Message: model.Message{Role: "user"}}, nil
+		}},
+		{"unknown", func(context.Context, []model.Message) (*model.Response, error) { return request(), nil }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, e := must(t, tc.f, nil, 1).Run(context.Background(), "读取 doc-1"); e == nil {
+				t.Fatal("expected error")
+			}
+		})
+	}
+	sentinel := errors.New("model failure")
+	_, e := must(t, dModel(func(context.Context, []model.Message) (*model.Response, error) { return nil, sentinel }), nil, 1).Run(context.Background(), "")
+	if !errors.Is(e, sentinel) {
+		t.Fatal(e)
+	}
+	_, e = must(t, dModel(func(context.Context, []model.Message) (*model.Response, error) { return request(), nil }), map[string]tool.Tool{"get_document": dTool{func(context.Context, json.RawMessage) (string, error) { return "正文", nil }}}, 1).Run(context.Background(), "")
+	if !errors.Is(e, agent.ErrMaxSteps) {
+		t.Fatal(e)
+	}
+	_, e = must(t, dModel(func(context.Context, []model.Message) (*model.Response, error) { return request(), nil }), map[string]tool.Tool{"get_document": dTool{func(context.Context, json.RawMessage) (string, error) { return "", sentinel }}}, 2).Run(context.Background(), "")
+	if !errors.Is(e, sentinel) {
+		t.Fatal(e)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, e = must(t, m, nil, 1).Run(ctx, "")
+	if !errors.Is(e, context.Canceled) {
+		t.Fatal(e)
+	}
+}

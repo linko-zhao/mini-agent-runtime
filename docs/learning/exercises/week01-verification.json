@@ -1,0 +1,173 @@
+{
+  "go": "go version go1.22.2 linux/amd64",
+  "days": {
+    "1": {
+      "compile": 0,
+      "red": 1,
+      "green_race": 0,
+      "expected_todo": true,
+      "target_tests_ran": true,
+      "compile_log": "ok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/agent\t0.002s [no tests to run]\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/model\t0.002s [no tests to run]\n",
+      "red_log": "=== RUN   TestDay01RoundTrip\n--- FAIL: TestDay01RoundTrip (0.00s)\npanic: TODO: New [recovered]\n\tpanic: TODO: New\n\ngoroutine 18 [running]:\ntesting.tRunner.func1.2({0x513dc0, 0x56fc10})\n\t/tmp/go/src/testing/testing.go:1631 +0x24a\ntesting.tRunner.func1()\n\t/tmp/go/src/testing/testing.go:1634 +0x377\npanic({0x513dc0?, 0x56fc10?})\n\t/tmp/go/src/runtime/panic.go:770 +0x132\ngithub.com/linko-zhao/mini-agent-runtime/internal/agent.New(...)\n\t/tmp/learning-verify-wka47fix/day01-red/internal/agent/agent.go:18\ngithub.com/linko-zhao/mini-agent-runtime/internal/agent_test.must(0x51b300?, {0xc000040710?, 0x53ea05?}, 0xc?, 0x628320?)\n\t/tmp/learning-verify-wka47fix/day01-red/internal/agent/day01_contract_test.go:33 +0x29\ngithub.com/linko-zhao/mini-agent-runtime/internal/agent_test.TestDay01RoundTrip(0xc0000d04e0)\n\t/tmp/learning-verify-wka47fix/day01-red/internal/agent/day01_contract_test.go:62 +0x191\ntesting.tRunner(0xc0000d04e0, 0x549540)\n\t/tmp/go/src/testing/testing.go:1689 +0xfb\ncreated by testing.(*T).Run in goroutine 1\n\t/tmp/go/src/testing/testing.go:1742 +0x390\nFAIL\tgithub.com/linko-zhao/mini-agent-runtime/internal/agent\t0.006s\n=== RUN   TestDay01Mock\n--- FAIL: TestDay01Mock (0.00s)\npanic: TODO: NewMock [recovered]\n\tpanic: TODO: NewMock\n\ngoroutine 4 [running]:\ntesting.tRunner.func1.2({0x513860, 0x56e8b0})\n\t/tmp/go/src/testing/testing.go:1631 +0x24a\ntesting.tRunner.func1()\n\t/tmp/go/src/testing/testing.go:1634 +0x377\npanic({0x513860?, 0x56e8b0?})\n\t/tmp/go/src/runtime/panic.go:770 +0x132\ngithub.com/linko-zhao/mini-agent-runtime/internal/model.NewMock(...)\n\t/tmp/learning-verify-wka47fix/day01-red/internal/model/mock.go:13\ngithub.com/linko-zhao/mini-agent-runtime/internal/model_test.TestDay01Mock(0xc0001144e0?)\n\t/tmp/learning-verify-wka47fix/day01-red/internal/model/day01_contract_test.go:11 +0x25\ntesting.tRunner(0xc0001144e0, 0x548408)\n\t/tmp/go/src/testing/testing.go:1689 +0xfb\ncreated by testing.(*T).Run in goroutine 1\n\t/tmp/go/src/testing/testing.go:1742 +0x390\nFAIL\tgithub.com/linko-zhao/mini-agent-runtime/internal/model\t0.004s\nFAIL\n",
+      "green_log": "=== RUN   TestDay01RoundTrip\n--- PASS: TestDay01RoundTrip (0.00s)\n=== RUN   TestDay01Boundaries\n=== RUN   TestDay01Boundaries/nil\n=== RUN   TestDay01Boundaries/role\n=== RUN   TestDay01Boundaries/unknown\n--- PASS: TestDay01Boundaries (0.00s)\n    --- PASS: TestDay01Boundaries/nil (0.00s)\n    --- PASS: TestDay01Boundaries/role (0.00s)\n    --- PASS: TestDay01Boundaries/unknown (0.00s)\nPASS\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/agent\t1.032s\n=== RUN   TestDay01Mock\n--- PASS: TestDay01Mock (0.00s)\nPASS\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/model\t1.025s\n"
+    },
+    "2": {
+      "compile": 0,
+      "red": 1,
+      "green_race": 0,
+      "expected_todo": true,
+      "target_tests_ran": true,
+      "compile_log": "ok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/model/openai\t0.055s [no tests to run]\n",
+      "red_log": "=== RUN   TestDay02Normalize\n--- FAIL: TestDay02Normalize (0.00s)\npanic: TODO: New [recovered]\n\tpanic: TODO: New\n\ngoroutine 19 [running]:\ntesting.tRunner.func1.2({0x5b3c60, 0x652d10})\n\t/tmp/go/src/testing/testing.go:1631 +0x24a\ntesting.tRunner.func1()\n\t/tmp/go/src/testing/testing.go:1634 +0x377\npanic({0x5b3c60?, 0x652d10?})\n\t/tmp/go/src/runtime/panic.go:770 +0x132\ngithub.com/linko-zhao/mini-agent-runtime/internal/model/openai.New(...)\n\t/tmp/learning-verify-wka47fix/day02-red/internal/model/openai/adapter.go:20\ngithub.com/linko-zhao/mini-agent-runtime/internal/model/openai_test.newAdapter(0x0?, 0xc000042760?)\n\t/tmp/learning-verify-wka47fix/day02-red/internal/model/openai/day02_contract_test.go:20 +0x29\ngithub.com/linko-zhao/mini-agent-runtime/internal/model/openai_test.TestDay02Normalize(0xc000144680?)\n\t/tmp/learning-verify-wka47fix/day02-red/internal/model/openai/day02_contract_test.go:30 +0x2f\ntesting.tRunner(0xc000144680, 0x61e180)\n\t/tmp/go/src/testing/testing.go:1689 +0xfb\ncreated by testing.(*T).Run in goroutine 1\n\t/tmp/go/src/testing/testing.go:1742 +0x390\nFAIL\tgithub.com/linko-zhao/mini-agent-runtime/internal/model/openai\t0.057s\nFAIL\n",
+      "green_log": "=== RUN   TestDay02Normalize\n--- PASS: TestDay02Normalize (0.00s)\n=== RUN   TestDay02Failures\n--- PASS: TestDay02Failures (0.40s)\n=== RUN   TestDay02HistoryEncoding\n--- PASS: TestDay02HistoryEncoding (0.00s)\nPASS\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/model/openai\t1.455s\n"
+    },
+    "3": {
+      "compile": 0,
+      "red": 1,
+      "green_race": 0,
+      "expected_todo": true,
+      "target_tests_ran": true,
+      "compile_log": "ok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/agent\t0.007s [no tests to run]\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/model/openai\t0.021s [no tests to run]\n",
+      "red_log": "=== RUN   TestDay03HostBinding\n--- FAIL: TestDay03HostBinding (0.00s)\npanic: TODO: New [recovered]\n\tpanic: TODO: New\n\ngoroutine 6 [running]:\ntesting.tRunner.func1.2({0x516080, 0x572b40})\n\t/tmp/go/src/testing/testing.go:1631 +0x24a\ntesting.tRunner.func1()\n\t/tmp/go/src/testing/testing.go:1634 +0x377\npanic({0x516080?, 0x572b40?})\n\t/tmp/go/src/runtime/panic.go:770 +0x132\ngithub.com/linko-zhao/mini-agent-runtime/internal/agent.New(...)\n\t/tmp/learning-verify-wka47fix/day03-red/internal/agent/new.go:8\ngithub.com/linko-zhao/mini-agent-runtime/internal/agent_test.day03Must(0x51d6c0?, {0xc0000446e8?, 0x5727c8?}, 0x1?, 0x4ca18d?)\n\t/tmp/learning-verify-wka47fix/day03-red/internal/agent/day03_contract_test.go:33 +0x29\ngithub.com/linko-zhao/mini-agent-runtime/internal/agent_test.TestDay03HostBinding(0xc000096820)\n\t/tmp/learning-verify-wka47fix/day03-red/internal/agent/day03_contract_test.go:67 +0x1f8\ntesting.tRunner(0xc000096820, 0x54c258)\n\t/tmp/go/src/testing/testing.go:1689 +0xfb\ncreated by testing.(*T).Run in goroutine 1\n\t/tmp/go/src/testing/testing.go:1742 +0x390\nFAIL\tgithub.com/linko-zhao/mini-agent-runtime/internal/agent\t0.004s\n=== RUN   TestDay03Binding\n--- FAIL: TestDay03Binding (0.00s)\npanic: TODO: WithTools [recovered]\n\tpanic: TODO: WithTools\n\ngoroutine 6 [running]:\ntesting.tRunner.func1.2({0x6c5040, 0x7aef20})\n\t/tmp/go/src/testing/testing.go:1631 +0x24a\ntesting.tRunner.func1()\n\t/tmp/go/src/testing/testing.go:1634 +0x377\npanic({0x6c5040?, 0x7aef20?})\n\t/tmp/go/src/runtime/panic.go:770 +0x132\ngithub.com/linko-zhao/mini-agent-runtime/internal/model/openai.(*Adapter).WithTools(...)\n\t/tmp/learning-verify-wka47fix/day03-red/internal/model/openai/binding.go:8\ngithub.com/linko-zhao/mini-agent-runtime/internal/model/openai_test.TestDay03Binding(0xc000128680)\n\t/tmp/learning-verify-wka47fix/day03-red/internal/model/openai/day03_contract_test.go:40 +0x85\ntesting.tRunner(0xc000128680, 0x75b678)\n\t/tmp/go/src/testing/testing.go:1689 +0xfb\ncreated by testing.(*T).Run in goroutine 1\n\t/tmp/go/src/testing/testing.go:1742 +0x390\nFAIL\tgithub.com/linko-zhao/mini-agent-runtime/internal/model/openai\t0.008s\nFAIL\n",
+      "green_log": "=== RUN   TestDay03HostBinding\n--- PASS: TestDay03HostBinding (0.00s)\nPASS\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/agent\t1.084s\n=== RUN   TestDay03Binding\n--- PASS: TestDay03Binding (0.00s)\nPASS\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/model/openai\t1.066s\n"
+    },
+    "4": {
+      "compile": 0,
+      "red": 1,
+      "green_race": 0,
+      "expected_todo": true,
+      "target_tests_ran": true,
+      "compile_log": "ok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/agent\t0.003s [no tests to run]\n",
+      "red_log": "=== RUN   TestDay04Cancellation\n--- FAIL: TestDay04Cancellation (0.00s)\npanic: TODO: Run [recovered]\n\tpanic: TODO: Run\n\ngoroutine 18 [running]:\ntesting.tRunner.func1.2({0x51a5c0, 0x578ed0})\n\t/tmp/go/src/testing/testing.go:1631 +0x24a\ntesting.tRunner.func1()\n\t/tmp/go/src/testing/testing.go:1634 +0x377\npanic({0x51a5c0?, 0x578ed0?})\n\t/tmp/go/src/runtime/panic.go:770 +0x132\ngithub.com/linko-zhao/mini-agent-runtime/internal/agent.(*Agent).Run(...)\n\t/tmp/learning-verify-wka47fix/day04-red/internal/agent/run.go:7\ngithub.com/linko-zhao/mini-agent-runtime/internal/agent_test.TestDay04Cancellation(0xc0000d04e0)\n\t/tmp/learning-verify-wka47fix/day04-red/internal/agent/day04_contract_test.go:53 +0xfa\ntesting.tRunner(0xc0000d04e0, 0x551f48)\n\t/tmp/go/src/testing/testing.go:1689 +0xfb\ncreated by testing.(*T).Run in goroutine 1\n\t/tmp/go/src/testing/testing.go:1742 +0x390\nFAIL\tgithub.com/linko-zhao/mini-agent-runtime/internal/agent\t0.017s\nFAIL\n",
+      "green_log": "=== RUN   TestDay04Cancellation\n--- PASS: TestDay04Cancellation (0.00s)\n=== RUN   TestDay04Timeout\n--- PASS: TestDay04Timeout (0.00s)\nPASS\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/agent\t1.037s\n"
+    },
+    "5": {
+      "compile": 0,
+      "red": 1,
+      "green_race": 0,
+      "expected_todo": true,
+      "target_tests_ran": true,
+      "compile_log": "ok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/agent\t0.003s [no tests to run]\n",
+      "red_log": "=== RUN   TestDay05Sequence\n--- FAIL: TestDay05Sequence (0.00s)\npanic: TODO: WithEventSink [recovered]\n\tpanic: TODO: WithEventSink\n\ngoroutine 6 [running]:\ntesting.tRunner.func1.2({0x51b800, 0x57afd0})\n\t/tmp/go/src/testing/testing.go:1631 +0x24a\ntesting.tRunner.func1()\n\t/tmp/go/src/testing/testing.go:1634 +0x377\npanic({0x51b800?, 0x57afd0?})\n\t/tmp/go/src/runtime/panic.go:770 +0x132\ngithub.com/linko-zhao/mini-agent-runtime/internal/agent.WithEventSink(...)\n\t/tmp/learning-verify-wka47fix/day05-red/internal/agent/options.go:9\ngithub.com/linko-zhao/mini-agent-runtime/internal/agent_test.TestDay05Sequence(0xc000116680?)\n\t/tmp/learning-verify-wka47fix/day05-red/internal/agent/day05_contract_test.go:56 +0x105\ntesting.tRunner(0xc000116680, 0x553d70)\n\t/tmp/go/src/testing/testing.go:1689 +0xfb\ncreated by testing.(*T).Run in goroutine 1\n\t/tmp/go/src/testing/testing.go:1742 +0x390\nFAIL\tgithub.com/linko-zhao/mini-agent-runtime/internal/agent\t0.011s\nFAIL\n",
+      "green_log": "=== RUN   TestDay05Sequence\n--- PASS: TestDay05Sequence (0.00s)\n=== RUN   TestDay05Terminal\n=== RUN   TestDay05Terminal/error\n=== RUN   TestDay05Terminal/nil\n=== RUN   TestDay05Terminal/cancelled\n--- PASS: TestDay05Terminal (0.00s)\n    --- PASS: TestDay05Terminal/error (0.00s)\n    --- PASS: TestDay05Terminal/nil (0.00s)\n    --- PASS: TestDay05Terminal/cancelled (0.00s)\n=== RUN   TestDay05ToolFailuresAndBudget\n=== RUN   TestDay05ToolFailuresAndBudget/tool_error\n=== RUN   TestDay05ToolFailuresAndBudget/timeout\n=== RUN   TestDay05ToolFailuresAndBudget/budget\n--- PASS: TestDay05ToolFailuresAndBudget (0.00s)\n    --- PASS: TestDay05ToolFailuresAndBudget/tool_error (0.00s)\n    --- PASS: TestDay05ToolFailuresAndBudget/timeout (0.00s)\n    --- PASS: TestDay05ToolFailuresAndBudget/budget (0.00s)\nPASS\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/agent\t1.077s\n"
+    },
+    "6": {
+      "compile": 0,
+      "red": 1,
+      "green_race": 0,
+      "expected_todo": true,
+      "target_tests_ran": true,
+      "compile_log": "ok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/agent\t0.039s [no tests to run]\n",
+      "red_log": "=== RUN   TestDay06SharedSink\n--- FAIL: TestDay06SharedSink (0.00s)\npanic: TODO: NewSynchronizedSink [recovered]\n\tpanic: TODO: NewSynchronizedSink\n\ngoroutine 18 [running]:\ntesting.tRunner.func1.2({0x524a80, 0x586400})\n\t/tmp/go/src/testing/testing.go:1631 +0x24a\ntesting.tRunner.func1()\n\t/tmp/go/src/testing/testing.go:1634 +0x377\npanic({0x524a80?, 0x586400?})\n\t/tmp/go/src/runtime/panic.go:770 +0x132\ngithub.com/linko-zhao/mini-agent-runtime/internal/agent.NewSynchronizedSink(...)\n\t/tmp/learning-verify-wka47fix/day06-red/internal/agent/synchronized_sink.go:15\ngithub.com/linko-zhao/mini-agent-runtime/internal/agent_test.TestDay06SharedSink(0xc0000d04e0?)\n\t/tmp/learning-verify-wka47fix/day06-red/internal/agent/day06_contract_test.go:19 +0x25\ntesting.tRunner(0xc0000d04e0, 0x55d8f8)\n\t/tmp/go/src/testing/testing.go:1689 +0xfb\ncreated by testing.(*T).Run in goroutine 1\n\t/tmp/go/src/testing/testing.go:1742 +0x390\nFAIL\tgithub.com/linko-zhao/mini-agent-runtime/internal/agent\t0.007s\nFAIL\n",
+      "green_log": "=== RUN   TestDay06SharedSink\n--- PASS: TestDay06SharedSink (0.00s)\n=== RUN   TestDay06NilAndCancelled\n--- PASS: TestDay06NilAndCancelled (0.00s)\nPASS\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/agent\t1.030s\n"
+    },
+    "7": {
+      "compile": 0,
+      "red": 1,
+      "green_race": 0,
+      "expected_todo": true,
+      "target_tests_ran": true,
+      "compile_log": "ok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/assembly\t0.007s [no tests to run]\n",
+      "red_log": "=== RUN   TestDay07Matrix\n=== RUN   TestDay07Matrix/text\n--- FAIL: TestDay07Matrix (0.00s)\n    --- FAIL: TestDay07Matrix/text (0.00s)\npanic: TODO: BuildWeek01 [recovered]\n\tpanic: TODO: BuildWeek01\n\ngoroutine 7 [running]:\ntesting.tRunner.func1.2({0x513dc0, 0x56fd90})\n\t/tmp/go/src/testing/testing.go:1631 +0x24a\ntesting.tRunner.func1()\n\t/tmp/go/src/testing/testing.go:1634 +0x377\npanic({0x513dc0?, 0x56fd90?})\n\t/tmp/go/src/runtime/panic.go:770 +0x132\ngithub.com/linko-zhao/mini-agent-runtime/internal/assembly.BuildWeek01(...)\n\t/tmp/learning-verify-wka47fix/day07-red/internal/assembly/week01.go:18\ngithub.com/linko-zhao/mini-agent-runtime/internal/assembly_test.TestDay07Matrix.func1(0xc000096680?)\n\t/tmp/learning-verify-wka47fix/day07-red/internal/assembly/day07_contract_test.go:79 +0xd1\ntesting.tRunner(0xc000096680, 0xc00006e190)\n\t/tmp/go/src/testing/testing.go:1689 +0xfb\ncreated by testing.(*T).Run in goroutine 6\n\t/tmp/go/src/testing/testing.go:1742 +0x390\nFAIL\tgithub.com/linko-zhao/mini-agent-runtime/internal/assembly\t0.014s\nFAIL\n",
+      "green_log": "=== RUN   TestDay07Matrix\n=== RUN   TestDay07Matrix/text\n=== RUN   TestDay07Matrix/roundtrip\n=== RUN   TestDay07Matrix/unknown\n=== RUN   TestDay07Matrix/model_error\n=== RUN   TestDay07Matrix/cancel\n=== RUN   TestDay07Matrix/timeout\n=== RUN   TestDay07Matrix/max\n--- PASS: TestDay07Matrix (0.00s)\n    --- PASS: TestDay07Matrix/text (0.00s)\n    --- PASS: TestDay07Matrix/roundtrip (0.00s)\n    --- PASS: TestDay07Matrix/unknown (0.00s)\n    --- PASS: TestDay07Matrix/model_error (0.00s)\n    --- PASS: TestDay07Matrix/cancel (0.00s)\n    --- PASS: TestDay07Matrix/timeout (0.00s)\n    --- PASS: TestDay07Matrix/max (0.00s)\n=== RUN   TestDay07Build\n--- PASS: TestDay07Build (0.00s)\nPASS\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/assembly\t1.089s\n"
+    }
+  },
+  "cumulative": {
+    "command": "go test ./... -timeout 60s",
+    "mode": "compatible reference in isolated copy, including matched cmd baseline",
+    "exit_code": 0,
+    "log": "?   \tgithub.com/linko-zhao/mini-agent-runtime/examples/cmd/access\t[no test files]\n?   \tgithub.com/linko-zhao/mini-agent-runtime/examples/cmd/demo\t[no test files]\n?   \tgithub.com/linko-zhao/mini-agent-runtime/examples/cmd/knowledge\t[no test files]\n?   \tgithub.com/linko-zhao/mini-agent-runtime/examples/cmd/mcp\t[no test files]\n?   \tgithub.com/linko-zhao/mini-agent-runtime/examples/cmd/mcpagent\t[no test files]\n?   \tgithub.com/linko-zhao/mini-agent-runtime/examples/cmd/state\t[no test files]\nok  \tgithub.com/linko-zhao/mini-agent-runtime/examples/integration\t0.066s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/examples/internal/agent\t0.019s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/examples/internal/assembly\t0.068s\n?   \tgithub.com/linko-zhao/mini-agent-runtime/examples/internal/model\t[no test files]\nok  \tgithub.com/linko-zhao/mini-agent-runtime/examples/internal/mcp\t0.028s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/examples/internal/model/openai\t0.011s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/examples/internal/runstate\t0.013s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/examples/internal/tool\t0.053s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/examples/internal/tool/calculator\t0.011s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/examples/internal/tool/knowledge\t0.010s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/examples/internal/tool/mcptool\t0.107s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/agent\t0.012s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/assembly\t0.009s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/model\t0.006s\n?   \tgithub.com/linko-zhao/mini-agent-runtime/internal/tool\t[no test files]\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/model/openai\t0.185s\n"
+  },
+  "date": "2026-11-10",
+  "timezone": "Asia/Shanghai",
+  "scope": "Exact staged lesson files in isolated same-module copies; learner internal/cmd untouched.",
+  "later_lessons_regression": {
+    "days": {
+      "9": {
+        "compile": 0,
+        "red": 1,
+        "green_race": 0,
+        "expected_todo": true,
+        "target_tests_ran": true
+      },
+      "10": {
+        "compile": 0,
+        "red": 1,
+        "green_race": 0,
+        "expected_todo": true,
+        "target_tests_ran": true
+      },
+      "11": {
+        "compile": 0,
+        "red": 1,
+        "green_race": 0,
+        "expected_todo": true,
+        "target_tests_ran": true
+      },
+      "12": {
+        "compile": 0,
+        "red": 1,
+        "green_race": 0,
+        "expected_todo": true,
+        "target_tests_ran": true
+      },
+      "13": {
+        "compile": 0,
+        "red": 1,
+        "green_race": 0,
+        "expected_todo": true,
+        "target_tests_ran": true
+      },
+      "14": {
+        "compile": 0,
+        "red": 1,
+        "green_race": 0,
+        "expected_todo": true,
+        "target_tests_ran": true
+      },
+      "15": {
+        "compile": 0,
+        "red": 1,
+        "green_race": 0,
+        "expected_todo": true,
+        "target_tests_ran": true
+      }
+    },
+    "cumulative_exit_code": 0
+  },
+  "current_examples": [
+    {
+      "command": "go test ./examples/...",
+      "exit_code": 0
+    },
+    {
+      "command": "go test -race ./examples/...",
+      "exit_code": 0
+    }
+  ],
+  "source_checks": {
+    "repository": "https://github.com/cloudwego/eino",
+    "ref": "main (read 2026-11-10; no immutable commit pinned)",
+    "verified_symbols": {
+      "components/model/interface.go": [
+        "BaseChatModel",
+        "ToolCallingChatModel.WithTools"
+      ],
+      "components/tool/interface.go": [
+        "BaseTool.Info",
+        "InvokableTool.InvokableRun"
+      ],
+      "adk/runner.go": [
+        "Runner",
+        "NewRunner",
+        "TypedRunner.Run"
+      ],
+      "adk/interface.go": [
+        "AgentEvent"
+      ],
+      "callbacks/interface.go": [
+        "Handler"
+      ]
+    }
+  }
+}

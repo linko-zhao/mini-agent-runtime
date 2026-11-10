@@ -1,0 +1,11 @@
+package tool
+
+import (
+	"context"
+	"encoding/json"
+)
+
+type Tool interface {
+	Name() string
+	Execute(context.Context, json.RawMessage) (string, error)
+}

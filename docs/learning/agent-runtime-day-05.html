@@ -1,152 +1,430 @@
 <!doctype html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light">
-<title>Day 05 · Agent 执行事件与生命周期回归 | Agent Runtime</title>
-<style>
-:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#58667b;--line:#e0e6ee;--accent:#2459bd;--pale:#edf3ff}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
-main{max-width:920px;margin:auto;padding:32px 22px 70px}.hero{background:#183561;color:#fff;border-radius:18px;padding:29px 30px}.hero small{opacity:.8;letter-spacing:1px}.hero h1{margin:7px 0;font-size:30px;line-height:1.3}.hero p{margin:0;color:#e6eefa}
-.chips{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}.chip{border:1px solid #8ea4c8;border-radius:20px;padding:3px 10px;font-size:12px}
-section{background:var(--paper);border:1px solid var(--line);border-radius:14px;margin-top:18px;padding:22px 26px}h2{font-size:19px;margin:0 0 13px}h3{font-size:16px;margin:18px 0 6px}.time{font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.4px}
-p{margin:8px 0}a{color:var(--accent)}li{margin:6px 0}code{background:#f0f3f8;padding:2px 5px;border-radius:4px}pre{overflow:auto;background:#142136;color:#e7f3ff;padding:17px;border-radius:10px;font-size:13px;line-height:1.65}pre code{background:transparent;padding:0}
-.goal{background:var(--pale);border-left:3px solid var(--accent);padding:12px 15px;border-radius:4px}.note{background:#fff8e9;border:1px solid #f2deb2;border-radius:9px;padding:11px 14px;color:#644b18}.info{background:#eff6ff;border:1px solid #d5e4fc;border-radius:9px;padding:11px 14px}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.grid>div{padding:12px;background:#f6f8fc;border-radius:9px}.grid strong{display:block;font-size:19px}.grid span{font-size:12px;color:var(--sub)}
-.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0}.check input{margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer;flex:1}.check.done label{text-decoration:line-through;color:var(--sub)}
-.progress{height:8px;background:#e3e9f2;border-radius:99px;overflow:hidden}.fill{height:100%;background:var(--accent);width:0%;transition:width .2s}.meta{display:flex;justify-content:space-between;font-size:13px;color:var(--sub);margin-bottom:9px}
-table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px;vertical-align:top}th{background:#f4f7fc}
-.tag{display:inline-block;background:#eaf0fc;color:#2459bd;border-radius:5px;font-size:12px;padding:2px 7px;margin-right:6px}.flow{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:12px 0}.flow span{padding:6px 9px;background:#f6f9ff;border:1px solid #dbe6f8;border-radius:8px;font-size:12px}.flow b{color:#6b85ad}
-.muted{color:var(--sub);font-size:13px}footer{text-align:center;color:var(--sub);font-size:12px;margin:24px}
-@media(max-width:600px){main{padding:14px 12px 40px}.hero{padding:22px}.hero h1{font-size:24px}section{padding:18px}.grid{grid-template-columns:1fr}table{font-size:12px}th,td{padding:8px}pre{font-size:12px}}
-</style>
-</head>
-<body><main>
-<header class="hero"><small>MINI AGENT RUNTIME · WEEK 01</small>
-<h1>Day 05 / 56 · Agent 执行事件与生命周期回归</h1>
-<p>2026 年 10 月 23 日，星期五 · Go 实战 · Event Sink、事件顺序、Run 终态</p>
-<div class="chips"><span class="chip">阅读 20 分钟</span><span class="chip">编码 80 分钟</span><span class="chip">测试复盘 20 分钟</span><span class="chip">独立离线 HTML</span></div>
-</header>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Day 05 · 执行事件与唯一终态</title><style>*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#edf2f8;color:#17253c;font:18px/1.8 system-ui,-apple-system,"Segoe UI",sans-serif}main{max-width:44em;margin:auto;padding:24px 18px 64px}header{background:#11284a;color:white;padding:32px;border-radius:18px}h1{font-size:1.9em;line-height:1.4}h2{font-size:1.4em;line-height:1.5;margin-top:0}h3{font-size:1.08em;line-height:1.6}section,nav{background:white;border:1px solid #d8e1ee;border-radius:14px;padding:28px;margin-top:22px}p{margin:.7em 0;overflow-wrap:anywhere}a{color:#0756ac}header a{color:#cce4ff}nav a{display:inline-block;margin-right:18px}article,.node{background:#f7f9fc;border:1px solid #ced9e8;border-radius:10px;padding:18px;margin:16px 0;overflow-wrap:anywhere}figure{margin:20px 0}.arrow{text-align:center;font-weight:700;color:#314c72}.node strong{display:block}.muted,figcaption{color:#4c607a;font-size:.9em}.note{border-left:4px solid #416fa8;padding:12px 16px;background:#eef5ff}pre{max-width:100%;overflow-x:auto;background:#102138;color:#eff6ff;padding:18px;border-radius:9px;font:14px/1.7 ui-monospace,monospace;tab-size:4}code{overflow-wrap:anywhere}pre code{overflow-wrap:normal}details{margin:16px 0}summary{cursor:pointer;padding:10px;border:1px solid #cbd6e5;border-radius:6px;font-weight:600}button{font:inherit;font-size:15px;background:#eaf2ff;color:#153b70;border:1px solid #9ab0d0;border-radius:7px;padding:6px 14px;cursor:pointer}a:focus-visible,button:focus-visible,summary:focus-visible,input:focus-visible{outline:3px solid #dc7900;outline-offset:3px}.file-label{overflow-wrap:anywhere}.checks label{display:flex;gap:12px;margin:16px 0}.checks input{width:22px;height:22px;flex-shrink:0;margin-top:5px}.progress{height:14px;border-radius:9px;background:#dce5f0;overflow:hidden}#fill{height:100%;width:0;background:#2467b1}footer{text-align:center;margin:32px 0}.meta{font-size:.9em}li{margin:8px 0}section:target{scroll-margin-top:18px}@media(max-width:600px){main{padding:12px 10px 36px}section,nav{padding:22px 16px}header{padding:24px 18px}h1{font-size:1.5em}pre{padding:12px;font-size:13px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}</style></head><body><main><header><div>DAY 05 / 56 · 第 1 周 · 图解设计与测试先行</div><h1>执行事件与唯一终态</h1><p>今天实现同步执行事件，让宿主能观察读取过程的顺序、耗时和结束状态。</p><p class="meta">官方阅读 20 分钟 · 编码 80 分钟 · 测试复盘 20 分钟</p></header><nav aria-label="本页学习路线"><a href="#goal">① 问题</a><a href="#concepts">② 图解</a><a href="#design">③ 设计</a><a href="#contract">④ 契约</a><a href="#skeleton">⑤ 骨架</a><a href="#tests">⑥ 测试</a><a href="#tasks">⑦ 实现</a><a href="#review">⑧ 验收</a></nav><section id="goal"><h2>今天只解决什么</h2><p>今天实现同步执行事件，让宿主能观察读取过程的顺序、耗时和结束状态。</p><p>Run 只返回最后文本，无法判断时间花在模型还是工具。到处打印原始参数既难以验证顺序，也会让正文混进运行日志。</p><div class="note">只发布内存同步事件；不实现日志平台、追踪持久化、实时查询、重入或异常隔离。共享 Sink 的串行保护放到 Day06。</div></section><section id="concepts"><h2>先解释概念，再看一次具体运行</h2><article><h3>事件</h3><p><strong>是什么：</strong>对已经发生的阶段作简短记录。</p><p><strong>为什么需要：</strong>tool_completed 说明 read-1 返回，不携带正文。</p><p><strong>落到代码：</strong>Event 包含类型、轮次、时间和状态。</p></article><article><h3>接收器</h3><p><strong>是什么：</strong>由宿主提供的观察目标。</p><p><strong>为什么需要：</strong>测试把事件记到切片中检查顺序。</p><p><strong>落到代码：</strong>EventSink.Emit(ctx,event) 同步调用。</p></article><article><h3>唯一终态</h3><p><strong>是什么：</strong>每次 Run 最后只发布一次结束或失败。</p><p><strong>为什么需要：</strong>超时只产生 run_failed，不再发 run_finished。</p><p><strong>落到代码：</strong>Run 的 defer 根据命名返回错误选择事件。</p></article><figure aria-label="图 1 · 职责关系（装配与依赖）"><h3>图 1 · 职责关系（装配与依赖）</h3><div class="node"><strong>Run</strong>控制模型与工具，生成阶段摘要。</div><div class="arrow">↓ ctx / Event</div><div class="node"><strong>EventSink</strong>同步接收摘要，调用方等待它返回。</div><div class="arrow">↓ 测试切片或宿主存储</div><div class="node"><strong>观察者</strong>检查顺序、标识、状态与耗时。</div><figcaption>文字等价说明：按从上到下顺序阅读；框内说明职责或状态，箭头标明传递的数据。</figcaption></figure><figure aria-label="图 2 · 编号运行过程"><h3>图 2 · 编号运行过程</h3><div class="node"><strong>① 开始</strong>run_started → step_started(1)。</div><div class="arrow">↓ 第1轮摘要</div><div class="node"><strong>② 请求工具</strong>model_completed(1) → tool_started(read-1) → tool_completed(read-1)。</div><div class="arrow">↓ 第2轮摘要</div><div class="node"><strong>③ 形成回答</strong>step_started(2) → model_completed(2)。</div><div class="arrow">↓ 最终状态</div><div class="node"><strong>④ 唯一结束</strong>run_finished(step=2,status=ok)。</div><figcaption>文字等价说明：按从上到下顺序阅读；框内说明职责或状态，箭头标明传递的数据。</figcaption></figure><h3>失败反例</h3><p>模型报错时记录 model_completed(status=error) 后发布唯一 run_failed。Run 预先取消仍发 started/failed，但不发 step_started，也不调用模型。</p></section><section id="design"><h2>为什么这样设计</h2><article><h3>EventType / 常量</h3><p><strong>职责与字段/参数：</strong>run_started、step_started、model_completed、tool_started、tool_completed、run_finished、run_failed 是稳定字符串。支持文件中预留 tool_authorized/tool_denied 供后续课程，今天不发布。</p><p><strong>返回与失败：</strong>事件顺序见运行图；只有实际开始的调用才有 completed。nil 响应视为模型错误，非 assistant 由 Loop 检查后失败。</p><p><strong>状态、所有权与取消：</strong>常量无状态，不承诺真实模型语义正确。</p><p><strong>设计理由：</strong>用稳定常量替代散落文本。</p></article><article><h3>Event</h3><p><strong>职责与字段/参数：</strong>Type 为阶段；Step 是从1开始的模型轮次，run_started 为0；At 由 emit 写当前时间；Duration 是 time.Duration，完成/终态非负，started 默认0。</p><p><strong>返回与失败：</strong>ToolName/ToolCallID 仅工具事件有值；Status 为 ok/error/cancelled。PrincipalID 是后续授权预留，本日空。事件不含 Prompt、参数、正文、原错误。</p><p><strong>状态、所有权与取消：</strong>Event 按值传递；终态步数为最后实际轮次，预算耗尽时为 maxSteps。时间仅观测，不断言固定耗时。</p><p><strong>设计理由：</strong>分离运行信息与业务内容，降低意外泄露。</p></article><article><h3>EventSink.Emit / WithEventSink</h3><p><strong>职责与字段/参数：</strong>Emit(ctx,Event) 不返回错误；WithEventSink(s) 返回构造选项，s=nil 禁用观察。emit 为事件填 At 后同步转发。</p><p><strong>返回与失败：</strong>Sink 返回才继续业务；不吞 panic、不重试、不保证持久保存。</p><p><strong>状态、所有权与取消：</strong>取消时仍把原 ctx 交给 Sink，以便记录终态；Sink 应快速返回、不重入同一 Agent。今天不承诺并发安全。</p><p><strong>设计理由：</strong>简单接口便于 fake；同步的代价是观察者会影响延迟。</p></article><article><h3>Run / status</h3><p><strong>职责与字段/参数：</strong>Run 使用命名返回值，让 defer 依据 runErr 只发布一个终态。status 通过 errors.Is 区分取消/超时，其他错误为 error，nil 为 ok。</p><p><strong>返回与失败：</strong>普通回答输出不变；失败仍保留原错误；started 以后所有普通返回路径都有一个终态，panic 不在契约范围。</p><p><strong>状态、所有权与取消：</strong>复用 Day04 的 context、超时和计时器释放。sink=nil 时不改变执行结果。</p><p><strong>设计理由：</strong>统一收口，避免每个错误出口重复发终态。</p></article></section><section id="contract"><h2>行为契约：不用读答案也知道怎么写</h2><p>按编号实现；未规定的错误文本不需逐字匹配。依赖错误用 errors.Is/As 判断，不以私有字段或某种容器为验收目标。</p><article><h3>R1 · 完整事件顺序与标识</h3><p>两轮读取产生8个确定事件；工具事件轮次1、名称 get_document、ID read-1；所有时间非零、耗时非负、成功状态 ok，终态 step=2。</p><p>对应完整测试：<code>TestDay05Sequence</code></p></article><article><h3>R2 · 失败、取消与禁用</h3><p>模型错误、nil 响应、预先取消均只有一个失败终态；取消不调用模型，状态为 cancelled；nil Sink 时正常返回。工具错误、超时、预算耗尽均保留原因链，工具 completed 与唯一失败终态状态正确。</p><p>对应完整测试：<code>TestDay05Terminal / TestDay05ToolFailuresAndBudget</code></p></article></section><section id="read"><h2>官方阅读 · 20 分钟</h2><article><h3>10 分钟 · <a href="https://github.com/cloudwego/eino/blob/main/adk/interface.go">Eino · AgentEvent</a></h3><p>找出事件承载的运行信息，列出本课刻意不传递的业务内容。</p></article><article><h3>10 分钟 · <a href="https://go.dev/blog/defer-panic-and-recover">Go · defer 与命名返回值</a></h3><p>解释 defer 读取错误时机，写一条“为什么只有一个终态”的不变量。</p></article><p class="muted">阅读产出是职责映射和问题答案，不要求照搬 Eino 接口。链接供源码对照；正文、图和练习代码均离线可读。远端 main 会变化，阅读时记录 commit；本次已核对 Eino 的5个源码路径及符号（2026-11-10）；BaseChatModel、Runner、AgentEvent、Handler 在当前源码中是兼容别名，阅读时继续定位其底层泛型或内部接口。</p></section><section id="continuity"><h2>承接前序设计与本日增量</h2><p>复用 Day04 Option 与生命周期。新增 Event/EventSink/WithEventSink，Run 只增加观察点；旧 New/Run 调用不变。完整 options.go 保留已实现的超时选项。</p><p>旧讲义若使用字符串事件或另一组常量，统一映射本页 EventRunStarted 等常量；Status 保持 string。保留现有事件消费者并更新其常量引用；不把事件当消息传给模型。</p><p><strong>练习环境：</strong>Go ≥ 1.22.2、Python ≥ 3.9；命令从同一仓库根执行。练习目标是 internal/cmd，累计参考位于 examples；两套 model 类型不可混用。</p><pre><code>python3 docs/learning/exercises/prepare.py 05</code></pre><p>在原仓库根执行上面命令，进入脚本打印的新副本绝对路径。脚本只在仓库外创建副本，并按日序提供前序已完成依赖与本日 TODO；不改你现有的 internal/cmd。没有新增每日 Module。</p><details><summary>已有实现或希望手工应用时</summary><p>已实现的方法可以保留，只应用本页测试；不必挖空重做。手工应用先备份，依次复用前序文件、本页支持文件、目标方法与测试；已有同名定义先比较，只替换需改的方法，保留其他内容。前序完整文件可由上一页取得，明确文件索引见下表。</p><ul><li>复用 <a href="exercises/day05/support/internal/agent/agent.go.txt">internal/agent/agent.go</a></li><li>复用 <a href="exercises/day01/tests/internal/agent/day01_contract_test.go.txt">internal/agent/day01_contract_test.go</a></li><li>复用 <a href="exercises/day03/tests/internal/agent/day03_contract_test.go.txt">internal/agent/day03_contract_test.go</a></li><li>复用 <a href="exercises/day04/tests/internal/agent/day04_contract_test.go.txt">internal/agent/day04_contract_test.go</a></li><li>复用 <a href="exercises/day04/support/internal/agent/new.go.txt">internal/agent/new.go</a></li><li>复用 <a href="exercises/day01/tests/internal/model/day01_contract_test.go.txt">internal/model/day01_contract_test.go</a></li><li>复用 <a href="exercises/day01/reference/internal/model/mock.go.txt">internal/model/mock.go</a></li><li>复用 <a href="exercises/day02/support/internal/model/model.go.txt">internal/model/model.go</a></li><li>复用 <a href="exercises/day02/reference/internal/model/openai/adapter.go.txt">internal/model/openai/adapter.go</a></li><li>复用 <a href="exercises/day03/reference/internal/model/openai/binding.go.txt">internal/model/openai/binding.go</a></li><li>复用 <a href="exercises/day02/reference/internal/model/openai/convert.go.txt">internal/model/openai/convert.go</a></li><li>复用 <a href="exercises/day02/tests/internal/model/openai/day02_contract_test.go.txt">internal/model/openai/day02_contract_test.go</a></li><li>复用 <a href="exercises/day03/tests/internal/model/openai/day03_contract_test.go.txt">internal/model/openai/day03_contract_test.go</a></li><li>复用 <a href="exercises/day03/support/internal/tool/tool.go.txt">internal/tool/tool.go</a></li></ul><p>这些是前序实现或本日支持依赖，不是另一套协议；若与你当前版本有冲突，先用隔离副本，不覆盖已有文件。</p></details><h3 class="file-label">前置支持文件：internal/agent/agent.go</h3><a href="exercises/day05/support/internal/agent/agent.go.txt" download="agent.go">下载完整文件</a><details class="code-file" data-kind="support" data-source="day05/support/internal/agent/agent.go.txt"><summary>展开完整文件 agent.go</summary><pre id="d5-support-internal-agent-agent-go"><code>package agent
 
-<section><h2>今日目标与交付</h2>
-<div class="goal">在已有 Model → Tool → Model 执行闭环上，建立<strong>可测试的 Agent 生命周期事件接口</strong>。事件发布先采用同步回调，不引入 SSE、Channel 或持久化。<strong>先通过 Day 04 生命周期门禁</strong>，再实现最小 Event Sink；如果前置问题未解决，今天以修复和回归测试作为实际交付。</div>
-<div class="grid" style="margin-top:16px"><div><strong>1</strong><span>最小 EventSink 抽象</span></div><div><strong>7</strong><span>建议的执行事件类型</span></div><div><strong>6+</strong><span>事件顺序与异常测试</span></div></div>
-<p class="note"><strong>基于 2026-10-23 的 main 分支静态检查：</strong><code>internal/agent/agent.go</code> 仍在 Run 中修改共享 <code>a.model</code>，没有检查 nil Response，也没有独立的工具超时控制；<code>internal/model/model.go</code> 中 <code>FinishToolCalls</code> 仍拼写为 <code>too_calls</code>。当前仓库的 <code>docs/design.md</code> 为空。这些不等于测试已失败，但说明 Day 04 的完成定义尚未得到代码验证。今天优先修复，不能把 HTML 计划存在视为编码完成。</p>
-<div class="flow"><span>Agent.Run</span><b>→</b><span>RunStarted</span><b>→</b><span>StepStarted / ModelCompleted</span><b>→</b><span>ToolStarted / ToolCompleted</span><b>→</b><span>RunFinished 或 RunFailed</span></div>
-</section>
+import (
+	&quot;errors&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool&quot;
+	&quot;time&quot;
+)
 
-<section><div class="time">20 MIN · READ</div><h2>源码与官方文档阅读</h2>
-<h3>10 分钟 · Eino ADK 的事件抽象</h3>
-<p>打开 <a href="https://github.com/cloudwego/eino/blob/main/adk/interface.go" target="_blank" rel="noopener noreferrer">Eino ADK / adk/interface.go</a>，查找 <code>TypedAgentEvent</code>、<code>TypedAgentOutput</code>、<code>TypedAgent.Run</code>，观察事件中 Output、Action、Err 的区分，以及 Runner 如何通过 Iterator 暴露运行过程。对照 <a href="https://github.com/cloudwego/eino-ext/blob/main/skills/eino-agent/reference/runner-and-events.md" target="_blank" rel="noopener noreferrer">Eino Runner &amp; Events 参考</a>。</p>
-<p><strong>阅读问题：</strong>为什么事件不是简单的日志字符串？为什么消费者不应该直接修改 Runtime 内部消息切片？</p>
-<h3>10 分钟 · LangGraph Streaming</h3>
-<p>阅读 <a href="https://docs.langchain.com/oss/python/langgraph/streaming" target="_blank" rel="noopener noreferrer">LangGraph 官方 Streaming 文档</a>，只看 <code>updates</code>、<code>messages</code>、<code>custom</code> 的区别。注意今天的事件是“执行状态事件”，<strong>不是 LLM Token Streaming</strong>。</p>
-<p><strong>阅读产出：</strong>在 <code>docs/design.md</code> 记录事件与状态快照的边界。对照 <a href="https://docs.temporal.io/encyclopedia/event-history" target="_blank" rel="noopener noreferrer">Temporal Event History 官方文档</a>，补一句：今天的内存事件流不是可重放的 Durable Event History。</p>
-</section>
+var ErrMaxSteps = errors.New(&quot;agent: max steps exceeded&quot;)
 
-<section><div class="time">80 MIN · BUILD</div><h2>Go 编码任务（时间盒推进）</h2>
-<h3>任务 A · 30 分钟：先补齐 Day 04 生命周期门禁</h3>
-<p><span class="tag">internal/model/model.go</span><span class="tag">internal/agent/agent.go</span><span class="tag">internal/agent/agent_test.go</span></p>
-<table><thead><tr><th>修复点</th><th>验收要求</th></tr></thead><tbody>
-<tr><td><code>FinishToolCalls</code></td><td>常量修正为 <code>"tool_calls"</code>，现有协议测试不回归。</td></tr>
-<tr><td><code>maxSteps &lt;= 0</code></td><td>运行前返回配置错误，不进入模型调用；保留当前 <code>New(...)*Agent</code> API 时可在 Run 入口校验。</td></tr>
-<tr><td>nil Response</td><td>模型返回 <code>nil, nil</code> 时不 panic，返回明确错误。</td></tr>
-<tr><td>取消与工具超时</td><td>每个 ToolCall 前检查父 <code>ctx.Err()</code>；超时用子 Context，调用后立即 <code>cancel()</code>；<code>errors.Is</code> 能判断取消/超时。</td></tr>
-<tr><td>共享模型修改</td><td>不要在 <code>Run</code> 内写 <code>a.model = bound</code>；使用局部 <code>runModel</code> 或在构造阶段完成不可变绑定，避免多个 Run 的数据竞争。</td></tr>
-</tbody></table>
-<p class="note"><strong>进度门禁：</strong>如果上述 30 分钟未能补齐，请将剩余编码时间用于完成 Day 04 的修复及测试，今天的 Event Sink 推迟到下一次学习。不要为了“完成 Day 05”同时留下已知 Runtime 缺陷。</p>
-<h3>任务 B · 15 分钟：定义 Event 与 EventSink</h3>
-<p><span class="tag">internal/agent/event.go（新增）</span>事件只携带可安全观察的元数据：类型、步数、时间、工具名称、ToolCall ID、耗时和分类状态。不要直接放入完整 Prompt、工具参数、工具返回值或 API Key。</p>
-<pre><code>// internal/agent/event.go —— 仅给出建议结构，具体常量自行定义
-type EventType string // RunStarted、StepStarted、ModelCompleted、
-// ToolStarted、ToolCompleted、RunFinished、RunFailed
+type Agent struct {
+	model       model.Model
+	tools       map[string]tool.Tool
+	maxSteps    int
+	toolTimeout time.Duration
+	sink        EventSink
+}
+</code></pre><button type="button" data-copy="d5-support-internal-agent-agent-go">复制本文件</button><span role="status" aria-live="polite"></span></details></section><section id="skeleton"><h2>可以直接编译的骨架</h2><p>下列均为新增或本日修改文件的完整可复制版本。package、import、签名齐全；只把 TODO 方法体补齐。已有实现按上节方法名做增量修改，不整包覆盖。</p><h3 class="file-label">待实现骨架：internal/agent/run.go</h3><a href="exercises/day05/skeleton/internal/agent/run.go.txt" download="run.go">下载完整文件</a><details class="code-file" data-kind="skeleton" data-source="day05/skeleton/internal/agent/run.go.txt"><summary>展开完整文件 run.go</summary><pre id="d5-skeleton-internal-agent-run-go"><code>package agent
+
+import (
+	&quot;context&quot;
+	&quot;errors&quot;
+)
+
+func (a *Agent) Run(ctx context.Context, input string) (output string, runErr error) {
+	panic(&quot;TODO: Run&quot;)
+}
+
+func status(e error) string {
+	if errors.Is(e, context.Canceled) || errors.Is(e, context.DeadlineExceeded) {
+		return &quot;cancelled&quot;
+	}
+	if e != nil {
+		return &quot;error&quot;
+	}
+	return &quot;ok&quot;
+}
+</code></pre><button type="button" data-copy="d5-skeleton-internal-agent-run-go">复制本文件</button><span role="status" aria-live="polite"></span></details><h3 class="file-label">待实现骨架：internal/agent/event.go</h3><a href="exercises/day05/skeleton/internal/agent/event.go.txt" download="event.go">下载完整文件</a><details class="code-file" data-kind="skeleton" data-source="day05/skeleton/internal/agent/event.go.txt"><summary>展开完整文件 event.go</summary><pre id="d5-skeleton-internal-agent-event-go"><code>package agent
+
+import (
+	&quot;context&quot;
+	&quot;time&quot;
+)
+
+type EventType string
+
+const (
+	EventRunStarted     EventType = &quot;run_started&quot;
+	EventStepStarted    EventType = &quot;step_started&quot;
+	EventModelCompleted EventType = &quot;model_completed&quot;
+	EventToolStarted    EventType = &quot;tool_started&quot;
+	EventToolAuthorized EventType = &quot;tool_authorized&quot;
+	EventToolDenied     EventType = &quot;tool_denied&quot;
+	EventToolCompleted  EventType = &quot;tool_completed&quot;
+	EventRunFinished    EventType = &quot;run_finished&quot;
+	EventRunFailed      EventType = &quot;run_failed&quot;
+)
 
 type Event struct {
-    Type       EventType     // 事件类型
-    Step       int           // 当前模型调用轮数，从 1 开始
-    At         time.Time     // 事件产生时刻
-    ToolName   string        // 工具名称，非工具事件可为空
-    ToolCallID string        // 与消息历史中的 ToolCall.ID 对齐
-    Duration   time.Duration // 模型或工具执行耗时
-    Status     string        // ok、error、cancelled 等非敏感状态
+	Type        EventType
+	Step        int
+	At          time.Time
+	ToolName    string
+	ToolCallID  string
+	PrincipalID string // trusted opaque ID on authorization decision events only
+	Duration    time.Duration
+	Status      string
+}
+type EventSink interface{ Emit(context.Context, Event) }
+
+func (a *Agent) emit(ctx context.Context, e Event) { panic(&quot;TODO: emit&quot;) }
+</code></pre><button type="button" data-copy="d5-skeleton-internal-agent-event-go">复制本文件</button><span role="status" aria-live="polite"></span></details><h3 class="file-label">待实现骨架：internal/agent/options.go</h3><a href="exercises/day05/skeleton/internal/agent/options.go.txt" download="options.go">下载完整文件</a><details class="code-file" data-kind="skeleton" data-source="day05/skeleton/internal/agent/options.go.txt"><summary>展开完整文件 options.go</summary><pre id="d5-skeleton-internal-agent-options-go"><code>package agent
+
+import &quot;time&quot;
+
+type Option func(*Agent)
+
+func WithToolTimeout(d time.Duration) Option { return func(a *Agent) { a.toolTimeout = d } }
+
+func WithEventSink(s EventSink) Option { panic(&quot;TODO: WithEventSink&quot;) }
+</code></pre><button type="button" data-copy="d5-skeleton-internal-agent-options-go">复制本文件</button><span role="status" aria-live="polite"></span></details></section><section id="tests"><h2>完整测试：先红，再逐步变绿</h2><p>测试文件包含本日需要的全部断言。每个本日测试文件都包含自己的 fake 与 fixture；同包前序测试继续累计执行，夹具命名按日隔离。原样测试始终导入副本 internal，不导入已完成的 examples。</p><h3 class="file-label">完整测试：internal/agent/day05_contract_test.go</h3><a href="exercises/day05/tests/internal/agent/day05_contract_test.go.txt" download="day05_contract_test.go">下载完整文件</a><details class="code-file" data-kind="tests" data-source="day05/tests/internal/agent/day05_contract_test.go.txt"><summary>展开完整文件 day05_contract_test.go</summary><pre id="d5-tests-internal-agent-day05-contract-test-go"><code>package agent_test
+
+import (
+	&quot;context&quot;
+	&quot;encoding/json&quot;
+	&quot;errors&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/agent&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool&quot;
+	&quot;reflect&quot;
+	&quot;testing&quot;
+	&quot;time&quot;
+)
+
+type events struct{ all []agent.Event }
+
+func (s *events) Emit(_ context.Context, e agent.Event) { s.all = append(s.all, e) }
+
+type day05Model func(context.Context, []model.Message) (*model.Response, error)
+
+func (f day05Model) Generate(c context.Context, m []model.Message) (*model.Response, error) {
+	return f(c, m)
 }
 
-type EventSink interface {
-    Emit(ctx context.Context, e Event) // 同步发布，先不引入异步队列
-}</code></pre>
-<p>建议在 <code>internal/agent/options.go</code> 提供 <code>WithEventSink(sink EventSink)</code>，通过 <code>New(..., opts ...Option)</code> 保持原有构造调用兼容。也可以增加 <code>NewWithOptions</code>，但不要破坏 Day 01～04 的测试。</p>
-<h3>任务 C · 25 分钟：在 Agent Loop 中注入事件</h3>
-<p><span class="tag">internal/agent/agent.go</span><span class="tag">internal/agent/event_test.go</span></p>
-<p>从 <code>Run</code> 开始发出 <code>RunStarted</code>；每轮调用模型前发 <code>StepStarted</code>，成功返回后发 <code>ModelCompleted</code>；每个工具执行前后分别发 <code>ToolStarted</code> 和 <code>ToolCompleted</code>；最终只发一个 <code>RunFinished</code> 或 <code>RunFailed</code>。建议使用命名返回值与 <code>defer</code> 集中处理终态事件，避免每个错误分支重复发布。</p>
-<pre><code>// 建议辅助方法：sink 为 nil 时不产生事件
+type day05Tool struct {
+	f func(context.Context, json.RawMessage) (string, error)
+}
+
+func (day05Tool) Name() string                                                   { return &quot;get_document&quot; }
+func (f day05Tool) Execute(c context.Context, a json.RawMessage) (string, error) { return f.f(c, a) }
+func day05Answer(s string) *model.Response {
+	return &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, Content: s}}
+}
+func day05Request() *model.Response {
+	return &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, ToolCalls: []model.ToolCall{{ID: &quot;read-1&quot;, Name: &quot;get_document&quot;, Arguments: json.RawMessage(`{&quot;id&quot;:&quot;doc-1&quot;}`)}}}}
+}
+func day05Must(t *testing.T, m model.Model, tools map[string]tool.Tool, n int) *agent.Agent {
+	t.Helper()
+	a, e := agent.New(m, tools, n)
+	if e != nil {
+		t.Fatal(e)
+	}
+	return a
+}
+
+func TestDay05Sequence(t *testing.T) {
+	s := &amp;events{}
+	round := 0
+	m := day05Model(func(context.Context, []model.Message) (*model.Response, error) {
+		round++
+		if round == 1 {
+			return day05Request(), nil
+		}
+		return day05Answer(&quot;已读取&quot;), nil
+	})
+	a, e := agent.New(m, map[string]tool.Tool{&quot;get_document&quot;: day05Tool{func(context.Context, json.RawMessage) (string, error) { return &quot;正文&quot;, nil }}}, 2, agent.WithEventSink(s))
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = a.Run(context.Background(), &quot;读取 doc-1&quot;); e != nil {
+		t.Fatal(e)
+	}
+	want := []agent.EventType{agent.EventRunStarted, agent.EventStepStarted, agent.EventModelCompleted, agent.EventToolStarted, agent.EventToolCompleted, agent.EventStepStarted, agent.EventModelCompleted, agent.EventRunFinished}
+	var got []agent.EventType
+	for _, ev := range s.all {
+		got = append(got, ev.Type)
+		if ev.At.IsZero() || ev.Duration &lt; 0 || ev.Status != &quot;ok&quot; {
+			t.Fatal(ev)
+		}
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatal(got)
+	}
+	for _, i := range []int{3, 4} {
+		ev := s.all[i]
+		if ev.Step != 1 || ev.ToolName != &quot;get_document&quot; || ev.ToolCallID != &quot;read-1&quot; {
+			t.Fatal(ev)
+		}
+	}
+	if s.all[len(s.all)-1].Step != 2 {
+		t.Fatal(&quot;terminal step&quot;)
+	}
+}
+func TestDay05Terminal(t *testing.T) {
+	sentinel := errors.New(&quot;provider&quot;)
+	for _, tc := range []struct {
+		name   string
+		m      day05Model
+		cancel bool
+		want   string
+	}{
+		{&quot;error&quot;, func(context.Context, []model.Message) (*model.Response, error) { return nil, sentinel }, false, &quot;error&quot;},
+		{&quot;nil&quot;, func(context.Context, []model.Message) (*model.Response, error) { return nil, nil }, false, &quot;error&quot;},
+		{&quot;cancelled&quot;, func(context.Context, []model.Message) (*model.Response, error) {
+			t.Fatal(&quot;day05Must not call&quot;)
+			return nil, nil
+		}, true, &quot;cancelled&quot;},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &amp;events{}
+			a, e := agent.New(tc.m, nil, 1, agent.WithEventSink(s))
+			if e != nil {
+				t.Fatal(e)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if tc.cancel {
+				cancel()
+			}
+			if _, e = a.Run(ctx, &quot;secret prompt&quot;); e == nil {
+				t.Fatal(&quot;want failure&quot;)
+			}
+			n := 0
+			for _, v := range s.all {
+				if v.Type == agent.EventRunFinished || v.Type == agent.EventRunFailed {
+					n++
+					if v.Type != agent.EventRunFailed || v.Status != tc.want {
+						t.Fatal(v)
+					}
+				}
+			}
+			if n != 1 {
+				t.Fatal(s.all)
+			}
+		})
+	}
+	// A nil sink disables observation without changing results.
+	a, e := agent.New(day05Model(func(context.Context, []model.Message) (*model.Response, error) { return day05Answer(&quot;ok&quot;), nil }), nil, 1, agent.WithEventSink(nil))
+	if e != nil {
+		t.Fatal(e)
+	}
+	if s, e := a.Run(context.Background(), &quot;&quot;); e != nil || s != &quot;ok&quot; {
+		t.Fatal(s, e)
+	}
+}
+
+func TestDay05ToolFailuresAndBudget(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		status  string
+		timeout bool
+		max     int
+		want    error
+	}{
+		{&quot;tool_error&quot;, &quot;error&quot;, false, 2, errors.New(&quot;tool failure&quot;)},
+		{&quot;timeout&quot;, &quot;cancelled&quot;, true, 2, context.DeadlineExceeded},
+		{&quot;budget&quot;, &quot;error&quot;, false, 1, agent.ErrMaxSteps},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := &amp;events{}
+			m := day05Model(func(context.Context, []model.Message) (*model.Response, error) { return day05Request(), nil })
+			r := day05Tool{func(c context.Context, _ json.RawMessage) (string, error) {
+				if tc.timeout {
+					&lt;-c.Done()
+					return &quot;late&quot;, nil
+				}
+				if tc.name == &quot;tool_error&quot; {
+					return &quot;&quot;, tc.want
+				}
+				return &quot;正文&quot;, nil
+			}}
+			a, e := agent.New(m, map[string]tool.Tool{&quot;get_document&quot;: r}, tc.max, agent.WithEventSink(s), agent.WithToolTimeout(func() time.Duration {
+				if tc.timeout {
+					return time.Nanosecond
+				}
+				return 0
+			}()))
+			if e != nil {
+				t.Fatal(e)
+			}
+			_, e = a.Run(context.Background(), &quot;读取 doc-1&quot;)
+			if !errors.Is(e, tc.want) {
+				t.Fatal(e)
+			}
+			completed, terminal := 0, 0
+			for _, ev := range s.all {
+				if ev.Type == agent.EventToolCompleted {
+					completed++
+					want := &quot;ok&quot;
+					if tc.name != &quot;budget&quot; {
+						want = tc.status
+					}
+					if ev.Status != want {
+						t.Fatal(ev)
+					}
+				}
+				if ev.Type == agent.EventRunFailed || ev.Type == agent.EventRunFinished {
+					terminal++
+					if ev.Type != agent.EventRunFailed || ev.Status != tc.status {
+						t.Fatal(ev)
+					}
+				}
+			}
+			if completed != 1 || terminal != 1 {
+				t.Fatal(s.all)
+			}
+		})
+	}
+}
+</code></pre><button type="button" data-copy="d5-tests-internal-agent-day05-contract-test-go">复制本文件</button><span role="status" aria-live="polite"></span></details><pre><code>go test ./internal/agent -run &#x27;^$&#x27;
+go test ./internal/agent -run &#x27;^TestDay05&#x27; -count=1 -v</code></pre><p><strong>预期：</strong>第一条退出码0，只证明能编译；第二条实际执行目标测试，并在 TODO 处失败。找不到包、语法错误和 no tests to run 都不算行为红灯。已有实现若直接全绿，可保留并继续复盘。</p></section><section id="tasks"><h2>一次只完成一步 · 编码 80 分钟</h2><article><h3>1 · 15 分钟 · 接上观察目标</h3><p><strong>目标：</strong>接上观察目标，让本步对应契约先获得可观察证据。</p><p><strong>位置：</strong>internal/agent/options.go · WithEventSink；event.go · emit，新增。</p><p><strong>输入 → 输出与动作：</strong>传 s → 保存；Event → 写 At → 同步 Emit；nil → 无操作。 依赖职责按前述设计保留，本步不改测试迎合实现。</p><p><strong>验证：</strong>在练习副本根执行，匹配 TestDay05Terminal。</p><pre><code>go test ./internal/agent -run &#x27;^TestDay05Terminal$&#x27; -count=1 -v</code></pre><p><strong>完成证据与下一步：</strong>nil Sink 分支不会影响正常输出。 继续下一张任务卡。</p><details><summary>卡住时再看提示</summary><p>At 的来源统一放在 emit，不让各调用点漏填。</p></details></article><article><h3>2 · 25 分钟 · 发出唯一终态</h3><p><strong>目标：</strong>发出唯一终态，让本步对应契约先获得可观察证据。</p><p><strong>位置：</strong>internal/agent/run.go · Run，修改。</p><p><strong>输入 → 输出与动作：</strong>错误/取消 → run_started 和唯一 run_failed。 依赖职责按前述设计保留，本步不改测试迎合实现。</p><p><strong>验证：</strong>在练习副本根执行，匹配 TestDay05Terminal。</p><pre><code>go test ./internal/agent -run &#x27;^TestDay05Terminal$&#x27; -count=1 -v</code></pre><p><strong>完成证据与下一步：</strong>三个失败场景均只有一个终态。 继续下一张任务卡。</p><details><summary>卡住时再看提示</summary><p>defer 读取命名错误，正常 return 不要遮蔽最终错误。</p></details></article><article><h3>3 · 25 分钟 · 记录模型与工具</h3><p><strong>目标：</strong>记录模型与工具，让本步对应契约先获得可观察证据。</p><p><strong>位置：</strong>internal/agent/run.go · Run，修改。</p><p><strong>输入 → 输出与动作：</strong>read-1 两轮 → 图中8个事件。 依赖职责按前述设计保留，本步不改测试迎合实现。</p><p><strong>验证：</strong>在练习副本根执行，匹配 TestDay05Sequence。</p><pre><code>go test ./internal/agent -run &#x27;^TestDay05Sequence$&#x27; -count=1 -v</code></pre><p><strong>完成证据与下一步：</strong>顺序、工具关联、轮次和时间断言通过。 继续下一张任务卡。</p><details><summary>卡住时再看提示</summary><p>先明确一个调用何时算已开始，再放 completed。</p></details></article><article><h3>4 · 15 分钟 · 整理状态与回归</h3><p><strong>目标：</strong>整理状态与回归，让本步对应契约先获得可观察证据。</p><p><strong>位置：</strong>internal/agent/run.go · Run/status，修改；保留既有取消逻辑。</p><p><strong>输入 → 输出与动作：</strong>超时仍返回错误，不因观察成功变成业务成功。 依赖职责按前述设计保留，本步不改测试迎合实现。</p><p><strong>验证：</strong>在练习副本根执行，匹配 TestDay05Terminal。</p><pre><code>go test ./internal/agent -run &#x27;^TestDay05Terminal$&#x27; -count=1 -v</code></pre><p><strong>完成证据与下一步：</strong>目标及 Day01–04 回归通过。 然后进入20分钟测试复盘。</p><details><summary>卡住时再看提示</summary><p>只发错误分类，不发 err.Error 或正文。</p></details></article></section><section id="review"><h2>测试与复盘 · 20 分钟</h2><h3>12 分钟 · 红 → 绿 → 重构</h3><p>确认 Go 版本与前置文件后先编译、看红灯。补实现后按小步运行目标测试；全部通过后再整理重复逻辑，重跑同组测试和累计回归。</p><pre><code>go test ./internal/agent -run &#x27;^TestDay05&#x27; -count=1 -v
+go test -race ./internal/agent -run &#x27;^TestDay05&#x27; -count=1
+go test ./internal/...
+go test ./examples/...
+go test -race ./examples/...</code></pre><p>目标测试必须出现真实用例；examples 通过只说明参考基线可用。你的原实现未被本次发布修改或验证；本日隔离副本支持的累计范围到今天为止。</p><h3>8 分钟 · 合上代码回答</h3><ol><li>不看代码，沿两张图讲完“读取 doc-1”：谁产生请求、谁消费结果、失败停在哪里？</li><li>换成日志接收器只实现 EventSink；如果要求持久可靠交付，需要另行设计缓冲、失败策略与存储，不能把当前 Emit 等同于可靠队列。 请先自己指出改动层次与理由。</li><li>本页测试验证了哪些不变量？哪些真实 Provider 或外部副作用仍缺证据？</li></ol><h3>完成标准</h3><p><strong>实现验收：</strong>目标断言、目标包、race 与受影响累计回归通过，记录真实命令和结果；取消、错误、次数及状态符合本页编号契约。</p><p><strong>理解验收：</strong>独立解释数据流和设计代价，能对一个需求变化指出修改层次。勾选或测试全绿都不能代替这项。</p><h3>发布验证状态</h3><p data-validation>2026-11-10（Asia/Shanghai）· Go 1.22.2：本页原样骨架与完整测试编译通过；目标测试确实执行并在 TODO 处按预期失败。同一套测试换入兼容参考后通过（含 race）；第一周累计参考回归、当前 examples 普通/race 回归和 Day09–15 原有练习流程均通过。Chromium 离线 1280px / 390px 的布局、代码逐字一致、复制与回退、键盘折叠及清单持久化检查通过。你的原实现未修改、未验证；真实模型与网络后端未验证。</p><p><a href="exercises/README.md">交付范围、验证记录与复跑说明</a></p></section><section id="checklist"><h2>学习清单</h2><p>新版自评独立保存；不把旧版勾选自动算成新任务完成。</p><p id="count">0 / 7</p><div id="bar" class="progress" role="progressbar" aria-label="自评进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="fill"></div></div><div id="checks" class="checks"><label for="task-0"><input id="task-0" type="checkbox">解释今天需求与本日范围</label><label for="task-1"><input id="task-1" type="checkbox">根据两张图讲一次读取过程</label><label for="task-2"><input id="task-2" type="checkbox">完成20分钟官方阅读并写映射</label><label for="task-3"><input id="task-3" type="checkbox">确认原样骨架编译与目标红灯</label><label for="task-4"><input id="task-4" type="checkbox">按四步补齐实现并通过契约测试</label><label for="task-5"><input id="task-5" type="checkbox">完成race与累计回归</label><label for="task-6"><input id="task-6" type="checkbox">不看代码完成需求变化推演</label></div><noscript>JavaScript 未启用：仍可阅读、展开与手动复制；勾选不会保存。</noscript></section><section id="reference"><h2>最后再看参考答案</h2><p>先用契约实现，再自行选择展开。这里是同一套兼容参考，import 映射到练习 internal；与 examples 同源或按课程阶段裁剪，不修改测试断言、不换 Module。</p><h3 class="file-label">参考实现：internal/agent/run.go</h3><a href="exercises/day05/reference/internal/agent/run.go.txt" download="run.go">下载完整文件</a><details class="code-file" data-kind="reference" data-source="day05/reference/internal/agent/run.go.txt"><summary>展开完整文件 run.go</summary><pre id="d5-reference-internal-agent-run-go"><code>package agent
+
+import (
+	&quot;context&quot;
+	&quot;errors&quot;
+	&quot;fmt&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+	&quot;time&quot;
+)
+
+func (a *Agent) Run(ctx context.Context, input string) (output string, runErr error) {
+	started := time.Now()
+	step := 0
+	a.emit(ctx, Event{Type: EventRunStarted, Status: &quot;ok&quot;})
+	defer func() {
+		kind := EventRunFinished
+		if runErr != nil {
+			kind = EventRunFailed
+		}
+		a.emit(ctx, Event{Type: kind, Step: step, Duration: time.Since(started), Status: status(runErr)})
+	}()
+	messages := []model.Message{{Role: &quot;user&quot;, Content: input}}
+	for step = 1; step &lt;= a.maxSteps; step++ {
+		if e := ctx.Err(); e != nil {
+			return &quot;&quot;, e
+		}
+		a.emit(ctx, Event{Type: EventStepStarted, Step: step, Status: &quot;ok&quot;})
+		modelStart := time.Now()
+		r, e := a.model.Generate(ctx, messages)
+		if ctx.Err() != nil {
+			e = ctx.Err()
+		}
+		if e == nil &amp;&amp; r == nil {
+			e = fmt.Errorf(&quot;nil response&quot;)
+		}
+		a.emit(ctx, Event{Type: EventModelCompleted, Step: step, Duration: time.Since(modelStart), Status: status(e)})
+		if e != nil {
+			return &quot;&quot;, e
+		}
+		if r == nil || r.Message.Role != &quot;assistant&quot; {
+			return &quot;&quot;, fmt.Errorf(&quot;agent: invalid response&quot;)
+		}
+		messages = append(messages, r.Message)
+		if len(r.Message.ToolCalls) == 0 {
+			return r.Message.Content, nil
+		}
+		for _, call := range r.Message.ToolCalls {
+			if e := ctx.Err(); e != nil {
+				return &quot;&quot;, e
+			}
+			t, ok := a.tools[call.Name]
+			if !ok {
+				return &quot;&quot;, fmt.Errorf(&quot;agent: unknown tool&quot;)
+			}
+			tc := ctx
+			cancel := func() {}
+			if a.toolTimeout &gt; 0 {
+				tc, cancel = context.WithTimeout(ctx, a.toolTimeout)
+			}
+			start := time.Now()
+			ev := Event{Type: EventToolStarted, Step: step, ToolName: call.Name, ToolCallID: call.ID, Status: &quot;ok&quot;}
+			a.emit(ctx, ev)
+			out, e := t.Execute(tc, call.Arguments)
+			if tc.Err() != nil {
+				e = tc.Err()
+			}
+			cancel()
+			ev.Type = EventToolCompleted
+			ev.Duration = time.Since(start)
+			ev.Status = status(e)
+			a.emit(ctx, ev)
+			if e != nil {
+				return &quot;&quot;, e
+			}
+			messages = append(messages, model.Message{Role: &quot;tool&quot;, Content: out, ToolCallID: call.ID})
+		}
+	}
+	step = a.maxSteps
+	return &quot;&quot;, ErrMaxSteps
+}
+
+func status(e error) string {
+	if errors.Is(e, context.Canceled) || errors.Is(e, context.DeadlineExceeded) {
+		return &quot;cancelled&quot;
+	}
+	if e != nil {
+		return &quot;error&quot;
+	}
+	return &quot;ok&quot;
+}
+</code></pre><button type="button" data-copy="d5-reference-internal-agent-run-go">复制本文件</button><span role="status" aria-live="polite"></span></details><h3 class="file-label">参考实现：internal/agent/event.go</h3><a href="exercises/day05/reference/internal/agent/event.go.txt" download="event.go">下载完整文件</a><details class="code-file" data-kind="reference" data-source="day05/reference/internal/agent/event.go.txt"><summary>展开完整文件 event.go</summary><pre id="d5-reference-internal-agent-event-go"><code>package agent
+
+import (
+	&quot;context&quot;
+	&quot;time&quot;
+)
+
+type EventType string
+
+const (
+	EventRunStarted     EventType = &quot;run_started&quot;
+	EventStepStarted    EventType = &quot;step_started&quot;
+	EventModelCompleted EventType = &quot;model_completed&quot;
+	EventToolStarted    EventType = &quot;tool_started&quot;
+	EventToolAuthorized EventType = &quot;tool_authorized&quot;
+	EventToolDenied     EventType = &quot;tool_denied&quot;
+	EventToolCompleted  EventType = &quot;tool_completed&quot;
+	EventRunFinished    EventType = &quot;run_finished&quot;
+	EventRunFailed      EventType = &quot;run_failed&quot;
+)
+
+type Event struct {
+	Type        EventType
+	Step        int
+	At          time.Time
+	ToolName    string
+	ToolCallID  string
+	PrincipalID string // trusted opaque ID on authorization decision events only
+	Duration    time.Duration
+	Status      string
+}
+type EventSink interface{ Emit(context.Context, Event) }
+
 func (a *Agent) emit(ctx context.Context, e Event) {
-    if a.sink == nil {
-        return
-    }
-    a.sink.Emit(ctx, e)
+	if a.sink != nil {
+		e.At = time.Now()
+		a.sink.Emit(ctx, e)
+	}
 }
+</code></pre><button type="button" data-copy="d5-reference-internal-agent-event-go">复制本文件</button><span role="status" aria-live="polite"></span></details><h3 class="file-label">参考实现：internal/agent/options.go</h3><a href="exercises/day05/reference/internal/agent/options.go.txt" download="options.go">下载完整文件</a><details class="code-file" data-kind="reference" data-source="day05/reference/internal/agent/options.go.txt"><summary>展开完整文件 options.go</summary><pre id="d5-reference-internal-agent-options-go"><code>package agent
 
-// 在工具执行前：先检查 ctx.Err()，再发布 ToolStarted。
-// 工具错误若按现有策略回填给模型，发布 ToolCompleted(error)，
-// 不要错误地同时发布 RunFailed；只有 Run 真正返回错误才是 RunFailed。</code></pre>
-<p class="info"><strong>本日事件语义：</strong>回调在当前 Run goroutine 内同步执行，保证同一次 Run 的事件顺序；Sink 不能阻塞过久。共享 Sink 可能被多个 Run 并发调用，收集器需要互斥保护。教学阶段假设 Sink 是可信代码；Sink panic、背压、异步队列、丢弃策略和 SSE 留到后续迭代。</p>
-<h3>任务 D · 10 分钟：设计文档与演示</h3>
-<p><span class="tag">docs/design.md</span><span class="tag">cmd/demo/main.go（可选）</span>写下事件的顺序、终态唯一性、Sink 同步策略、隐私边界，以及与 LangGraph <code>updates</code>、Eino <code>AgentEvent</code> 的区别。可选：给 Demo 注入打印事件类型的 Sink，禁止输出消息原文。</p>
-</section>
+import &quot;time&quot;
 
-<section><div class="time">20 MIN · TEST &amp; REVIEW</div><h2>测试与验收</h2>
-<table><thead><tr><th>测试场景</th><th>断言</th></tr></thead><tbody>
-<tr><td>模型直接返回文本</td><td><code>RunStarted → StepStarted → ModelCompleted → RunFinished</code>；只出现一个终态事件。</td></tr>
-<tr><td>两轮模型 + 单工具</td><td>ToolStarted/ToolCompleted 成对出现，Step 顺序递增，ToolCallID 与工具消息一致。</td></tr>
-<tr><td>工具执行失败但错误回填</td><td>ToolCompleted 标记 error；如果模型随后正常结束，最终仍为 RunFinished。</td></tr>
-<tr><td>模型返回错误</td><td>RunFailed 恰好一次，不产生 RunFinished。</td></tr>
-<tr><td>Context 在工具前取消</td><td>后续工具不执行，返回 <code>context.Canceled</code>，终态为 RunFailed。</td></tr>
-<tr><td>nil Sink 与共享 Sink</td><td>nil Sink 不影响旧行为；共享收集器有 mutex，race 检查通过。</td></tr>
-<tr><td>回归门禁</td><td>Day 01～04 的 Mock、HTTP 双轮和超时测试全部通过。</td></tr>
-</tbody></table>
-<pre><code>gofmt -w internal/agent internal/model
-go test ./internal/agent/... -v
-go test ./...
-go test -race ./...
-git diff --check</code></pre>
-<h3>交互式任务清单</h3>
-<div class="meta"><span>勾选进度保存在当前浏览器 localStorage</span><span id="count">0 / 8</span></div>
-<div class="progress" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="bar"><div class="fill" id="fill"></div></div>
-<div id="checks"></div>
-<h3>复盘问题</h3>
-<ol><li>为什么事件观察（Event Sink）不能代替持久化状态（Checkpoint）？</li>
-<li>多个 Run 并发时，如何保持每个 Run 内部的事件顺序，又避免把不同 Run 的事件混淆？（可考虑未来增加 RunID）</li>
-<li>工具执行失败并被回填为 ToolResult，应该是 ToolCompleted(error) 还是 RunFailed？为什么？</li></ol>
-</section>
+type Option func(*Agent)
 
-<section><h2>完成定义与 Day 06 衔接</h2>
-<p><strong>Definition of Done：</strong>Day 04 生命周期门禁通过；EventSink 可选注入，不改变原有 Run 返回语义；至少覆盖正常结束、工具调用、工具错误回填、取消和模型失败的事件序列；终态事件恰好一次；<code>go test ./...</code> 与 <code>go test -race ./...</code> 通过；<code>docs/design.md</code> 记录关键设计，提交一次代码 Commit。若 Day 04 尚未补齐，今日完成定义改为“前置修复及回归测试通过”，不虚报事件系统已完成。</p>
-<p><strong>Day 06 预告：</strong>在已验证的 EventSink 上扩展可消费的运行事件（消费者生命周期、取消传播与背压的最小方案），为未来 SSE/Tracing 留接口；如果今天事件抽象未完成，Day 06 优先补齐。Day 07（周日）执行第一周集成与复盘。</p>
-<p class="muted">本日范围：内存同步事件回调。暂不实现 Token Streaming、HTTP SSE、事件持久化、MCP 或 Workflow Replay。</p>
-</section>
-<footer>Mini Agent Runtime · 8 周 / 56 天 · 离线 HTML · 官方链接需联网访问</footer>
-</main>
-<script>
-const items=["阅读 Eino ADK AgentEvent 与 LangGraph Streaming 官方资料，回答事件和持久化日志的区别","核对 Day 04 现有实现并修复 FinishToolCalls、maxSteps、nil Response 与取消检查","工具超时及错误链测试通过；避免 Run 修改共享 a.model","定义 EventType、Event 和 EventSink（不包含敏感原始消息）","Agent Run 注入事件发布，保证 Step/Tool/Run 的事件顺序","Tool 执行错误与 Run 终止错误有明确区分；取消时只产生一次终态事件","用 Mock 收集事件并验证顺序、关联 ID、异常路径和并发使用安全性","执行 go test ./...、go test -race ./...；更新 docs/design.md 并提交代码 Commit"];
-const storageKey="mini-agent-runtime-day-05-checklist-v1";
-let saved=[];
-try { const v=JSON.parse(localStorage.getItem(storageKey)||"[]"); if(Array.isArray(v)) saved=v; } catch (_) {}
-const box=document.getElementById("checks"), bar=document.getElementById("bar");
-function refresh(){
- let n=0; [...box.children].forEach((row,i)=>{const done=!!saved[i];row.classList.toggle("done",done);if(done)n++;});
- const p=Math.round(100*n/items.length);
- document.getElementById("count").textContent=n+" / "+items.length;
- document.getElementById("fill").style.width=p+"%";
- bar.setAttribute("aria-valuenow",String(p));
-}
-items.forEach((title,i)=>{
- const row=document.createElement("div");row.className="check";
- const cb=document.createElement("input");cb.type="checkbox";cb.id="day05-task-"+i;cb.checked=!!saved[i];
- const label=document.createElement("label");label.htmlFor=cb.id;label.textContent=title;
- row.append(cb,label);box.append(row);
- cb.addEventListener("change",()=>{saved[i]=cb.checked;try{localStorage.setItem(storageKey,JSON.stringify(saved))}catch(_){}refresh();});
-});
-refresh();
-</script>
-</body></html>
+func WithToolTimeout(d time.Duration) Option { return func(a *Agent) { a.toolTimeout = d } }
+
+func WithEventSink(s EventSink) Option { return func(a *Agent) { a.sink = s } }
+</code></pre><button type="button" data-copy="d5-reference-internal-agent-options-go">复制本文件</button><span role="status" aria-live="polite"></span></details></section><section><h2>接下来为什么学下一天</h2><p>今天看到了阶段和终态。明天多个 Agent 共用一个不安全接收器时，需要明确串行保护与取消时的观察承诺。</p><a href="agent-runtime-day-06.html">继续 Day 06</a> · <a href="agent-runtime-day-04.html">回看 Day 04</a></section><footer><a href="../../index.html">返回学习首页</a> · Day 05 / 56</footer></main><script>
+const key="mini-agent-runtime-day-05-tdd-v1";let saved=[];try{const v=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(v))saved=v}catch(_){}
+const inputs=[...document.querySelectorAll('#checks input')];function refresh(){const n=inputs.filter(x=>x.checked).length;document.getElementById('count').textContent=n+' / '+inputs.length;const p=Math.round(n/inputs.length*100);document.getElementById('fill').style.width=p+'%';document.getElementById('bar').setAttribute('aria-valuenow',p)}
+inputs.forEach((c,i)=>{c.checked=!!saved[i];c.addEventListener('change',()=>{saved=inputs.map(x=>x.checked);try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()})});refresh();
+document.querySelectorAll('button[data-copy]').forEach(b=>b.addEventListener('click',async()=>{const p=document.getElementById(b.dataset.copy);try{await navigator.clipboard.writeText(p.textContent);b.nextElementSibling.textContent=' 已复制'}catch(_){const r=document.createRange();r.selectNodeContents(p);const s=window.getSelection();s.removeAllRanges();s.addRange(r);b.nextElementSibling.textContent=' 已选中，请手动复制'}}));
+</script></body></html>

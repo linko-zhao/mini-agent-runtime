@@ -1,0 +1,18 @@
+package agent
+
+import (
+	"errors"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
+	"time"
+)
+
+var ErrMaxSteps = errors.New("agent: max steps exceeded")
+
+type Agent struct {
+	model       model.Model
+	tools       map[string]tool.Tool
+	maxSteps    int
+	toolTimeout time.Duration
+	sink        EventSink
+}

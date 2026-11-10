@@ -1,0 +1,8 @@
+package agent
+
+import (
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+	"github.com/linko-zhao/mini-agent-runtime/internal/tool"
+)
+
+func New(m model.Model, tools map[string]tool.Tool, maxSteps int) (*Agent, error) { panic("TODO: New") }

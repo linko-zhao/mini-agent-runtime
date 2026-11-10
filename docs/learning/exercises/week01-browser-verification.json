@@ -1,0 +1,100 @@
+{
+  "engine": "Chromium",
+  "date": "2026-11-10",
+  "results": [
+    {
+      "day": 1,
+      "offline": true,
+      "widths": [
+        1280,
+        390
+      ],
+      "exact_files": 8,
+      "keyboard": true,
+      "clipboard_and_fallback": true,
+      "progress_persistence": true,
+      "local_links": true
+    },
+    {
+      "day": 2,
+      "offline": true,
+      "widths": [
+        1280,
+        390
+      ],
+      "exact_files": 6,
+      "keyboard": true,
+      "clipboard_and_fallback": true,
+      "progress_persistence": true,
+      "local_links": true
+    },
+    {
+      "day": 3,
+      "offline": true,
+      "widths": [
+        1280,
+        390
+      ],
+      "exact_files": 8,
+      "keyboard": true,
+      "clipboard_and_fallback": true,
+      "progress_persistence": true,
+      "local_links": true
+    },
+    {
+      "day": 4,
+      "offline": true,
+      "widths": [
+        1280,
+        390
+      ],
+      "exact_files": 7,
+      "keyboard": true,
+      "clipboard_and_fallback": true,
+      "progress_persistence": true,
+      "local_links": true
+    },
+    {
+      "day": 5,
+      "offline": true,
+      "widths": [
+        1280,
+        390
+      ],
+      "exact_files": 8,
+      "keyboard": true,
+      "clipboard_and_fallback": true,
+      "progress_persistence": true,
+      "local_links": true
+    },
+    {
+      "day": 6,
+      "offline": true,
+      "widths": [
+        1280,
+        390
+      ],
+      "exact_files": 3,
+      "keyboard": true,
+      "clipboard_and_fallback": true,
+      "progress_persistence": true,
+      "local_links": true
+    },
+    {
+      "day": 7,
+      "offline": true,
+      "widths": [
+        1280,
+        390
+      ],
+      "exact_files": 3,
+      "keyboard": true,
+      "clipboard_and_fallback": true,
+      "progress_persistence": true,
+      "local_links": true
+    }
+  ],
+  "js_errors": [],
+  "external_requests": [],
+  "no_js_reading": true
+}

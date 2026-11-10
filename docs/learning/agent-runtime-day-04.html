@@ -1,65 +1,278 @@
 <!doctype html>
-<html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Day 04 · Runtime 生命周期控制与前置功能补齐 | Agent Runtime</title><style>:root{--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#58667b;--line:#e0e6ee;--accent:#2459bd}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:920px;margin:auto;padding:32px 22px 70px}.hero{background:#183561;color:#fff;border-radius:18px;padding:29px 30px}.hero h1{margin:7px 0;font-size:30px;line-height:1.3}.hero p{margin:0;color:#e6eefa}.chips{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}.chip{border:1px solid #8ea4c8;border-radius:20px;padding:3px 10px;font-size:12px}section{background:var(--paper);border:1px solid var(--line);border-radius:14px;margin-top:18px;padding:22px 26px}h2{font-size:19px;margin:0 0 13px}h3{font-size:16px;margin:18px 0 6px}.time{font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.4px}p{margin:8px 0}a{color:var(--accent)}li{margin:6px 0}code{background:#f0f3f8;padding:2px 5px;border-radius:4px}pre{overflow:auto;background:#142136;color:#e7f3ff;padding:17px;border-radius:10px;font-size:13px;line-height:1.65}pre code{background:transparent;padding:0}.goal{background:#edf3ff;border-left:3px solid var(--accent);padding:12px 15px;border-radius:4px}.note{background:#fff8e9;border:1px solid #f2deb2;border-radius:9px;padding:11px 14px;color:#644b18}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.grid>div{padding:12px;background:#f6f8fc;border-radius:9px}.grid strong{display:block;font-size:19px}.grid span{font-size:12px;color:var(--sub)}.check{display:flex;align-items:flex-start;gap:9px;margin:10px 0}.check input{margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer;flex:1}.check.done label{text-decoration:line-through;color:var(--sub)}.progress{height:8px;background:#e3e9f2;border-radius:99px;overflow:hidden}.fill{height:100%;background:var(--accent);width:0%;transition:width .2s}.meta{display:flex;justify-content:space-between;font-size:13px;color:var(--sub);margin-bottom:9px}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px;vertical-align:top}th{background:#f4f7fc}footer{text-align:center;color:var(--sub);font-size:12px;margin:24px} @media(max-width:600px){main{padding:14px 12px 40px}.hero{padding:22px}.hero h1{font-size:24px}section{padding:18px}.grid{grid-template-columns:1fr}table{font-size:12px}}</style></head>
-<body><main>
-<header class="hero"><small>MINI AGENT RUNTIME · WEEK 01</small><h1>Day 04 / 56 · Runtime 生命周期控制与前置功能补齐</h1><p>2026 年 10 月 22 日，星期四 · Go 实战 · Context、Timeout、maxSteps 与错误传播</p><div class="chips"><span class="chip">阅读 20 分钟</span><span class="chip">编码 80 分钟</span><span class="chip">测试复盘 20 分钟</span><span class="chip">离线 HTML</span></div></header>
-<section><h2>今日目标与交付</h2><div class="goal">沿用 Day 01 的 Agent Loop、Day 02 的 Model Adapter 和 Day 03 的 Tool Binding，补齐生命周期控制：取消传播、工具超时、步数边界与错误链。最终通过离线 Mock 和 httptest 验证。今天不引入 MCP、持久化或并发工具执行。</div><div class="grid" style="margin-top:16px"><div><strong>1</strong><span>端到端工具绑定闭环</span></div><div><strong>4</strong><span>生命周期边界行为</span></div><div><strong>7+</strong><span>测试断言场景</span></div></div><p class="note"><strong>前置说明：</strong>不能根据学习计划推定 Day 01～03 代码已完成。如果 Tool Binding 尚未实现，优先用今日时间补齐 Day 03 的最小闭环；只在前置测试通过后继续生命周期改造。以下任务时间可按实际进度适当顺延。</p></section>
-<section><div class="time">20 MIN · READ</div><h2>源码与文档阅读</h2>
-<h3>10 分钟 · Go Context 生命周期</h3><p>阅读 <a href="https://pkg.go.dev/context" target="_blank" rel="noopener noreferrer">Go context 官方文档</a>，重点关注 <code>WithTimeout</code>、<code>CancelFunc</code>、<code>Err</code>、<code>DeadlineExceeded</code>。回答：父 Context 取消后子 Context 会发生什么？为什么必须调用 cancel？</p>
-<h3>10 分钟 · Eino ADK 执行接口</h3><p>阅读 <a href="https://github.com/cloudwego/eino/tree/main/adk" target="_blank" rel="noopener noreferrer">Eino ADK 源码目录</a>及 <a href="https://www.cloudwego.io/docs/eino/" target="_blank" rel="noopener noreferrer">Eino 官方文档</a>，关注 Runner 与 Agent 之间的执行职责和 Context 传递。记录：Runtime 与 Tool Executor 分别应负责哪些超时和错误处理？</p>
-<p><strong>阅读产出：</strong>在 <code>docs/design.md</code> 写出三条规则：取消检查点、工具超时边界、错误包装与原始错误链保留。</p></section>
-<section><div class="time">80 MIN · BUILD</div><h2>Go 编码任务（按时间盒推进）</h2>
-<h3>任务 A · 10 分钟：前置检查与修正</h3><p>检查 <code>internal/model/model.go</code>、<code>internal/agent/agent.go</code>、<code>internal/model/openai/adapter.go</code>。确认 <code>FinishToolCalls = "tool_calls"</code>；不要在日志中打印完整消息历史、API Key；HTTP Adapter 使用 <code>defer resp.Body.Close()</code> 并限制读取大小。执行现有回归测试，记录失败项（如存在）。</p>
-<h3>任务 B · 35 分钟：补齐 Day 03 Tool Binding（若已完成则用于补测试）</h3><p><code>internal/model/model.go</code>：定义模型无关的 <code>ToolDefinition{Name, Description, Parameters}</code> 和可选的 <code>ToolBinder.WithTools(defs) (Model,error)</code>。</p><p><code>internal/tool/calculator.go</code>：加入 <code>Definition()</code>，让名称与 <code>Name()</code> 一致，参数采用两个整数 <code>a</code>、<code>b</code> 的 JSON Schema。</p><p><code>internal/model/openai/adapter.go</code>：将工具定义正确序列化为请求的 <code>tools</code>，<code>parameters</code> 保持对象而非 JSON 字符串。通过 <code>httptest.Server</code> 验证 ToolCall 回填及第二轮响应。</p><pre><code>// 仅展示关键接口，保留 Day 01 的 Model.Generate 签名
-type ToolDefinition struct {
-    Name        string          // 唯一工具名
-    Description string          // 供模型理解工具用途
-    Parameters  json.RawMessage // 参数 JSON Schema
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Day 04 · 生命周期：取消、超时与步数</title><style>*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#edf2f8;color:#17253c;font:18px/1.8 system-ui,-apple-system,"Segoe UI",sans-serif}main{max-width:44em;margin:auto;padding:24px 18px 64px}header{background:#11284a;color:white;padding:32px;border-radius:18px}h1{font-size:1.9em;line-height:1.4}h2{font-size:1.4em;line-height:1.5;margin-top:0}h3{font-size:1.08em;line-height:1.6}section,nav{background:white;border:1px solid #d8e1ee;border-radius:14px;padding:28px;margin-top:22px}p{margin:.7em 0;overflow-wrap:anywhere}a{color:#0756ac}header a{color:#cce4ff}nav a{display:inline-block;margin-right:18px}article,.node{background:#f7f9fc;border:1px solid #ced9e8;border-radius:10px;padding:18px;margin:16px 0;overflow-wrap:anywhere}figure{margin:20px 0}.arrow{text-align:center;font-weight:700;color:#314c72}.node strong{display:block}.muted,figcaption{color:#4c607a;font-size:.9em}.note{border-left:4px solid #416fa8;padding:12px 16px;background:#eef5ff}pre{max-width:100%;overflow-x:auto;background:#102138;color:#eff6ff;padding:18px;border-radius:9px;font:14px/1.7 ui-monospace,monospace;tab-size:4}code{overflow-wrap:anywhere}pre code{overflow-wrap:normal}details{margin:16px 0}summary{cursor:pointer;padding:10px;border:1px solid #cbd6e5;border-radius:6px;font-weight:600}button{font:inherit;font-size:15px;background:#eaf2ff;color:#153b70;border:1px solid #9ab0d0;border-radius:7px;padding:6px 14px;cursor:pointer}a:focus-visible,button:focus-visible,summary:focus-visible,input:focus-visible{outline:3px solid #dc7900;outline-offset:3px}.file-label{overflow-wrap:anywhere}.checks label{display:flex;gap:12px;margin:16px 0}.checks input{width:22px;height:22px;flex-shrink:0;margin-top:5px}.progress{height:14px;border-radius:9px;background:#dce5f0;overflow:hidden}#fill{height:100%;width:0;background:#2467b1}footer{text-align:center;margin:32px 0}.meta{font-size:.9em}li{margin:8px 0}section:target{scroll-margin-top:18px}@media(max-width:600px){main{padding:12px 10px 36px}section,nav{padding:22px 16px}header{padding:24px 18px}h1{font-size:1.5em}pre{padding:12px;font-size:13px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}</style></head><body><main><header><div>DAY 04 / 56 · 第 1 周 · 图解设计与测试先行</div><h1>生命周期：取消、超时与步数</h1><p>今天实现合作式取消和单工具超时，让取消后的读取流程停止继续推进。</p><p class="meta">官方阅读 20 分钟 · 编码 80 分钟 · 测试复盘 20 分钟</p></header><nav aria-label="本页学习路线"><a href="#goal">① 问题</a><a href="#concepts">② 图解</a><a href="#design">③ 设计</a><a href="#contract">④ 契约</a><a href="#skeleton">⑤ 骨架</a><a href="#tests">⑥ 测试</a><a href="#tasks">⑦ 实现</a><a href="#review">⑧ 验收</a></nav><section id="goal"><h2>今天只解决什么</h2><p>今天实现合作式取消和单工具超时，让取消后的读取流程停止继续推进。</p><p>工具可能在取消后误报成功，模型也可能返回一个迟到的回答。只把 context 传下去，不足以保证 Loop 不继续执行后续动作。</p><div class="note">复用 Day03 工具绑定；不安排补课门禁。只控制串行边界，不强杀 goroutine、不回滚外部操作、不重试。</div></section><section id="concepts"><h2>先解释概念，再看一次具体运行</h2><article><h3>合作式取消</h3><p><strong>是什么：</strong>传递停止信号，由当前操作主动响应。</p><p><strong>为什么需要：</strong>get_document 等待 ctx.Done 后返回。</p><p><strong>落到代码：</strong>Run 前后检查 ctx，依赖收到同一个或派生 context。</p></article><article><h3>单工具超时</h3><p><strong>是什么：</strong>每次执行工具时独立计算的一段时间预算。</p><p><strong>为什么需要：</strong>读取 doc-1 超时后，不再调用下一轮模型。</p><p><strong>落到代码：</strong>WithToolTimeout 配置 time.Duration；WithTimeout 派生执行 context。</p></article><article><h3>模型轮次预算</h3><p><strong>是什么：</strong>限制 Generate 最多调用几次。</p><p><strong>为什么需要：</strong>maxSteps=1 时读取完成也不能再问模型。</p><p><strong>落到代码：</strong>沿用 ErrMaxSteps，不把工具个数算作轮次。</p></article><figure aria-label="图 1 · 职责关系（装配与依赖）"><h3>图 1 · 职责关系（装配与依赖）</h3><div class="node"><strong>宿主</strong>提供父 context 与超时选项。</div><div class="arrow">↓ ctx / time.Duration</div><div class="node"><strong>Run</strong>检查边界并派生工具 context。</div><div class="arrow">↓ toolCtx / Arguments</div><div class="node"><strong>Tool.Execute</strong>监听 Done，返回后由 Loop 再检查状态。</div><figcaption>文字等价说明：按从上到下顺序阅读；框内说明职责或状态，箭头标明传递的数据。</figcaption></figure><figure aria-label="图 2 · 编号运行过程"><h3>图 2 · 编号运行过程</h3><div class="node"><strong>① 启动读取</strong>父 context 有效，第一轮 Generate 提出 read-1。</div><div class="arrow">↓ ToolCall</div><div class="node"><strong>② 开始工具</strong>派生 toolCtx，设置一次调用的期限。</div><div class="arrow">↓ toolCtx / {&quot;id&quot;:&quot;doc-1&quot;}</div><div class="node"><strong>③ 收到取消</strong>工具监听 Done；即使返回 late,nil，取消仍优先。</div><div class="arrow">↓ context.DeadlineExceeded</div><div class="node"><strong>④ 停止推进</strong>释放计时器，返回空输出与可识别超时；没有第二轮。</div><figcaption>文字等价说明：按从上到下顺序阅读；框内说明职责或状态，箭头标明传递的数据。</figcaption></figure><h3>失败反例</h3><p>若工具已经发出写请求，取消只能停止后续推进，不能证明写入没有发生。非合作工具仍可能阻塞；本课没有隔离或强制终止承诺。</p></section><section id="design"><h2>为什么这样设计</h2><article><h3>Option / WithToolTimeout</h3><p><strong>职责与字段/参数：</strong>New 增加 ...Option，旧三参数调用仍合法。Option 是修改构造中 Agent 配置的函数；nil Option 忽略。WithToolTimeout(d) 返回选项，d 单位纳秒的 time.Duration。</p><p><strong>返回与失败：</strong>d=0 禁用单工具超时；d<0 由 New 返回 nil,error；正值应用到每次 Execute。</p><p><strong>状态、所有权与取消：</strong>选项仅构造时应用，运行时不得修改配置；工具对象仍共享。</p><p><strong>设计理由：</strong>在入口统一配置生命周期，避免每个业务工具重复算预算。</p></article><article><h3>Agent.toolTimeout / Run</h3><p><strong>职责与字段/参数：</strong>toolTimeout 保存配置；每个 Run 的 messages/step 保持私有。模型前检查父 ctx，模型返回后父取消优先于成功或其他错误。</p><p><strong>返回与失败：</strong>工具前检查父 ctx，传入派生 ctx；返回后优先检查 toolCtx.Err，再释放 cancel。取消/超时 errors.Is 保留，不把 late 当正文。</p><p><strong>状态、所有权与取消：</strong>父 context 同样生效；零超时直接传父 ctx。可能已有副作用，不回滚；无并发承诺。</p><p><strong>设计理由：</strong>双边检查防止不规范依赖误报成功。</p></article><article><h3>New 与文件迁移</h3><p><strong>职责与字段/参数：</strong>New 仍负责模型、工具和步数校验，并接受选项；Run 移到 run.go，Agent 定义保留在 agent.go。</p><p><strong>返回与失败：</strong>页面提供完整支持文件 new.go，主要新增行为只是应用选项与拒绝负超时。</p><p><strong>状态、所有权与取消：</strong>手工迁移从旧 agent.go 删除 Run 后才新增 run.go；保持 Day03 的 New 只在 new.go 定义一次。</p><p><strong>设计理由：</strong>拆分文件让本日骨架聚焦执行边界。</p></article></section><section id="contract"><h2>行为契约：不用读答案也知道怎么写</h2><p>按编号实现；未规定的错误文本不需逐字匹配。依赖错误用 errors.Is/As 判断，不以私有字段或某种容器为验收目标。</p><article><h3>R1 · 取消优先</h3><p>已取消不调用模型；模型中取消但返回成功仍取消；第一个工具中取消后第二个工具和下一轮模型都不执行，零超时保留原 ctx。</p><p>对应完整测试：<code>TestDay04Cancellation</code></p></article><article><h3>R2 · 期限与可重用配置</h3><p>负超时构造失败；正值确实传 Deadline，工具等待 Done，返回 late 仍超时；零值禁用，普通 Agent 可连续运行两次。</p><p>对应完整测试：<code>TestDay04Timeout</code></p></article></section><section id="read"><h2>官方阅读 · 20 分钟</h2><article><h3>10 分钟 · <a href="https://pkg.go.dev/context#WithTimeout">Go · WithTimeout / CancelFunc</a></h3><p>说明为什么成功路径也要 cancel；写出取消不能回滚副作用的原因。</p></article><article><h3>10 分钟 · <a href="https://github.com/cloudwego/eino/blob/main/adk/runner.go">Eino · Runner.Run</a></h3><p>定位 context 传递与执行入口，标出本课 Run 对应的控制边界；不要把框架中断等同于本课取消。</p></article><p class="muted">阅读产出是职责映射和问题答案，不要求照搬 Eino 接口。链接供源码对照；正文、图和练习代码均离线可读。远端 main 会变化，阅读时记录 commit；本次已核对 Eino 的5个源码路径及符号（2026-11-10）；BaseChatModel、Runner、AgentEvent、Handler 在当前源码中是兼容别名，阅读时继续定位其底层泛型或内部接口。</p></section><section id="continuity"><h2>承接前序设计与本日增量</h2><p>承接 Day03 的绑定，新增 Option/WithToolTimeout；New 增加可变参数，旧调用不变。将 Run 拆入 run.go，测试仍用同一个 Model/Tool。</p><p>保留已有方法时只加入选项应用和超时字段；手工迁移见支持文件，不能把旧 Run 和新 Run 同时编译。若已有更多选项，不用本页文件整份覆盖，按方法名比较增量。</p><p><strong>练习环境：</strong>Go ≥ 1.22.2、Python ≥ 3.9；命令从同一仓库根执行。练习目标是 internal/cmd，累计参考位于 examples；两套 model 类型不可混用。</p><pre><code>python3 docs/learning/exercises/prepare.py 04</code></pre><p>在原仓库根执行上面命令，进入脚本打印的新副本绝对路径。脚本只在仓库外创建副本，并按日序提供前序已完成依赖与本日 TODO；不改你现有的 internal/cmd。没有新增每日 Module。</p><details><summary>已有实现或希望手工应用时</summary><p>已实现的方法可以保留，只应用本页测试；不必挖空重做。手工应用先备份，依次复用前序文件、本页支持文件、目标方法与测试；已有同名定义先比较，只替换需改的方法，保留其他内容。前序完整文件可由上一页取得，明确文件索引见下表。</p><ul><li>复用 <a href="exercises/day04/support/internal/agent/agent.go.txt">internal/agent/agent.go</a></li><li>复用 <a href="exercises/day01/tests/internal/agent/day01_contract_test.go.txt">internal/agent/day01_contract_test.go</a></li><li>复用 <a href="exercises/day03/tests/internal/agent/day03_contract_test.go.txt">internal/agent/day03_contract_test.go</a></li><li>复用 <a href="exercises/day04/support/internal/agent/new.go.txt">internal/agent/new.go</a></li><li>复用 <a href="exercises/day01/tests/internal/model/day01_contract_test.go.txt">internal/model/day01_contract_test.go</a></li><li>复用 <a href="exercises/day01/reference/internal/model/mock.go.txt">internal/model/mock.go</a></li><li>复用 <a href="exercises/day02/support/internal/model/model.go.txt">internal/model/model.go</a></li><li>复用 <a href="exercises/day02/reference/internal/model/openai/adapter.go.txt">internal/model/openai/adapter.go</a></li><li>复用 <a href="exercises/day03/reference/internal/model/openai/binding.go.txt">internal/model/openai/binding.go</a></li><li>复用 <a href="exercises/day02/reference/internal/model/openai/convert.go.txt">internal/model/openai/convert.go</a></li><li>复用 <a href="exercises/day02/tests/internal/model/openai/day02_contract_test.go.txt">internal/model/openai/day02_contract_test.go</a></li><li>复用 <a href="exercises/day03/tests/internal/model/openai/day03_contract_test.go.txt">internal/model/openai/day03_contract_test.go</a></li><li>复用 <a href="exercises/day03/support/internal/tool/tool.go.txt">internal/tool/tool.go</a></li></ul><p>这些是前序实现或本日支持依赖，不是另一套协议；若与你当前版本有冲突，先用隔离副本，不覆盖已有文件。</p></details><h3 class="file-label">前置支持文件：internal/agent/agent.go</h3><a href="exercises/day04/support/internal/agent/agent.go.txt" download="agent.go">下载完整文件</a><details class="code-file" data-kind="support" data-source="day04/support/internal/agent/agent.go.txt"><summary>展开完整文件 agent.go</summary><pre id="d4-support-internal-agent-agent-go"><code>package agent
+
+import (
+	&quot;errors&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool&quot;
+	&quot;time&quot;
+)
+
+var ErrMaxSteps = errors.New(&quot;agent: max steps exceeded&quot;)
+
+type Agent struct {
+	model       model.Model
+	tools       map[string]tool.Tool
+	maxSteps    int
+	toolTimeout time.Duration
 }
-type ToolBinder interface {
-    WithTools(defs []ToolDefinition) (Model, error)
-}</code></pre>
-<h3>任务 C · 25 分钟：完善 Agent 生命周期</h3><p><code>internal/agent/agent.go</code>：初始化阶段拒绝 <code>maxSteps &lt;= 0</code>；每轮模型调用前和每次工具执行前检查 <code>ctx.Err()</code>；若 <code>Generate()</code> 返回 <code>nil, nil</code> 则返回可判定错误；超出步数限制时返回上限错误。</p>
-<p><code>internal/agent/agent.go</code> 或 <code>internal/agent/options.go</code>：为工具执行增加正数超时配置；设置了超时时使用 <code>context.WithTimeout(ctx, toolTimeout)</code>，未配置时直接使用父 Context；每次执行结束及时调用 <code>cancel()</code>。使用 <code>fmt.Errorf("tool %s: %w", name, err)</code> 保留错误链。</p>
-<pre><code>// 示意片段：工具执行使用合作式取消，不负责强杀 Goroutine
-toolCtx := ctx
-cancel := func() {}
-if toolTimeout &gt; 0 {
-    toolCtx, cancel = context.WithTimeout(ctx, toolTimeout)
+</code></pre><button type="button" data-copy="d4-support-internal-agent-agent-go">复制本文件</button><span role="status" aria-live="polite"></span></details><h3 class="file-label">前置支持文件：internal/agent/new.go</h3><a href="exercises/day04/support/internal/agent/new.go.txt" download="new.go">下载完整文件</a><details class="code-file" data-kind="support" data-source="day04/support/internal/agent/new.go.txt"><summary>展开完整文件 new.go</summary><pre id="d4-support-internal-agent-new-go"><code>package agent
+
+import (
+	&quot;fmt&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool&quot;
+	&quot;sort&quot;
+)
+
+func New(m model.Model, tools map[string]tool.Tool, maxSteps int, opts ...Option) (*Agent, error) {
+	if m == nil || maxSteps &lt;= 0 {
+		return nil, fmt.Errorf(&quot;agent: model and positive maxSteps required&quot;)
+	}
+	a := &amp;Agent{model: m, tools: make(map[string]tool.Tool), maxSteps: maxSteps}
+	for _, o := range opts {
+		if o != nil {
+			o(a)
+		}
+	}
+	if a.toolTimeout &lt; 0 {
+		return nil, fmt.Errorf(&quot;agent: negative timeout&quot;)
+	}
+	names := []string{}
+	for n, t := range tools {
+		if t == nil || n == &quot;&quot; || n != t.Name() {
+			return nil, fmt.Errorf(&quot;agent: invalid registration&quot;)
+		}
+		a.tools[n] = t
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	var defs []model.ToolDefinition
+	for _, n := range names {
+		if t, ok := a.tools[n].(tool.DescribedTool); ok {
+			d := t.Definition()
+			if d.Name != n {
+				return nil, fmt.Errorf(&quot;agent: definition name mismatch&quot;)
+			}
+			defs = append(defs, d)
+		}
+	}
+	if b, ok := m.(model.ToolBinder); ok {
+		bound, err := b.WithTools(defs)
+		if err != nil {
+			return nil, err
+		}
+		if bound == nil {
+			return nil, fmt.Errorf(&quot;agent: nil bound model&quot;)
+		}
+		a.model = bound
+	}
+	return a, nil
 }
-result, err := selectedTool.Execute(toolCtx, call.Arguments)
-cancel()
-if ctx.Err() != nil {
-    return "", ctx.Err()
+</code></pre><button type="button" data-copy="d4-support-internal-agent-new-go">复制本文件</button><span role="status" aria-live="polite"></span></details></section><section id="skeleton"><h2>可以直接编译的骨架</h2><p>下列均为新增或本日修改文件的完整可复制版本。package、import、签名齐全；只把 TODO 方法体补齐。已有实现按上节方法名做增量修改，不整包覆盖。</p><h3 class="file-label">待实现骨架：internal/agent/run.go</h3><a href="exercises/day04/skeleton/internal/agent/run.go.txt" download="run.go">下载完整文件</a><details class="code-file" data-kind="skeleton" data-source="day04/skeleton/internal/agent/run.go.txt"><summary>展开完整文件 run.go</summary><pre id="d4-skeleton-internal-agent-run-go"><code>package agent
+
+import (
+	&quot;context&quot;
+)
+
+func (a *Agent) Run(ctx context.Context, input string) (string, error) { panic(&quot;TODO: Run&quot;) }
+</code></pre><button type="button" data-copy="d4-skeleton-internal-agent-run-go">复制本文件</button><span role="status" aria-live="polite"></span></details><h3 class="file-label">待实现骨架：internal/agent/options.go</h3><a href="exercises/day04/skeleton/internal/agent/options.go.txt" download="options.go">下载完整文件</a><details class="code-file" data-kind="skeleton" data-source="day04/skeleton/internal/agent/options.go.txt"><summary>展开完整文件 options.go</summary><pre id="d4-skeleton-internal-agent-options-go"><code>package agent
+
+import &quot;time&quot;
+
+type Option func(*Agent)
+
+func WithToolTimeout(d time.Duration) Option { panic(&quot;TODO: WithToolTimeout&quot;) }
+</code></pre><button type="button" data-copy="d4-skeleton-internal-agent-options-go">复制本文件</button><span role="status" aria-live="polite"></span></details></section><section id="tests"><h2>完整测试：先红，再逐步变绿</h2><p>测试文件包含本日需要的全部断言。每个本日测试文件都包含自己的 fake 与 fixture；同包前序测试继续累计执行，夹具命名按日隔离。原样测试始终导入副本 internal，不导入已完成的 examples。</p><h3 class="file-label">完整测试：internal/agent/day04_contract_test.go</h3><a href="exercises/day04/tests/internal/agent/day04_contract_test.go.txt" download="day04_contract_test.go">下载完整文件</a><details class="code-file" data-kind="tests" data-source="day04/tests/internal/agent/day04_contract_test.go.txt"><summary>展开完整文件 day04_contract_test.go</summary><pre id="d4-tests-internal-agent-day04-contract-test-go"><code>package agent_test
+
+import (
+	&quot;context&quot;
+	&quot;encoding/json&quot;
+	&quot;errors&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/agent&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/tool&quot;
+	&quot;testing&quot;
+	&quot;time&quot;
+)
+
+type day04Model func(context.Context, []model.Message) (*model.Response, error)
+
+func (f day04Model) Generate(c context.Context, m []model.Message) (*model.Response, error) {
+	return f(c, m)
 }
-if err != nil {
-    return "", fmt.Errorf("tool %s: %w", call.Name, err)
+
+type day04Tool struct {
+	f func(context.Context, json.RawMessage) (string, error)
 }
-_ = result // 后续沿用既有 ToolResult 回填逻辑</code></pre>
-<p class="note"><strong>工程边界：</strong>Context 的取消是合作式的。忽略 ctx 的工具可能阻塞，不能通过简单增加 Goroutine 包装就声称已经实现安全终止；非可信代码执行隔离留到第六周。</p>
-<h3>任务 D · 10 分钟：更新设计文档</h3><p><code>docs/design.md</code> 记录 <code>maxSteps</code> 是模型调用轮数还是工具调用次数、Context 取消优先级、Timeout 与重试之间的界限。<strong>不要</strong>在这里引入自动重试或持久化副作用管理。</p></section>
-<section><div class="time">20 MIN · TEST &amp; REVIEW</div><h2>测试与验收</h2><p>重点在 <code>internal/agent/agent_test.go</code> 与 <code>internal/model/openai/adapter_test.go</code> 中加入以下断言：</p>
-<table><thead><tr><th>场景</th><th>预期</th></tr></thead><tbody>
-<tr><td>真实协议双轮 Tool Calling</td><td>HTTP tools 定义为 JSON 对象，ToolCall ID 与 ToolResult 精确匹配</td></tr>
-<tr><td>调用前 Context 取消</td><td>模型与工具均不会被调用</td></tr>
-<tr><td>工具执行超时</td><td><code>errors.Is(err, context.DeadlineExceeded)</code> 成立</td></tr>
-<tr><td>多工具中途取消</td><td>后续工具不会被执行</td></tr>
-<tr><td><code>maxSteps &lt;= 0</code></td><td>构造或运行时立即返回配置错误</td></tr>
-<tr><td>Model 返回 nil Response</td><td>返回明确错误，不 panic</td></tr>
-<tr><td>模型错误及历史回归</td><td>错误链可判定；Day 01～03 已有测试通过</td></tr>
-</tbody></table>
-<pre><code>gofmt -w internal/agent internal/model internal/tool
-go test ./internal/agent/... ./internal/model/... -v
-go test ./...
-go test -race ./...
-git diff --check</code></pre>
-<h3>交互式验收清单</h3><div class="meta"><span>勾选状态保存在本地浏览器（localStorage）</span><span id="count">0 / 8</span></div><div class="progress" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div><div id="checks"></div><h3>复盘问题</h3><ol><li>为什么工具执行超时不等于工具被强制终止？</li><li>在多个 ToolCall 中途取消时，已经成功执行的副作用如何记录？</li><li>maxSteps 限制轮数与限制工具次数分别有什么取舍？</li></ol></section>
-<section><h2>完成定义与 Day 05 衔接</h2><p><strong>Definition of Done：</strong>Day 03 工具绑定闭环可运行；取消、超时、步数限制、nil Response 等测试通过；<code>go test ./...</code> 与 <code>go test -race ./...</code> 通过；<code>docs/design.md</code> 记录关键取舍并提交一次 Git Commit。若前置任务未完成，请优先补齐，不视作 Day 04 已完成。</p><p><strong>Day 05 预告：</strong>在现有执行循环上设计 Agent Event Stream（Model/Tool/Step/Run 事件），为 SSE 和 Tracing 建立统一事件边界，不提前引入持久化状态机。</p></section>
-<footer>Mini Agent Runtime · 8 周 / 56 天 · 独立离线 HTML · 阅读链接需要联网</footer>
-</main><script>
-const items=["确认 Day 01~03 回归测试基线并修正遗留的调试输出或明显拼写问题","阅读 Go context 与 Eino ADK 执行接口并记录合作式取消边界","补齐 ToolDefinition、ToolBinder 与 Calculator 元数据（若 Day 03 尚未完成）","使用 httptest 验证 Tool Binding 双轮调用闭环","在 Agent.Run 中明确 maxSteps<=0、nil Response、ctx.Err() 行为","工具执行增加可配置超时并保留 context 错误链","完成取消/超时/多工具/步数限制测试，执行 go test -race ./...","更新 docs/design.md 并提交自己的代码变更"];
-const key="mini-agent-runtime-day-04-checklist-v1";let saved=[];try{const v=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(v))saved=v}catch(_){}
-const checks=document.getElementById("checks"),bar=document.querySelector('[role="progressbar"]');
-function refresh(){let n=0;[...checks.children].forEach((r,i)=>{const d=!!saved[i];r.classList.toggle("done",d);if(d)n++});const p=Math.round(n/items.length*100);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=p+"%";bar.setAttribute("aria-valuenow",String(p))}
-items.forEach((t,i)=>{const row=document.createElement("div");row.className="check";const cb=document.createElement("input");cb.type="checkbox";cb.id="task-"+i;cb.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=cb.id;label.textContent=t;row.append(cb,label);checks.append(row);cb.addEventListener("change",()=>{saved[i]=cb.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()})});refresh();
+
+func (day04Tool) Name() string                                                   { return &quot;get_document&quot; }
+func (f day04Tool) Execute(c context.Context, a json.RawMessage) (string, error) { return f.f(c, a) }
+func day04Answer(s string) *model.Response {
+	return &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, Content: s}}
+}
+func day04Request() *model.Response {
+	return &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, ToolCalls: []model.ToolCall{{ID: &quot;read-1&quot;, Name: &quot;get_document&quot;, Arguments: json.RawMessage(`{&quot;id&quot;:&quot;doc-1&quot;}`)}}}}
+}
+func day04Must(t *testing.T, m model.Model, tools map[string]tool.Tool, n int) *agent.Agent {
+	t.Helper()
+	a, e := agent.New(m, tools, n)
+	if e != nil {
+		t.Fatal(e)
+	}
+	return a
+}
+
+func TestDay04Cancellation(t *testing.T) {
+	calls := 0
+	m := day04Model(func(context.Context, []model.Message) (*model.Response, error) {
+		calls++
+		return day04Answer(&quot;late&quot;), nil
+	})
+	a, e := agent.New(m, nil, 1)
+	if e != nil {
+		t.Fatal(e)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, e = a.Run(ctx, &quot;&quot;)
+	if !errors.Is(e, context.Canceled) || calls != 0 {
+		t.Fatal(e, calls)
+	}
+	ctx, cancel = context.WithCancel(context.Background())
+	m = day04Model(func(context.Context, []model.Message) (*model.Response, error) {
+		cancel()
+		return day04Answer(&quot;late&quot;), nil
+	})
+	a, _ = agent.New(m, nil, 1)
+	if _, e = a.Run(ctx, &quot;&quot;); !errors.Is(e, context.Canceled) {
+		t.Fatal(e)
+	}
+	ctx, cancel = context.WithCancel(context.Background())
+	reads := 0
+	rounds := 0
+	m = day04Model(func(context.Context, []model.Message) (*model.Response, error) {
+		rounds++
+		r := day04Request()
+		r.Message.ToolCalls = append(r.Message.ToolCalls, model.ToolCall{ID: &quot;read-2&quot;, Name: &quot;get_document&quot;, Arguments: json.RawMessage(`{}`)})
+		return r, nil
+	})
+	a, e = agent.New(m, map[string]tool.Tool{&quot;get_document&quot;: day04Tool{func(c context.Context, _ json.RawMessage) (string, error) {
+		reads++
+		if c != ctx {
+			t.Fatal(&quot;parent ctx lost&quot;)
+		}
+		cancel()
+		return &quot;late&quot;, nil
+	}}}, 2)
+	if e != nil {
+		t.Fatal(e)
+	}
+	_, e = a.Run(ctx, &quot;&quot;)
+	if !errors.Is(e, context.Canceled) || reads != 1 || rounds != 1 {
+		t.Fatal(e, reads, rounds)
+	}
+}
+func TestDay04Timeout(t *testing.T) {
+	m := day04Model(func(context.Context, []model.Message) (*model.Response, error) { return day04Request(), nil })
+	if _, e := agent.New(m, nil, 1, agent.WithToolTimeout(-1)); e == nil {
+		t.Fatal(&quot;negative timeout&quot;)
+	}
+	reads := 0
+	a, e := agent.New(m, map[string]tool.Tool{&quot;get_document&quot;: day04Tool{func(c context.Context, _ json.RawMessage) (string, error) {
+		reads++
+		if _, ok := c.Deadline(); !ok {
+			t.Fatal(&quot;missing deadline&quot;)
+		}
+		&lt;-c.Done()
+		return &quot;late&quot;, nil
+	}}}, 2, agent.WithToolTimeout(time.Nanosecond))
+	if e != nil {
+		t.Fatal(e)
+	}
+	_, e = a.Run(context.Background(), &quot;&quot;)
+	if !errors.Is(e, context.DeadlineExceeded) || reads != 1 {
+		t.Fatal(e, reads)
+	}
+	a, e = agent.New(day04Model(func(context.Context, []model.Message) (*model.Response, error) { return day04Answer(&quot;ok&quot;), nil }), nil, 1, agent.WithToolTimeout(0))
+	if e != nil {
+		t.Fatal(e)
+	}
+	for i := 0; i &lt; 2; i++ {
+		if s, e := a.Run(context.Background(), &quot;&quot;); e != nil || s != &quot;ok&quot; {
+			t.Fatal(s, e)
+		}
+	}
+}
+</code></pre><button type="button" data-copy="d4-tests-internal-agent-day04-contract-test-go">复制本文件</button><span role="status" aria-live="polite"></span></details><pre><code>go test ./internal/agent -run &#x27;^$&#x27;
+go test ./internal/agent -run &#x27;^TestDay04&#x27; -count=1 -v</code></pre><p><strong>预期：</strong>第一条退出码0，只证明能编译；第二条实际执行目标测试，并在 TODO 处失败。找不到包、语法错误和 no tests to run 都不算行为红灯。已有实现若直接全绿，可保留并继续复盘。</p></section><section id="tasks"><h2>一次只完成一步 · 编码 80 分钟</h2><article><h3>1 · 15 分钟 · 接入超时配置</h3><p><strong>目标：</strong>接入超时配置，让本步对应契约先获得可观察证据。</p><p><strong>位置：</strong>internal/agent/options.go · WithToolTimeout，新增；new.go 复用支持文件。</p><p><strong>输入 → 输出与动作：</strong>0 → 禁用，-1 → 构造错误；只保存配置。 依赖职责按前述设计保留，本步不改测试迎合实现。</p><p><strong>验证：</strong>在练习副本根执行，匹配 TestDay04Timeout。</p><pre><code>go test ./internal/agent -run &#x27;^TestDay04Timeout$&#x27; -count=1 -v</code></pre><p><strong>完成证据与下一步：</strong>构造断言通过，Run TODO 仍需后续步骤。 继续下一张任务卡。</p><details><summary>卡住时再看提示</summary><p>选项负责赋值，构造函数负责拒绝负值。</p></details></article><article><h3>2 · 25 分钟 · 守住模型边界</h3><p><strong>目标：</strong>守住模型边界，让本步对应契约先获得可观察证据。</p><p><strong>位置：</strong>internal/agent/run.go · Run，修改。</p><p><strong>输入 → 输出与动作：</strong>已取消输入 → 零模型调用；模型取消后返回 late → Canceled。 依赖职责按前述设计保留，本步不改测试迎合实现。</p><p><strong>验证：</strong>在练习副本根执行，匹配 TestDay04Cancellation。</p><pre><code>go test ./internal/agent -run &#x27;^TestDay04Cancellation$&#x27; -count=1 -v</code></pre><p><strong>完成证据与下一步：</strong>前两组取消断言通过；工具分支仍待补齐。 继续下一张任务卡。</p><details><summary>卡住时再看提示</summary><p>在 Generate 前和返回后分别检查父 context。</p></details></article><article><h3>3 · 25 分钟 · 控制每个工具</h3><p><strong>目标：</strong>控制每个工具，让本步对应契约先获得可观察证据。</p><p><strong>位置：</strong>internal/agent/run.go · Run，修改。</p><p><strong>输入 → 输出与动作：</strong>read-1 超时 → DeadlineExceeded，读取一次、后续零次。 依赖职责按前述设计保留，本步不改测试迎合实现。</p><p><strong>验证：</strong>在练习副本根执行，匹配 TestDay04Timeout。</p><pre><code>go test ./internal/agent -run &#x27;^TestDay04Timeout$&#x27; -count=1 -v</code></pre><p><strong>完成证据与下一步：</strong>fake 确认 Deadline 存在且等待 Done；不使用 sleep 推测顺序。 继续下一张任务卡。</p><details><summary>卡住时再看提示</summary><p>检查派生 ctx 的状态之后再释放计时器，避免把主动释放误认超时。</p></details></article><article><h3>4 · 15 分钟 · 阻止取消后推进</h3><p><strong>目标：</strong>阻止取消后推进，让本步对应契约先获得可观察证据。</p><p><strong>位置：</strong>internal/agent/run.go · Run，修改与整理。</p><p><strong>输入 → 输出与动作：</strong>第一条取消 → 第二条零执行；正常两次 Run 相互独立。 依赖职责按前述设计保留，本步不改测试迎合实现。</p><p><strong>验证：</strong>在练习副本根执行，匹配 TestDay04Cancellation。</p><pre><code>go test ./internal/agent -run &#x27;^TestDay04Cancellation$&#x27; -count=1 -v</code></pre><p><strong>完成证据与下一步：</strong>目标和前序累计测试通过，错误原因仍可识别。 然后进入20分钟测试复盘。</p><details><summary>卡住时再看提示</summary><p>循环本地状态不能放到共享 Agent 字段。</p></details></article></section><section id="review"><h2>测试与复盘 · 20 分钟</h2><h3>12 分钟 · 红 → 绿 → 重构</h3><p>确认 Go 版本与前置文件后先编译、看红灯。补实现后按小步运行目标测试；全部通过后再整理重复逻辑，重跑同组测试和累计回归。</p><pre><code>go test ./internal/agent -run &#x27;^TestDay04&#x27; -count=1 -v
+go test -race ./internal/agent -run &#x27;^TestDay04&#x27; -count=1
+go test ./internal/...
+go test ./examples/...
+go test -race ./examples/...</code></pre><p>目标测试必须出现真实用例；examples 通过只说明参考基线可用。你的原实现未被本次发布修改或验证；本日隔离副本支持的累计范围到今天为止。</p><h3>8 分钟 · 合上代码回答</h3><ol><li>不看代码，沿两张图讲完“读取 doc-1”：谁产生请求、谁消费结果、失败停在哪里？</li><li>增加整次 Run 总时限时由宿主传带 Deadline 的父 ctx；单工具预算继续只负责一次 Execute。 请先自己指出改动层次与理由。</li><li>本页测试验证了哪些不变量？哪些真实 Provider 或外部副作用仍缺证据？</li></ol><h3>完成标准</h3><p><strong>实现验收：</strong>目标断言、目标包、race 与受影响累计回归通过，记录真实命令和结果；取消、错误、次数及状态符合本页编号契约。</p><p><strong>理解验收：</strong>独立解释数据流和设计代价，能对一个需求变化指出修改层次。勾选或测试全绿都不能代替这项。</p><h3>发布验证状态</h3><p data-validation>2026-11-10（Asia/Shanghai）· Go 1.22.2：本页原样骨架与完整测试编译通过；目标测试确实执行并在 TODO 处按预期失败。同一套测试换入兼容参考后通过（含 race）；第一周累计参考回归、当前 examples 普通/race 回归和 Day09–15 原有练习流程均通过。Chromium 离线 1280px / 390px 的布局、代码逐字一致、复制与回退、键盘折叠及清单持久化检查通过。你的原实现未修改、未验证；真实模型与网络后端未验证。</p><p><a href="exercises/README.md">交付范围、验证记录与复跑说明</a></p></section><section id="checklist"><h2>学习清单</h2><p>新版自评独立保存；不把旧版勾选自动算成新任务完成。</p><p id="count">0 / 7</p><div id="bar" class="progress" role="progressbar" aria-label="自评进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="fill"></div></div><div id="checks" class="checks"><label for="task-0"><input id="task-0" type="checkbox">解释今天需求与本日范围</label><label for="task-1"><input id="task-1" type="checkbox">根据两张图讲一次读取过程</label><label for="task-2"><input id="task-2" type="checkbox">完成20分钟官方阅读并写映射</label><label for="task-3"><input id="task-3" type="checkbox">确认原样骨架编译与目标红灯</label><label for="task-4"><input id="task-4" type="checkbox">按四步补齐实现并通过契约测试</label><label for="task-5"><input id="task-5" type="checkbox">完成race与累计回归</label><label for="task-6"><input id="task-6" type="checkbox">不看代码完成需求变化推演</label></div><noscript>JavaScript 未启用：仍可阅读、展开与手动复制；勾选不会保存。</noscript></section><section id="reference"><h2>最后再看参考答案</h2><p>先用契约实现，再自行选择展开。这里是同一套兼容参考，import 映射到练习 internal；与 examples 同源或按课程阶段裁剪，不修改测试断言、不换 Module。</p><h3 class="file-label">参考实现：internal/agent/run.go</h3><a href="exercises/day04/reference/internal/agent/run.go.txt" download="run.go">下载完整文件</a><details class="code-file" data-kind="reference" data-source="day04/reference/internal/agent/run.go.txt"><summary>展开完整文件 run.go</summary><pre id="d4-reference-internal-agent-run-go"><code>package agent
+
+import (
+	&quot;context&quot;
+	&quot;fmt&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+)
+
+func (a *Agent) Run(ctx context.Context, input string) (string, error) {
+	messages := []model.Message{{Role: &quot;user&quot;, Content: input}}
+	for step := 1; step &lt;= a.maxSteps; step++ {
+		if e := ctx.Err(); e != nil {
+			return &quot;&quot;, e
+		}
+		r, e := a.model.Generate(ctx, messages)
+		if ctx.Err() != nil {
+			e = ctx.Err()
+		}
+		if e != nil {
+			return &quot;&quot;, e
+		}
+		if r == nil || r.Message.Role != &quot;assistant&quot; {
+			return &quot;&quot;, fmt.Errorf(&quot;agent: invalid response&quot;)
+		}
+		messages = append(messages, r.Message)
+		if len(r.Message.ToolCalls) == 0 {
+			return r.Message.Content, nil
+		}
+		for _, call := range r.Message.ToolCalls {
+			if e := ctx.Err(); e != nil {
+				return &quot;&quot;, e
+			}
+			t, ok := a.tools[call.Name]
+			if !ok {
+				return &quot;&quot;, fmt.Errorf(&quot;agent: unknown tool&quot;)
+			}
+			tc := ctx
+			cancel := func() {}
+			if a.toolTimeout &gt; 0 {
+				tc, cancel = context.WithTimeout(ctx, a.toolTimeout)
+			}
+			out, e := t.Execute(tc, call.Arguments)
+			if tc.Err() != nil {
+				e = tc.Err()
+			}
+			cancel()
+			if e != nil {
+				return &quot;&quot;, e
+			}
+			messages = append(messages, model.Message{Role: &quot;tool&quot;, Content: out, ToolCallID: call.ID})
+		}
+	}
+	return &quot;&quot;, ErrMaxSteps
+}
+</code></pre><button type="button" data-copy="d4-reference-internal-agent-run-go">复制本文件</button><span role="status" aria-live="polite"></span></details><h3 class="file-label">参考实现：internal/agent/options.go</h3><a href="exercises/day04/reference/internal/agent/options.go.txt" download="options.go">下载完整文件</a><details class="code-file" data-kind="reference" data-source="day04/reference/internal/agent/options.go.txt"><summary>展开完整文件 options.go</summary><pre id="d4-reference-internal-agent-options-go"><code>package agent
+
+import &quot;time&quot;
+
+type Option func(*Agent)
+
+func WithToolTimeout(d time.Duration) Option { return func(a *Agent) { a.toolTimeout = d } }
+</code></pre><button type="button" data-copy="d4-reference-internal-agent-options-go">复制本文件</button><span role="status" aria-live="polite"></span></details></section><section><h2>接下来为什么学下一天</h2><p>今天明确了何时停止及取消的局限。明天要用不含正文的事件观察每个阶段，并保证每次运行只有一个终止事件。</p><a href="agent-runtime-day-05.html">继续 Day 05</a> · <a href="agent-runtime-day-03.html">回看 Day 03</a></section><footer><a href="../../index.html">返回学习首页</a> · Day 04 / 56</footer></main><script>
+const key="mini-agent-runtime-day-04-tdd-v1";let saved=[];try{const v=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(v))saved=v}catch(_){}
+const inputs=[...document.querySelectorAll('#checks input')];function refresh(){const n=inputs.filter(x=>x.checked).length;document.getElementById('count').textContent=n+' / '+inputs.length;const p=Math.round(n/inputs.length*100);document.getElementById('fill').style.width=p+'%';document.getElementById('bar').setAttribute('aria-valuenow',p)}
+inputs.forEach((c,i)=>{c.checked=!!saved[i];c.addEventListener('change',()=>{saved=inputs.map(x=>x.checked);try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()})});refresh();
+document.querySelectorAll('button[data-copy]').forEach(b=>b.addEventListener('click',async()=>{const p=document.getElementById(b.dataset.copy);try{await navigator.clipboard.writeText(p.textContent);b.nextElementSibling.textContent=' 已复制'}catch(_){const r=document.createRange();r.selectNodeContents(p);const s=window.getSelection();s.removeAllRanges();s.addRange(r);b.nextElementSibling.textContent=' 已选中，请手动复制'}}));
 </script></body></html>

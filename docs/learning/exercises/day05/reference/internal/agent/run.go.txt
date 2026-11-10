@@ -1,0 +1,90 @@
+package agent
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+	"time"
+)
+
+func (a *Agent) Run(ctx context.Context, input string) (output string, runErr error) {
+	started := time.Now()
+	step := 0
+	a.emit(ctx, Event{Type: EventRunStarted, Status: "ok"})
+	defer func() {
+		kind := EventRunFinished
+		if runErr != nil {
+			kind = EventRunFailed
+		}
+		a.emit(ctx, Event{Type: kind, Step: step, Duration: time.Since(started), Status: status(runErr)})
+	}()
+	messages := []model.Message{{Role: "user", Content: input}}
+	for step = 1; step <= a.maxSteps; step++ {
+		if e := ctx.Err(); e != nil {
+			return "", e
+		}
+		a.emit(ctx, Event{Type: EventStepStarted, Step: step, Status: "ok"})
+		modelStart := time.Now()
+		r, e := a.model.Generate(ctx, messages)
+		if ctx.Err() != nil {
+			e = ctx.Err()
+		}
+		if e == nil && r == nil {
+			e = fmt.Errorf("nil response")
+		}
+		a.emit(ctx, Event{Type: EventModelCompleted, Step: step, Duration: time.Since(modelStart), Status: status(e)})
+		if e != nil {
+			return "", e
+		}
+		if r == nil || r.Message.Role != "assistant" {
+			return "", fmt.Errorf("agent: invalid response")
+		}
+		messages = append(messages, r.Message)
+		if len(r.Message.ToolCalls) == 0 {
+			return r.Message.Content, nil
+		}
+		for _, call := range r.Message.ToolCalls {
+			if e := ctx.Err(); e != nil {
+				return "", e
+			}
+			t, ok := a.tools[call.Name]
+			if !ok {
+				return "", fmt.Errorf("agent: unknown tool")
+			}
+			tc := ctx
+			cancel := func() {}
+			if a.toolTimeout > 0 {
+				tc, cancel = context.WithTimeout(ctx, a.toolTimeout)
+			}
+			start := time.Now()
+			ev := Event{Type: EventToolStarted, Step: step, ToolName: call.Name, ToolCallID: call.ID, Status: "ok"}
+			a.emit(ctx, ev)
+			out, e := t.Execute(tc, call.Arguments)
+			if tc.Err() != nil {
+				e = tc.Err()
+			}
+			cancel()
+			ev.Type = EventToolCompleted
+			ev.Duration = time.Since(start)
+			ev.Status = status(e)
+			a.emit(ctx, ev)
+			if e != nil {
+				return "", e
+			}
+			messages = append(messages, model.Message{Role: "tool", Content: out, ToolCallID: call.ID})
+		}
+	}
+	step = a.maxSteps
+	return "", ErrMaxSteps
+}
+
+func status(e error) string {
+	if errors.Is(e, context.Canceled) || errors.Is(e, context.DeadlineExceeded) {
+		return "cancelled"
+	}
+	if e != nil {
+		return "error"
+	}
+	return "ok"
+}
