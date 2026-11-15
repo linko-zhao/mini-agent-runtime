@@ -1,6 +1,6 @@
 # Agent Runtime 累计示例
 
-这是依据 Day 01–15 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
+这是依据 Day 01–16 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
 
 共享仓库根目录的 `go.mod`（Go 1.22.2），无需新建 Module，也不导入根目录 `internal` 中的练习实现。所有命令在仓库根目录运行：
 
@@ -136,3 +136,13 @@ RunResult包含Output与独立RunSnapshot；Snapshot.Clone复制消息、ToolCal
 [课程首页](../index.html) 已更新 Day 09–15；练习附件、隔离准备与可重跑验证见 [交付说明](../docs/learning/exercises/README.md)。练习测试指向学习者 internal，参考仍在 examples，两套 model 类型不混用。
 
 Day 09 的批次授权段提取为私有 authorizeBatch 插槽，Day 11 使用同一位置练习，公开 API 不变。Day 14 新增 internal/assembly 的宿主 Build 与七场景验收；原 integration/week02_test.go 保留。Day 15 新增 internal/runstate 的纯状态转换和快照测试；既有 Agent.Run/RunWithState 及观测快照继续保留，也没有新增持久化恢复能力。
+
+## Day16：运行上下文与状态更新
+
+新增 `examples/internal/runstate/run.go` 与 `run_test.go`。NewRun(ctx,runID,input,maxSteps) 创建每次运行独立的状态所有者；Context 原样返回 ctx，Snapshot 深拷贝当前状态，Apply 复用 Day15 Advance 校验并提交单个事件。没有更换旧模型、工具或消息类型，没有新建 module。
+
+非终态的 Apply 观察到 ctx.Err() 时，提交 Cancel 并返回原 context 错误；拒收当前迟到事件。已是终态则返回 ErrTransition，保持结果。Snapshot 不推进状态；显式 Cancel 事件不会调用宿主 cancel。单事件串行不等于整个 I/O 链互斥，宿主仍需按顺序驱动，在 Apply 外执行 I/O。
+
+本课没有把纯状态机接入 agent.RunWithState；旧观测 API 与 Step 含义全部保留。参考与练习仅映射 examples/internal 到 internal，不混用包类型。页面先提供可编译 TODO 和完整行为测试，答案在最后折叠。
+
+Go1.22.2 下原样骨架编译通过、目标在 TODO 处按预期失败，同一套测试对参考实现通过含 race。当前累计 `go test ./examples/...` 和 `go test -race ./examples/...` 均通过；学习者原实现、真实网络及持久恢复未验证。原始材料验证记录见 [Day16](../docs/learning/exercises/day16/verification.json)。

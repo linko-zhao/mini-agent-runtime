@@ -1,0 +1,35 @@
+{
+  "html_code_attachment_equality": "PASS",
+  "unique_ids": "PASS",
+  "no_external_assets": "PASS",
+  "browser": [
+    {
+      "viewport": [
+        1280,
+        900
+      ],
+      "offline": true,
+      "delivery": "in-memory route, not deployed page",
+      "overflow": false,
+      "errors": [],
+      "external_requests": 0,
+      "checklist_reload": "PASS",
+      "keyboard_details": "PASS",
+      "copy": "PASS"
+    },
+    {
+      "viewport": [
+        390,
+        844
+      ],
+      "offline": true,
+      "delivery": "in-memory route, not deployed page",
+      "overflow": false,
+      "errors": [],
+      "external_requests": 0,
+      "checklist_reload": "PASS",
+      "keyboard_details": "PASS",
+      "copy": "PASS"
+    }
+  ]
+}

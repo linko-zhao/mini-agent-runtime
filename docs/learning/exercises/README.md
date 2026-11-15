@@ -90,3 +90,11 @@ python3 docs/learning/exercises/verify.py --go /你的Go工具链/bin/go --repor
 main 在本批讲义准备期间新增了 agent.RunWithState、RunSnapshot 与调用状态记录，相关实现及测试全部保留。旧版 Day 15 的运行快照说明另存为 [观测快照参考](../agent-runtime-day-15-snapshot-reference.html)。新版 Day 15 先练习纯转换；该转换模型与实际运行观测属于不同层次，不互相替换，也不代表恢复协议。
 
 `baseline/` 是全课程共用的教学依赖快照，基于 01c9ca6 及本批授权插槽、装配与纯状态模块增量；包路径均已映射为 internal。它固定早期练习的 New/Run/executeBatch 契约，防止后续 main 的可选观测接口让旧骨架无法编译。Day09–15 复用这份基线；Day01–07 使用同一模块按阶段裁剪的前序依赖，所有日期共享原 go.mod，没有每日独立 Module。升级教学基线时必须同时迁移骨架、调用点与完整测试，再重新执行红绿验证；不得用它覆盖真实项目。
+
+## Day16：运行上下文与状态更新
+
+[Day16 页面](../agent-runtime-day-16.html) 与 day16/ 中的完整骨架/测试/支持/参考逐字一致。继续复用 Day15 State/Event/New/Advance；新增 internal/runstate/run.go，未接入旧 Agent.RunWithState。共享原 go.mod，固定 baseline 不变，Day15 state.go 作为显式 support 提供。
+
+在原仓库根运行 `python3 docs/learning/exercises/prepare.py 16`，进入打印的仓库外副本。编译 `go test ./internal/runstate -run '^$'`；目标 `go test ./internal/runstate -run '^TestDay16' -count=1 -v`。骨架预期在 TODO 处失败，参考通过含 race；不触碰原 internal/cmd。
+
+重跑材料验证：`python3 docs/learning/exercises/verify.py --go /你的Go/bin/go --days 16 --report /tmp/day16-verification.json`。本日原始报告见 [day16/verification.json](day16/verification.json)。当前累计 examples 普通/race 也实际通过；不据此判断学习者已完成或跨进程恢复可靠。

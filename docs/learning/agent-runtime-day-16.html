@@ -1,0 +1,580 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>Day 16 · 运行上下文与状态更新</title><style>
+:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#52617a;--line:#dce4ef;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:820px;padding:28px 22px 64px;margin:auto}.hero{background:#183561;color:white;border-radius:18px;padding:30px}.hero h1{font-size:26px;line-height:1.45;margin:12px 0}.hero p{color:#e6eefa}.eyebrow,.time{font-size:13px;font-weight:700}.chips{display:flex;flex-wrap:wrap;gap:8px}.chips span{font-size:13px;border:1px solid #9cb5d9;border-radius:20px;padding:3px 12px}section,nav{background:white;border:1px solid var(--line);border-radius:14px;padding:26px;margin-top:20px}h2{font-size:19px;line-height:1.5;margin:0 0 20px}h3{font-size:16px;line-height:1.5;margin:24px 0 10px}p{margin:12px 0}a{color:var(--accent);text-underline-offset:3px}li{margin:10px 0}code{font-size:.88em;background:#edf1f7;padding:2px 4px;border-radius:4px;overflow-wrap:anywhere}pre{background:#142136;color:#e7f3ff;border-radius:10px;padding:18px;overflow:auto;font-size:13px;line-height:1.7;tab-size:4}pre code{background:none;padding:0;font-size:inherit;overflow-wrap:normal}.note,.goal{border-left:4px solid var(--accent);background:var(--pale);padding:14px 18px;border-radius:4px}.warn{border-left-color:#9b6500;background:#fff6e3}.card,.rule,.step{border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:18px 0}.card h3,.step h3{margin-top:0}.muted{color:var(--sub);font-size:13px}.flow{display:flex;flex-direction:column;gap:10px;margin:20px 0}.node{border:2px solid #9eb6db;border-radius:10px;padding:15px;background:#f4f8ff}.node strong{display:block}.arrow{text-align:center;color:#345276;font-size:16px}.branch{border:2px dashed #9b6500;background:#fff7e8}.time{color:var(--accent)}details{border:1px solid var(--line);border-radius:9px;padding:12px 16px;margin:16px 0}summary{cursor:pointer;font-weight:650}summary:focus-visible,a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid #c67800;outline-offset:4px}button{font:inherit;font-size:13px;background:#edf3ff;color:#183561;border:1px solid #9eb6db;border-radius:7px;padding:7px 12px;cursor:pointer}.check{display:flex;gap:12px;margin:14px 0}.check input{width:20px;height:20px;flex-shrink:0;margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer}.done label{color:var(--sub);text-decoration:line-through}.progress{background:#e3e9f2;height:12px;border-radius:8px;overflow:hidden}.fill{background:var(--accent);height:100%;width:0}.meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:13px}footer{font-size:13px;text-align:center;padding:24px}.toplinks{display:flex;flex-wrap:wrap;gap:10px 22px}.download{font-size:13px}.code-actions{display:flex;gap:12px;align-items:center;margin-top:12px}.copy-state{font-size:13px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@media(max-width:600px){main{padding:12px 10px 36px}section,nav{padding:20px 16px}.hero{padding:23px 20px}.hero h1{font-size:24px}h2{font-size:19px}pre{padding:14px;font-size:12px}.card,.rule,.step{padding:14px}body{font-size:15px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+
+figure{margin-inline:0}p,.node,figcaption{overflow-wrap:anywhere}.file-label{overflow-wrap:anywhere}.phase{font-weight:700;color:#183561}.copy-status{font-size:13px;color:#52617a}details>pre{margin-bottom:12px}
+
+body{font-size:18px;line-height:1.8}h2{font-size:23px}h3{font-size:19px}main{max-width:840px}.node small{display:block}.code-file{min-width:0}section{min-width:0}@media(max-width:600px){body{font-size:17px}h2{font-size:21px}}</style></head><body><main><header class="hero"><div class="eyebrow">MINI AGENT RUNTIME · WEEK 03 · DAY 16 / 56</div><h1>运行上下文与状态更新</h1><p>今天实现每次运行的状态管理，让宿主能安全更新进度、读取副本，并把取消信号交给模型和工具。</p><div class="chips"><span>阅读 20 分钟</span><span>Go练习 80 分钟</span><span>测试复盘 20 分钟</span></div></header>
+<nav aria-label="本页导航" class="toplinks"><a href="#concepts">先懂设计</a><a href="#rules">行为契约</a><a href="#skeleton">骨架与测试</a><a href="#tasks">分步实现</a><a href="#answer">最后看答案</a></nav>
+<section><h2>今天只解决什么？</h2><p>输入还是“读取 doc-1”。Day15已能用事件计算下一份状态；今天要解决的是：这次运行的当前状态由谁保存，宿主怎样更新它，取消后怎样拒收迟到结果。</p><p>把当前状态散放在多个闭包里，容易发生旧消息覆盖新消息。我们新增一个每次运行独有的 Run 对象，让所有更新经过同一个入口。</p><p class="goal">完成后：NewRun 创建独立运行，Context 把原取消信号交给下游，Apply 提交单个合法事件，Snapshot 返回独立副本。</p><p>今天不接管旧 Agent.Run，不执行真实模型或工具，也不保存 Checkpoint。自动化只修改参考 examples 和学习材料；学习者原 internal/cmd 不会被改写。</p></section>
+<section id="concepts"><h2>先分清三个概念</h2>
+<article class="card"><h3>运行上下文：告诉下游什么时候停</h3><p>context.Context 携带取消、截止时间及请求范围的值。“读取 doc-1”超时后，模型与工具要收到同一个信号。</p><p>本日 Run.Context() 原样返回构造时传入的 context。状态不塞进 context.Value；创建 cancel 函数的宿主负责调用它。</p></article>
+<article class="card"><h3>当前状态：记录已经接受的事实</h3><p>State 记录消息、待处理调用、轮次和阶段。例如 ToolsRunning 表示已经进入工具阶段，不能因为超时就断言工具没有执行。</p><p>继续复用 Day15 的 State、Event、New 和 Advance，不再创造一套消息或阶段枚举。</p></article>
+<article class="card"><h3>更新入口：一次只接纳一个合法事件</h3><p>Apply 保存合法的新状态；非法事件返回错误和当前副本，原状态不变。Snapshot 只读，不会自动处理取消。</p><p>互斥保护的是单次转换，不是“读取 → 网络调用 → 写回”的整个事务。驱动一条运行链仍由单个宿主按顺序负责。</p></article></section>
+<section><h2>职责图：谁管信号，谁管数据？</h2>
+<figure aria-label="宿主向 Run 交付上下文和事件，Run 调用纯转换；模型工具在锁外执行"><div class="flow">
+<div class="node"><strong>宿主 / 驱动</strong>创建 ctx 与 cancel；按顺序发事件；决定执行哪些 I/O</div>
+<div class="arrow">↓ NewRun(ctx, RunID, input, MaxSteps)</div>
+<div class="node"><strong>Run · 每次运行一个对象</strong>持有当前 State；Apply(Event) → State副本、error；Snapshot() → 只读副本</div>
+<div class="arrow">↓ 当前 State + Event</div>
+<div class="node"><strong>Day15 Advance · 纯转换</strong>校验阶段、消息与ID；返回新 State 或错误</div>
+<div class="arrow">宿主另走一条路径 ↓ Run.Context() + Snapshot.Messages / Pending</div>
+<div class="node"><strong>Model / Tool · 在 Apply 外执行</strong>产生 Response / tool消息；结果再交给宿主构造 Event</div>
+<div class="node branch"><strong>失败出口</strong>依赖错误由宿主保留原因链，按需提交受控 Abort；取消由 Apply 观察后提交 Cancel</div></div>
+<figcaption>Run 不接收模型或工具依赖。它只管理内存状态；网络与业务副作用在外面，因此锁不会包住 I/O。</figcaption></figure></section>
+<section><h2>运行图：同一个 doc-1 请求怎样推进？</h2>
+<figure aria-label="从 Ready 开始，经模型、工具、模型完成，带取消出口"><div class="flow">
+<div class="node"><strong>① 创建 → Ready</strong>NewRun(ctx, "r16", "读取 doc-1", 2)，初始1条 user 消息</div>
+<div class="arrow">↓ Apply(StartModel) → Step=1</div>
+<div class="node"><strong>② 模型调用 → ModelReturned</strong>宿主用 Context() 和 Snapshot.Messages 调 Generate；返回 assistant，含 call-1/get_document</div>
+<div class="arrow">↓ Apply(ModelReturned) → ToolsPending；Apply(StartTools)</div>
+<div class="node"><strong>③ 工具执行 → ToolsReturned</strong>宿主复用既有校验/授权/执行策略，在锁外取结果；按 call-1 回填 tool 消息</div>
+<div class="arrow">↓ Apply(ToolsReturned) → Ready，3条消息；Apply(StartModel) → Step=2</div>
+<div class="node"><strong>④ 模型返回文本 → Completed</strong>Apply(ModelReturned) 接纳“已读取”；Result=已读取，4条消息</div>
+<div class="node branch"><strong>取消反例</strong>③开始后 ctx 取消；即使工具后来返回正文，Apply 拒收它，保留2条历史和 Pending，阶段变 Cancelled</div></div>
+<figcaption>图中的模型/工具调用是宿主责任示意，不是本日自动实现的新驱动。StartTools 之前仍须沿已有整批检查和授权规则；事件本身不会执行或授权工具。</figcaption></figure>
+<p>Mock 能证明事件、ID、消息和取消顺序。真实模型能否正确选工具、后端是否已写入、跨进程能否恢复，都需要另外的证据。</p></section>
+<section><h2>接口为什么这样设计？</h2>
+<article class="card"><h3>Run：每次执行的状态所有者</h3><p>ctx 是传入的原 context；state 是当前 State；mu 只保护 state 的读取和转换。字段不导出，调用方只能通过方法操作。</p><p>必须使用 NewRun 返回的指针，不复制含锁的 Run，不使用零值。每个 Run 独立，底层 Model、Tool、Sink 的并发安全仍由各自契约承担。</p></article>
+<article class="card"><h3>NewRun(ctx, runID, input, maxSteps)</h3><p>返回 *Run 和 error。ctx 不能为 nil；runID 不得全为空白；maxSteps 是正整数模型轮次预算，空 input 继续合法。</p><p>先拒绝 nil ctx，再检查 ctx.Err()，然后委托 Day15 New 校验身份和预算。失败返回 nil：取消/超时保留原 context 错误，其余非法构造用 ErrTransition。</p></article>
+<article class="card"><h3>Context() context.Context</h3><p>原样返回保存的 context，不生成新截止时间或 cancel 函数。宿主把它交给 Generate/Execute/Invoke；方法本身没有 I/O，也不会取消任何东西。</p></article>
+<article class="card"><h3>Snapshot() State</h3><p>返回当前状态的深拷贝，包括 Messages → ToolCalls → Arguments 和 Pending 字节。调用方可修改副本，不影响 Run 或其他读者。</p><p>读取不改变状态，所以 ctx 刚取消时，Snapshot 仍可能显示 ModelRunning。只有下一次 Apply 才记录观察到的取消。</p></article>
+<article class="card"><h3>Apply(Event) (State, error)</h3><p>成功保存新状态并返回副本；转换错误返回当前副本和原错误。区别于纯 Advance 的“错误返回零 State”，这里必须让宿主仍能查看当前进度。</p><p>状态只接受从 New/Advance 演进的值；没有任意 State setter。事件缓冲区在 Apply 执行期间不得被调用方并发改写，返回后可以独立使用。</p></article>
+<p class="note">Apply 同步等待互斥锁，不承诺取消能打断锁等待，也不保证公平顺序。复制成本与历史大小相关；本日没有截断、内存配额或版本号。</p></section>
+<section id="rules"><h2>行为契约：不用看答案也能实现</h2>
+<article class="rule"><h3>R1 · 构造与身份</h3><p>NewRun(ctx,"r16","读取 doc-1",2) → Ready、Step=0、MaxSteps=2、1条 user 消息。Context 必须等于原 ctx；非法参数与预取消按上述顺序拒绝。</p><p>测试：TestDay16NewAndContext；空 input 由 TestDay16RoundTrip 验证。</p></article>
+<article class="rule"><h3>R2 · 合法更新与失败原子性</h3><p>沿 Day15 全部转换规则推进；只有 StartModel 增加轮次。Ready+StartTools、错误结果ID、终态再更新等，返回当前副本及 ErrTransition，不覆盖原状态。</p><p>预算耗尽仍返回 ErrMaxSteps，状态保持 Ready；宿主可另发 Abort("budget") → Failed。控制原因由宿主分类，Run 不接收外部 error，不自动泄露依赖错误正文。</p><p>测试：TestDay16RoundTrip、TestDay16RejectedAndOwned。</p></article>
+<article class="rule"><h3>R3 · 取消检查与终态优先</h3><p>先检查已是终态则拒绝；非终态再检查 ctx.Err()。发现取消时提交 Day15 Cancel，Failure="cancelled"，保留历史和 Pending，拒绝本次传入事件并返回原 context 错误。</p><p>因此 deadline 的 State.Failure 也为 cancelled，但 errors.Is(err, context.DeadlineExceeded) 仍成立。第一次取消更新带回取消错误，后续更新返回 ErrTransition。</p><p>只在检查点观察取消；取消若发生在该检查之后，当前事件仍可能提交。已完成终态不会被后来取消改写；不承诺物理时间上的全局先后。</p><p>测试：TestDay16Cancellation。deadline 传播使用可控 context 夹具；另用真正已过期的 context 验证构造拒绝。</p></article>
+<article class="rule"><h3>R4 · 数据所有权</h3><p>Apply 返回值、Snapshot、原 Event 缓冲区和保存的状态互不共享可变字节。ToolsPending 的 Pending 也不能与历史中的 ToolCalls 互相污染。</p><p>测试：TestDay16RejectedAndOwned。宿主可保留快照，但不能把它写回 Run 或把内存副本当持久恢复记录。</p></article>
+<article class="rule"><h3>R5 · 并发更新</h3><p>Apply 与 Snapshot 可并发调用；16个并发 StartModel 只能一个成功，Step=1，其余 ErrTransition。各调用方修改自己的副本不会竞争。</p><p>锁仅串行单事件；两个相同阶段的并发响应不提供去重或操作身份匹配，宿主必须单独串行驱动一条 I/O 链。</p><p>测试：TestDay16ConcurrentUpdates。</p></article>
+<article class="rule"><h3>R6 · 已进入工具阶段后的取消</h3><p>ToolsRunning 后取消，迟到 tool 结果不进入 Messages，Pending 保留供诊断。不能据此推断外部效果已回滚，更不能自动重新调用。</p><p>显式 Apply(Cancel) 在活 context 下可成功，但不会取消 context；宿主停止下游仍需自己的 cancel 函数。</p><p>测试：TestDay16ToolsAndExplicitCancel。Run 无外部依赖，依赖故障测试不适用于其方法；宿主的网络/执行错误仍应按前序契约另外处理。</p></article></section>
+<section id="read"><h2>带着问题读 Eino：20 分钟</h2>
+<article class="card"><h3>12分钟 · 共享状态的访问范围</h3><p><a href="https://github.com/cloudwego/eino/blob/main/compose/state.go">compose/state.go</a>：定位 GenLocalState、internalState、ProcessState、getState、convertPreHandler。</p><p>问题：状态从哪里找到？互斥保护哪段代码？嵌套图怎样查父层状态？产出一段解释：框架借 ctx 定位状态不等于把所有业务状态都设计成 context.Value。</p><p>映射：本日显式 Run 对象承担所有权，Apply 只执行纯转换；Eino ProcessState 的 handler 全程持锁，因此耗时 I/O 不应随意放进去。课程不复制其泛型或父图查找机制。</p></article>
+<article class="card"><h3>8分钟 · 从消息进入状态看更新边界</h3><p><a href="https://github.com/cloudwego/eino/blob/main/flow/agent/react/react.go">flow/agent/react/react.go</a>：定位 state.Messages、WithGenLocalState、modelPreHandle、toolsNodePreHandle。</p><p>问题：消息何时写入，下一节点消费什么？产出“生成局部状态 → 更新消息 → 下游消费”的三步图，再对照 Run.Apply 与宿主锁外调用的位置。</p></article>
+<p class="muted">本次已读取官方 main 并确认这些符号。state.go blob f3506018b2f9；react.go blob 794a41fe1c4f。链接 main 会变化，阅读时记录版本；Eino不是本课程的运行依赖。</p></section>
+<section><h2>承接前序设计与本日增量</h2>
+<p><strong>复用：</strong>Day15 runstate/state.go、State、Event、New/Advance，以及既有 model.Message/ToolCall/Response。阶段、ID校验、工具结果顺序和深拷贝契约保持原样。</p>
+<p><strong>新增：</strong>练习 internal/runstate/run.go 和 day16_contract_test.go；累计参考 examples/internal/runstate/run.go、run_test.go。共享根 go.mod，不新建每日 module。</p>
+<p><strong>路径映射：</strong>练习 import 根 internal/model 与 internal/runstate；参考只映射成 examples/internal 前缀。两套类型不能混用，测试断言不变。</p>
+<p><strong>兼容与迁移：</strong>旧 New/Advance → 继续可直接使用；需要当前状态所有者时，调用方改用 NewRun/Apply/Snapshot/Context。原 agent.RunWithState/RunSnapshot 仍是另一层最终观测接口，本日没有把它接入纯状态驱动。</p>
+<p>旧观测 Snapshot.Step 是进入的Loop轮次；本日 State.Step 沿 Day15 只在 StartModel 时增加，不能直接互换。将来整合时要显式映射，本日不更名、不删除旧接口，也不宣称两个状态模型已经统一。</p>
+<p>新增教学附件、Day16 manifest、prepare/verify日期支持；不修改旧 baseline，也不扫描学习者源码决定题目。前置依赖在副本由固定 baseline 加本页 Day15 state.go 支持文件提供。</p>
+<pre><code># 原仓库根：只创建仓库外的新副本
+python3 docs/learning/exercises/prepare.py 16
+# 进入脚本打印的绝对目录后，编辑 internal/runstate/run.go</code></pre>
+<p>需要 Python3.9+、Go1.22.2+，无需API Key。已有兼容实现先保留，只应用完整测试；不要为制造红灯挖空已完成方法。</p></section>
+<section id="skeleton"><h2>完整骨架：先实现，再看答案</h2><p>在练习副本保存下列完整文件。Run 字段仅供内部实现使用；不要额外提供 setter。原样骨架可以编译，目标测试会在 TODO 处失败。</p><h3 class="file-label">新增 · internal/runstate/run.go</h3><p class="download"><a href="exercises/day16/skeleton/internal/runstate/run.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="skeleton" data-source="day16/skeleton/internal/runstate/run.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day16-skeleton-internal-runstate-run-go-txt"><code>package runstate
+
+import (
+	&quot;context&quot;
+	&quot;sync&quot;
+)
+
+// Run owns one in-memory State. Do not copy after use; use NewRun.
+type Run struct {
+	ctx   context.Context
+	mu    sync.Mutex
+	state State
+}
+
+func NewRun(ctx context.Context, runID, input string, maxSteps int) (*Run, error) {
+	panic(&quot;TODO: implement NewRun&quot;)
+}
+func (r *Run) Context() context.Context {
+	panic(&quot;TODO: implement Context&quot;)
+}
+func (r *Run) Snapshot() State {
+	panic(&quot;TODO: implement Snapshot&quot;)
+}
+func (r *Run) Apply(e Event) (State, error) {
+	panic(&quot;TODO: implement Apply&quot;)
+}
+</code></pre><button type="button" data-copy="day16-skeleton-internal-runstate-run-go-txt">复制本文件</button></details><details><summary>前置依赖：Day15 state.go（复用，不是本日待实现）</summary><p>prepare 已自动准备。手工应用时，请确保与前一天契约一致，不要重复定义 State/Event。</p><pre><code>// Package runstate models in-memory transitions. It is not a checkpoint store.
+package runstate
+
+import (
+	&quot;errors&quot;
+	&quot;strings&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+)
+
+type Phase string
+
+const (
+	Ready        Phase = &quot;ready&quot;
+	ModelRunning Phase = &quot;model_running&quot;
+	ToolsPending Phase = &quot;tools_pending&quot;
+	ToolsRunning Phase = &quot;tools_running&quot;
+	Completed    Phase = &quot;completed&quot;
+	Failed       Phase = &quot;failed&quot;
+	Cancelled    Phase = &quot;cancelled&quot;
+)
+
+type EventKind string
+
+const (
+	StartModel    EventKind = &quot;start_model&quot;
+	ModelReturned EventKind = &quot;model_returned&quot;
+	StartTools    EventKind = &quot;start_tools&quot;
+	ToolsReturned EventKind = &quot;tools_returned&quot;
+	Abort         EventKind = &quot;abort&quot;
+	Cancel        EventKind = &quot;cancel&quot;
+)
+
+var (
+	ErrTransition = errors.New(&quot;runstate: invalid transition&quot;)
+	ErrMaxSteps   = errors.New(&quot;runstate: max model rounds exceeded&quot;)
+)
+
+type State struct {
+	RunID           string
+	Phase           Phase
+	Step, MaxSteps  int
+	Messages        []model.Message
+	Pending         []model.ToolCall
+	Result, Failure string
+}
+type Event struct {
+	Kind     EventKind
+	Response *model.Response
+	Results  []model.Message
+	Reason   string
+}
+
+func New(runID, input string, maxSteps int) (State, error) {
+	if strings.TrimSpace(runID) == &quot;&quot; || maxSteps &lt;= 0 {
+		return State{}, ErrTransition
+	}
+	return State{RunID: runID, Phase: Ready, MaxSteps: maxSteps, Messages: []model.Message{{Role: &quot;user&quot;, Content: input}}}, nil
+}
+func cloneCalls(calls []model.ToolCall) []model.ToolCall {
+	if calls == nil {
+		return nil
+	}
+	out := append([]model.ToolCall{}, calls...)
+	for i := range out {
+		out[i].Arguments = append([]byte(nil), out[i].Arguments...)
+	}
+	return out
+}
+func cloneMessages(ms []model.Message) []model.Message {
+	if ms == nil {
+		return nil
+	}
+	out := append([]model.Message{}, ms...)
+	for i := range out {
+		out[i].ToolCalls = cloneCalls(out[i].ToolCalls)
+	}
+	return out
+}
+func cloneState(s State) State {
+	s.Messages = cloneMessages(s.Messages)
+	s.Pending = cloneCalls(s.Pending)
+	return s
+}
+func terminal(p Phase) bool { return p == Completed || p == Failed || p == Cancelled }
+
+// Advance has no I/O. The host performs calls between start/returned events.
+// It accepts states from New/Advance and never mutates input state/event buffers.
+func Advance(current State, e Event) (State, error) {
+	if terminal(current.Phase) {
+		return State{}, ErrTransition
+	}
+	next := cloneState(current)
+	switch e.Kind {
+	case StartModel:
+		if current.Phase != Ready {
+			return State{}, ErrTransition
+		}
+		if current.Step &gt;= current.MaxSteps {
+			return State{}, ErrMaxSteps
+		}
+		next.Step++
+		next.Phase = ModelRunning
+	case ModelReturned:
+		if current.Phase != ModelRunning || e.Response == nil || e.Response.Message.Role != &quot;assistant&quot; {
+			return State{}, ErrTransition
+		}
+		msg := e.Response.Message
+		ids := map[string]bool{}
+		for _, call := range msg.ToolCalls {
+			if call.ID == &quot;&quot; || strings.TrimSpace(call.Name) == &quot;&quot; || ids[call.ID] {
+				return State{}, ErrTransition
+			}
+			ids[call.ID] = true
+		}
+		next.Messages = append(next.Messages, cloneMessages([]model.Message{msg})...)
+		if len(msg.ToolCalls) == 0 {
+			next.Phase = Completed
+			next.Result = msg.Content
+		} else {
+			next.Phase = ToolsPending
+			next.Pending = cloneCalls(msg.ToolCalls)
+		}
+	case StartTools:
+		if current.Phase != ToolsPending {
+			return State{}, ErrTransition
+		}
+		next.Phase = ToolsRunning
+	case ToolsReturned:
+		if current.Phase != ToolsRunning || len(e.Results) != len(current.Pending) {
+			return State{}, ErrTransition
+		}
+		for i, msg := range e.Results {
+			if msg.Role != &quot;tool&quot; || msg.ToolCallID != current.Pending[i].ID {
+				return State{}, ErrTransition
+			}
+		}
+		next.Messages = append(next.Messages, cloneMessages(e.Results)...)
+		next.Pending = nil
+		next.Phase = Ready
+	case Abort:
+		if strings.TrimSpace(e.Reason) == &quot;&quot; {
+			return State{}, ErrTransition
+		}
+		next.Phase = Failed
+		next.Failure = e.Reason
+	case Cancel:
+		next.Phase = Cancelled
+		next.Failure = &quot;cancelled&quot;
+	default:
+		return State{}, ErrTransition
+	}
+	return next, nil
+}
+</code></pre></details></section><section><h2>完整测试：验证自己的 internal 实现</h2><p>所有 fake、数据和断言都在下面。deadline16 只在底层 context 取消后切换 Err，用于可控测试，不代表生产计时器。</p><h3 class="file-label">新增 · internal/runstate/day16_contract_test.go</h3><p class="download"><a href="exercises/day16/tests/internal/runstate/day16_contract_test.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="tests" data-source="day16/tests/internal/runstate/day16_contract_test.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day16-tests-internal-runstate-day16_contract_test-go-txt"><code>package runstate_test
+
+import (
+	&quot;context&quot;
+	&quot;errors&quot;
+	&quot;reflect&quot;
+	&quot;sync&quot;
+	&quot;sync/atomic&quot;
+	&quot;testing&quot;
+	&quot;time&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/runstate&quot;
+)
+
+func mustRun16(t *testing.T, ctx context.Context, id string, budget int) *runstate.Run {
+	t.Helper()
+	r, err := runstate.NewRun(ctx, id, &quot;读取 doc-1&quot;, budget)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+func apply16(t *testing.T, r *runstate.Run, e runstate.Event) runstate.State {
+	t.Helper()
+	s, err := r.Apply(e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+func response16() *model.Response {
+	return &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, ToolCalls: []model.ToolCall{{ID: &quot;call-1&quot;, Name: &quot;get_document&quot;, Arguments: []byte(`{&quot;id&quot;:&quot;doc-1&quot;}`)}}}}
+}
+func TestDay16NewAndContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), struct{}{}, &quot;trusted&quot;))
+	defer cancel()
+	r := mustRun16(t, ctx, &quot;r16&quot;, 2)
+	if r.Context() != ctx {
+		t.Fatal(&quot;context was replaced&quot;)
+	}
+	s := r.Snapshot()
+	if s.RunID != &quot;r16&quot; || s.Step != 0 || s.MaxSteps != 2 || s.Phase != runstate.Ready || s.Messages[0].Content != &quot;读取 doc-1&quot; {
+		t.Fatal(s)
+	}
+	for _, tc := range []struct {
+		ctx    context.Context
+		id     string
+		budget int
+		want   error
+	}{
+		{nil, &quot;r&quot;, 2, runstate.ErrTransition},
+		{context.Background(), &quot; &quot;, 2, runstate.ErrTransition},
+		{context.Background(), &quot;r&quot;, 0, runstate.ErrTransition},
+	} {
+		r, e := runstate.NewRun(tc.ctx, tc.id, &quot;&quot;, tc.budget)
+		if r != nil || !errors.Is(e, tc.want) {
+			t.Fatal(r, e)
+		}
+	}
+	cancel()
+	if r, e := runstate.NewRun(ctx, &quot;r&quot;, &quot;&quot;, 2); r != nil || !errors.Is(e, context.Canceled) {
+		t.Fatal(r, e)
+	}
+}
+
+// Empty input remains legal, as in Day15; no new input restriction.
+func TestDay16RoundTrip(t *testing.T) {
+	r, err := runstate.NewRun(context.Background(), &quot;r&quot;, &quot;&quot;, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := apply16(t, r, runstate.Event{Kind: runstate.StartModel})
+	if start.Step != 1 || start.Phase != runstate.ModelRunning {
+		t.Fatal(start)
+	}
+	pending := apply16(t, r, runstate.Event{Kind: runstate.ModelReturned, Response: response16()})
+	if pending.Phase != runstate.ToolsPending || pending.Pending[0].ID != &quot;call-1&quot; {
+		t.Fatal(pending)
+	}
+	apply16(t, r, runstate.Event{Kind: runstate.StartTools})
+	ready := apply16(t, r, runstate.Event{Kind: runstate.ToolsReturned, Results: []model.Message{{Role: &quot;tool&quot;, ToolCallID: &quot;call-1&quot;, Content: &quot;正文&quot;}}})
+	if ready.Phase != runstate.Ready || len(ready.Pending) != 0 || len(ready.Messages) != 3 {
+		t.Fatal(ready)
+	}
+	apply16(t, r, runstate.Event{Kind: runstate.StartModel})
+	done := apply16(t, r, runstate.Event{Kind: runstate.ModelReturned, Response: &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, Content: &quot;已读取&quot;}}})
+	if done.Phase != runstate.Completed || done.Step != 2 || done.Result != &quot;已读取&quot; || len(done.Messages) != 4 {
+		t.Fatal(done)
+	}
+	before := r.Snapshot()
+	got, e := r.Apply(runstate.Event{Kind: runstate.Cancel})
+	if !errors.Is(e, runstate.ErrTransition) || !reflect.DeepEqual(before, got) {
+		t.Fatal(got, e)
+	}
+}
+func TestDay16RejectedAndOwned(t *testing.T) {
+	r := mustRun16(t, context.Background(), &quot;r&quot;, 1)
+	before := r.Snapshot()
+	got, e := r.Apply(runstate.Event{Kind: runstate.StartTools})
+	if !errors.Is(e, runstate.ErrTransition) || !reflect.DeepEqual(before, got) || !reflect.DeepEqual(before, r.Snapshot()) {
+		t.Fatal(got, e)
+	}
+	apply16(t, r, runstate.Event{Kind: runstate.StartModel})
+	response := response16()
+	returned := apply16(t, r, runstate.Event{Kind: runstate.ModelReturned, Response: response})
+	response.Message.ToolCalls[0].Arguments[0] = &#x27;x&#x27;
+	returned.Pending[0].Arguments[0] = &#x27;y&#x27;
+	returned.Messages[1].ToolCalls[0].Arguments[0] = &#x27;z&#x27;
+	snap := r.Snapshot()
+	snap.Pending[0].Arguments[0] = &#x27;!&#x27;
+	if r.Snapshot().Pending[0].Arguments[0] != &#x27;{&#x27; || r.Snapshot().Messages[1].ToolCalls[0].Arguments[0] != &#x27;{&#x27; {
+		t.Fatal(&quot;alias&quot;)
+	}
+	apply16(t, r, runstate.Event{Kind: runstate.StartTools})
+	before = r.Snapshot()
+	got, e = r.Apply(runstate.Event{Kind: runstate.ToolsReturned, Results: []model.Message{{Role: &quot;tool&quot;, ToolCallID: &quot;wrong&quot;}}})
+	if !errors.Is(e, runstate.ErrTransition) || !reflect.DeepEqual(before, got) {
+		t.Fatal(got, e)
+	}
+	apply16(t, r, runstate.Event{Kind: runstate.ToolsReturned, Results: []model.Message{{Role: &quot;tool&quot;, ToolCallID: &quot;call-1&quot;}}})
+	before = r.Snapshot()
+	got, e = r.Apply(runstate.Event{Kind: runstate.StartModel})
+	if !errors.Is(e, runstate.ErrMaxSteps) || !reflect.DeepEqual(before, got) {
+		t.Fatal(got, e)
+	}
+	failed := apply16(t, r, runstate.Event{Kind: runstate.Abort, Reason: &quot;budget&quot;})
+	if failed.Phase != runstate.Failed || failed.Failure != &quot;budget&quot; {
+		t.Fatal(failed)
+	}
+}
+func TestDay16Cancellation(t *testing.T) {
+	for _, deadline := range []bool{false, true} {
+		t.Run(map[bool]string{false: &quot;cancel&quot;, true: &quot;deadline&quot;}[deadline], func(t *testing.T) {
+			base, cancel := context.WithCancel(context.Background())
+			var ctx context.Context = base
+			want := error(context.Canceled)
+			if deadline {
+				ctx = deadline16{base}
+				want = context.DeadlineExceeded
+			}
+			defer cancel()
+			r := mustRun16(t, ctx, &quot;cancel&quot;, 2)
+			apply16(t, r, runstate.Event{Kind: runstate.StartModel})
+			cancel()
+			if r.Snapshot().Phase != runstate.ModelRunning {
+				t.Fatal(&quot;read must not transition&quot;)
+			}
+			got, e := r.Apply(runstate.Event{Kind: runstate.ModelReturned, Response: response16()})
+			if !errors.Is(e, want) || got.Phase != runstate.Cancelled || len(got.Messages) != 1 || got.Failure != &quot;cancelled&quot; {
+				t.Fatal(got, e)
+			}
+			if _, e = r.Apply(runstate.Event{Kind: runstate.Cancel}); !errors.Is(e, runstate.ErrTransition) {
+				t.Fatal(e)
+			}
+		})
+	}
+	expired, cancel := context.WithDeadline(context.Background(), time.Unix(1, 0))
+	defer cancel()
+	if r, e := runstate.NewRun(expired, &quot;r&quot;, &quot;&quot;, 2); r != nil || !errors.Is(e, context.DeadlineExceeded) {
+		t.Fatal(r, e)
+	}
+	ctx, c := context.WithCancel(context.Background())
+	r := mustRun16(t, ctx, &quot;terminal&quot;, 1)
+	apply16(t, r, runstate.Event{Kind: runstate.StartModel})
+	done := apply16(t, r, runstate.Event{Kind: runstate.ModelReturned, Response: &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, Content: &quot;ok&quot;}}})
+	c()
+	got, e := r.Apply(runstate.Event{Kind: runstate.Cancel})
+	if !errors.Is(e, runstate.ErrTransition) || !reflect.DeepEqual(done, got) {
+		t.Fatal(got, e)
+	}
+}
+
+// Controlled deadline fixture: Err switches only after the underlying cancel.
+// It tests deadline propagation without wall-clock sleeps.
+type deadline16 struct{ context.Context }
+
+func (d deadline16) Err() error {
+	if d.Context.Err() != nil {
+		return context.DeadlineExceeded
+	}
+	return nil
+}
+func TestDay16ConcurrentUpdates(t *testing.T) {
+	r := mustRun16(t, context.Background(), &quot;shared&quot;, 2)
+	var wins atomic.Int32
+	var wg sync.WaitGroup
+	for i := 0; i &lt; 16; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s, e := r.Apply(runstate.Event{Kind: runstate.StartModel})
+			if e == nil {
+				wins.Add(1)
+			} else if !errors.Is(e, runstate.ErrTransition) {
+				t.Error(e)
+			}
+			s.Messages[0].Content = &quot;private&quot;
+			snap := r.Snapshot()
+			snap.Messages[0].Content = &quot;reader&quot;
+		}()
+	}
+	wg.Wait()
+	s := r.Snapshot()
+	if wins.Load() != 1 || s.Step != 1 || s.Phase != runstate.ModelRunning || s.Messages[0].Content != &quot;读取 doc-1&quot; {
+		t.Fatal(wins.Load(), s)
+	}
+	other := mustRun16(t, context.Background(), &quot;other&quot;, 2)
+	if other.Snapshot().Phase != runstate.Ready {
+		t.Fatal(&quot;Run isolation&quot;)
+	}
+}
+
+func TestDay16ToolsAndExplicitCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	r := mustRun16(t, ctx, &quot;tools&quot;, 2)
+	apply16(t, r, runstate.Event{Kind: runstate.StartModel})
+	apply16(t, r, runstate.Event{Kind: runstate.ModelReturned, Response: response16()})
+	apply16(t, r, runstate.Event{Kind: runstate.StartTools})
+	// The host has entered I/O. Cancellation cannot undo external effects.
+	seen := r.Context()
+	if seen != ctx {
+		t.Fatal(&quot;downstream must receive original context&quot;)
+	}
+	cancel()
+	&lt;-seen.Done()
+	got, e := r.Apply(runstate.Event{Kind: runstate.ToolsReturned, Results: []model.Message{{Role: &quot;tool&quot;, ToolCallID: &quot;call-1&quot;, Content: &quot;late&quot;}}})
+	if !errors.Is(e, context.Canceled) || got.Phase != runstate.Cancelled || len(got.Messages) != 2 || len(got.Pending) != 1 {
+		t.Fatal(got, e)
+	}
+	// Explicit cancellation of a live Run is a state event, not context cancellation.
+	live := mustRun16(t, context.Background(), &quot;explicit&quot;, 1)
+	s := apply16(t, live, runstate.Event{Kind: runstate.Cancel})
+	if s.Phase != runstate.Cancelled || live.Context().Err() != nil {
+		t.Fatal(s)
+	}
+}
+</code></pre><button type="button" data-copy="day16-tests-internal-runstate-day16_contract_test-go-txt">复制本文件</button></details><pre><code># 以下命令在练习副本根执行
+go test ./internal/runstate -run '^$'
+go test ./internal/runstate -run '^TestDay16' -count=1 -v -timeout 20s</code></pre><p>第一条预期编译通过；第二条必须实际执行目标并在 TODO 处失败。编译错误、缺包或没有匹配测试都不是预期红灯。</p></section>
+<section id="tasks"><h2>80分钟：每步只完成一组行为</h2>
+<article class="step"><h3>1 · 15分钟：创建每次运行的所有者</h3><p><strong>为什么：</strong>先把信号和状态分开，避免跨运行共享。<strong>位置：</strong>新增 run.go 的 NewRun、Context。</p><p><strong>动作：</strong>沿 R1 处理 ctx 与 New 的错误；保留原 ctx；预测空输入和预取消的返回。不要重写 Day15 状态构造。</p><pre><code>go test ./internal/runstate -run '^TestDay16NewAndContext$' -count=1 -v</code></pre><p><strong>完成证据：</strong>Ready、预算与初始消息正确，Context身份相同，非法构造无 Run。</p><details><summary>卡住时的提示</summary><p>上下文检查和 State 构造有明确先后，验证错误不要只判断“非nil”。</p></details></article>
+<article class="step"><h3>2 · 25分钟：提交合法事件，保留错误前状态</h3><p><strong>为什么：</strong>宿主要得到确定的当前状态，不能把转换失败的零值覆盖上去。<strong>位置：</strong>Apply 的正常与拒绝路径。</p><p><strong>动作：</strong>按照 R2 复用 Advance；用 doc-1 的六个阶段解释每次输入输出。错误返回当前副本，不增加新转换规则。</p><pre><code>go test ./internal/runstate -run '^TestDay16RoundTrip$' -count=1 -v</code></pre><p><strong>完成证据：</strong>完成时4条消息、Step=2；终态不能重开。错误ID和预算断言会在第四步进一步验证。</p><details><summary>卡住时的提示</summary><p>区分“计算下一状态成功”与“把它设为当前状态”，不能无条件赋值。</p></details></article>
+<article class="step"><h3>3 · 20分钟：让取消成为更新边界</h3><p><strong>为什么：</strong>外部调用可能迟到，不能把取消后的返回直接写入历史。<strong>位置：</strong>Apply 的终态门禁和 ctx 检查。</p><p><strong>动作：</strong>沿 R3/R6 处理取消与截止时间；在纸上演算 ToolsRunning 后取消。说明为什么显式 Cancel 事件不等于调用 cancel 函数。</p><pre><code>go test ./internal/runstate -run '^(TestDay16Cancellation|TestDay16ToolsAndExplicitCancel)$' -count=1 -v</code></pre><p><strong>完成证据：</strong>迟到结果被拒收，Pending保留，终态不被改写；errors.Is能区别取消与截止时间。</p><details><summary>卡住时的提示</summary><p>先确定终态是否允许任何修改，再考虑 ctx.Err；快照读取不应暗中改变状态。</p></details></article>
+<article class="step"><h3>4 · 20分钟：验证副本与并发</h3><p><strong>为什么：</strong>有锁但返回共享切片，读者仍可能改坏当前状态。<strong>位置：</strong>Snapshot 和 Apply 返回值，R4/R5。</p><p><strong>动作：</strong>复用 Day15 克隆能力；预测修改 Event、返回值和 Snapshot 的影响。再让16个并发开始事件竞争，检查单事件串行承诺。</p><pre><code>go test ./internal/runstate -run '^(TestDay16RejectedAndOwned|TestDay16ConcurrentUpdates)$' -count=1 -v
+go test -race ./internal/runstate -run '^TestDay16' -count=1</code></pre><p><strong>完成证据：</strong>只有一个 StartModel 成功，历史字节互不串改。全绿后整理重复逻辑，再跑相同断言。</p><details><summary>卡住时的提示</summary><p>新状态独立于旧输入，不代表“保存的状态”和“返回值”已经彼此独立。</p></details></article></section>
+<section><h2>测试与复盘：20分钟</h2><div class="time">12分钟 · 目标与累计回归</div>
+<pre><code># 练习副本根：检查真正的练习包
+go test ./internal/runstate -run '^TestDay16' -count=1 -v -timeout 20s
+go test -race ./internal/runstate -timeout 30s
+go test ./internal/... -timeout 60s
+# 参考仓库根：检查累计答案
+go test ./examples/...
+go test -race ./examples/...</code></pre>
+<p>以上是建议练习命令，不代表学习者已执行。生成者只验证隔离材料和参考代码，不评判你的原实现。</p>
+<div class="time">8分钟 · 不看代码回答</div><ol><li>从“读取 doc-1”讲清 ctx、Run、Advance 与模型/工具之间的数据流。</li><li>如果改成运行中查询，今天哪个接口能复用？若要求跨进程查询，还缺哪一层？</li><li>为什么 Apply 有锁，仍不能让两个驱动同时消费同一 Pending？</li><li>工具超时后快照里没有结果，能否自动重放？还要知道什么？</li></ol>
+<h3>完成定义</h3><p><strong>实作：</strong>目标与race通过，错误/取消不污染历史，快照无别名；记录累计回归的真实结果与未验证范围。</p><p><strong>理解：</strong>不用接口名也能解释信号与数据的区别，能指出锁、取消和副作用的边界；增加存储或换模型时能判断要改哪层。</p>
+<h3>本次发布验证</h3><p class="note" id="verification">Go1.22.2 linux/amd64：原样骨架编译通过，目标测试在 TODO 处按预期失败；相同完整测试对隔离 internal 参考实现通过（含 race），兼容副本累计回归通过。仓库根 examples 普通与 race 测试全部通过。学习者原实现、真实模型/网络与持久恢复未验证。</p>
+<p><a href="exercises/day16/verification.json">本日原始验证记录</a> · <a href="exercises/README.md">准备方法与历史范围</a></p>
+<h3>学习清单</h3><div class="meta"><span>本浏览器自评进度</span><span id="count">0 / 8</span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="fill" class="fill"></div></div><div id="checks"></div><noscript><p>脚本关闭时仍可离线阅读图、骨架、测试和答案；清单不会自动保存。</p></noscript></section>
+<section id="answer"><h2>最后再看：兼容参考答案</h2><p>先完成自己的实现，再比较所有权、错误返回和取消边界。这里的 import 采用练习 internal 路径，累计答案位于 examples/internal/runstate/run.go；行为与测试一致。</p><h3 class="file-label">参考 · internal/runstate/run.go</h3><p class="download"><a href="exercises/day16/reference/internal/runstate/run.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="reference" data-source="day16/reference/internal/runstate/run.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day16-reference-internal-runstate-run-go-txt"><code>package runstate
+
+import (
+	&quot;context&quot;
+	&quot;sync&quot;
+)
+
+// Run owns one in-memory State. Use its pointer; do not copy it after use.
+// The zero value is not usable; construct with NewRun.
+type Run struct {
+	ctx   context.Context
+	mu    sync.Mutex
+	state State
+}
+
+// NewRun retains ctx for cancellation/deadlines, not for storing State.
+// A cancelled context rejects construction; invalid identity/budget uses ErrTransition.
+func NewRun(ctx context.Context, runID, input string, maxSteps int) (*Run, error) {
+	if ctx == nil {
+		return nil, ErrTransition
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	s, err := New(runID, input, maxSteps)
+	if err != nil {
+		return nil, err
+	}
+	return &amp;Run{ctx: ctx, state: s}, nil
+}
+
+// Context returns the original context. The host owns any cancel function.
+// Model/tool I/O must use this context outside Apply, never while holding its lock.
+func (r *Run) Context() context.Context { return r.ctx }
+
+// Snapshot returns an independent copy without triggering transitions.
+func (r *Run) Snapshot() State {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return cloneState(r.state)
+}
+
+// Apply commits exactly one valid event, or returns the unchanged current copy.
+// For a nonterminal Run, observed context cancellation commits Cancel and rejects
+// the event with the original context error. A terminal State is never overwritten.
+// This serializes transitions, not a snapshot -&gt; external I/O -&gt; Apply transaction.
+func (r *Run) Apply(e Event) (State, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if terminal(r.state.Phase) {
+		return cloneState(r.state), ErrTransition
+	}
+	if err := r.ctx.Err(); err != nil {
+		next, transitionErr := Advance(r.state, Event{Kind: Cancel})
+		if transitionErr != nil {
+			return cloneState(r.state), transitionErr
+		}
+		r.state = next
+		return cloneState(r.state), err
+	}
+	next, err := Advance(r.state, e)
+	if err != nil {
+		return cloneState(r.state), err
+	}
+	r.state = next
+	return cloneState(r.state), nil
+}
+</code></pre><button type="button" data-copy="day16-reference-internal-runstate-run-go-txt">复制本文件</button></details><h3>为什么明天开始 Checkpoint？</h3><p>今天统一了内存中的当前状态与更新入口，但进程退出仍会丢失状态。Day17将讨论哪些边界能保存快照、保存成功如何影响继续执行；持久化不自动解决外部副作用与重复调用。</p></section>
+<footer><a href="agent-runtime-day-15.html">前一天 Day15</a> · <a href="../../index.html">返回学习首页</a><p>Day16 / 56 · 第三周 · 正文、图示、骨架与测试离线可读</p></footer></main><script>
+const items=["用自己的话解释当天三个概念", "根据两张图讲清输入、职责和返回", "完成官方阅读并写下问题答案", "确认骨架可编译且目标出现预期红灯", "按任务卡逐步完成当天实现", "完整目标与 race 测试通过", "记录累计回归实际结果和未验证项", "合上代码完成需求变化与失败边界复盘"];const key="mini-agent-runtime-day-16-tdd-v1";
+let saved=[];try{const value=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(value))saved=value}catch(_){}
+const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const percent=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=percent+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(percent))}
+items.forEach((s,i)=>{const row=document.createElement("div");row.className="check";const input=document.createElement("input");input.type="checkbox";input.id="task-"+i;input.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=input.id;label.textContent=s;row.append(input,label);box.append(row);input.onchange=()=>{saved[i]=input.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+document.querySelectorAll("button[data-copy]").forEach(button=>button.addEventListener("click",async()=>{const target=document.getElementById(button.dataset.copy);try{await navigator.clipboard.writeText(target.textContent);button.textContent="已复制"}catch(_){const range=document.createRange();range.selectNodeContents(target);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);button.textContent="已选中，请手动复制"}}));
+</script></body></html>

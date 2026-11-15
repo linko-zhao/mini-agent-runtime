@@ -1,0 +1,26 @@
+package runstate
+
+import (
+	"context"
+	"sync"
+)
+
+// Run owns one in-memory State. Do not copy after use; use NewRun.
+type Run struct {
+	ctx   context.Context
+	mu    sync.Mutex
+	state State
+}
+
+func NewRun(ctx context.Context, runID, input string, maxSteps int) (*Run, error) {
+	panic("TODO: implement NewRun")
+}
+func (r *Run) Context() context.Context {
+	panic("TODO: implement Context")
+}
+func (r *Run) Snapshot() State {
+	panic("TODO: implement Snapshot")
+}
+func (r *Run) Apply(e Event) (State, error) {
+	panic("TODO: implement Apply")
+}

@@ -212,3 +212,28 @@ Day 08 已提供 [图解与 TDD 正式课程](../docs/learning/agent-runtime-day
 后续章节继续复用上述状态语义，先明确状态驱动/保存/恢复的边界，不把内存快照当成可靠恢复协议。实际验证范围见 `docs/learning/exercises/README.md` 与 verification.json。
 
 教学依赖固定在 `docs/learning/exercises/baseline`，不覆盖本节保留的 RunWithState 观测实现。纯 runstate 是设计练习模型；与已运行的 RunSnapshot 映射需在后续课程显式设计，不混用状态枚举或声称已经恢复。
+
+## Day16 增量：纯状态机的运行所有者
+
+### 新增与复用
+- 新增 `examples/internal/runstate.Run`（只能使用 NewRun 返回的指针，不可复制或使用零值）、`NewRun(ctx context.Context,runID,input string,maxSteps int)(*Run,error)`、`Context() context.Context`、`Snapshot() State`、`Apply(Event)(State,error)`。
+- Run 私有保存原 ctx、互斥和当前 State；复用 Day15 New、Advance、克隆与终态规则。State/Event/Phase/消息与旧 public 接口不变。练习目标 internal/runstate/run.go；示例与测试 import 仅作 examples/internal ↔ internal 前缀映射。
+- NewRun 依次检查 nil ctx（ErrTransition）、ctx.Err（原错误）、New 的身份与预算。失败返回 nil。空 input 仍合法；不新增 cancel 函数或模块。
+- 原 agent.Run/RunWithState 及观测 RunSnapshot 保留，未改造为纯状态驱动。纯 State.Step 只在 StartModel 增加，旧 Snapshot.Step 为进入Loop轮次，不能静默互换。
+
+### 更新、错误与取消
+- Apply 串行一次事件，合法则提交新状态；错误返回当前独立副本及原错误，不把 Advance 的错误零值写为当前状态。ErrMaxSteps 不自动 Abort；宿主决定受控 Reason，原依赖错误链由宿主另行保留。
+- 已为终态优先拒绝所有事件并返回 ErrTransition，不被后来取消改写。非终态在锁内采样 ctx.Err；观察到取消/截止时间则沿 Advance(Cancel) 提交 Cancelled、Failure="cancelled"，保留 Messages/Pending，拒收当前事件，返回原 ctx.Err（可 errors.Is 区分 DeadlineExceeded）。
+- Snapshot 只读，不观察取消并修改状态。显式 Apply(Cancel) 是状态更新，不取消 ctx；真正的取消函数归宿主。取消如果发生在检查之后，当前事件仍可能提交；无严格物理时间先后保证。
+- Context 原样返回输入，供锁外模型/工具调用。没有外部 I/O 依赖、网络错误包装或任意 State setter；不把状态放进 context.Value。
+
+### 所有权、并发与范围
+- Snapshot 和每次 Apply 返回值都深拷贝当前 State，包含历史嵌套 Arguments 与 Pending；内部状态、原事件和返回副本互不别名。调用方不得在 Apply 期间并发修改 Event 缓冲区。
+- Apply/Snapshot 可并发调用；16个 StartModel 竞争仅一个成功、Step=1。锁不是 Snapshot→I/O→Apply 的事务，不提供操作身份去重；宿主负责单驱动顺序及下游并发安全。Run 不可复制，Context 无额外取消能力。
+- 互斥等待不支持 context 中断或公平承诺；克隆成本随状态增长。快照含私密输入/参数/正文，不是公开审计事件。
+- 已开始工具后取消不回滚外部效果；被拒收的迟到结果不进入历史，Pending保留仅供诊断。没有自动重放、Checkpoint、状态版本/存储、跨进程恢复或对旧 Agent 观测状态的适配。
+
+### 验证与迁移
+新增 run.go 即可，旧 New/Advance 调用可继续使用；需要状态所有者的宿主改用 NewRun/Apply/Snapshot/Context。前置 state.go 保留 Day15；不替换旧 Agent.Event 或 RunSnapshot。教学 prepare/verify 支持 Day16，manifest 单列目标、完整测试与 Day15 support，固定 baseline 保持不动。
+
+官方 Go1.22.2 下原样 TODO 骨架可编译，目标因 TODO 失败；相同测试在隔离 internal 参考副本通过含 race，兼容副本累计回归通过。当前 examples 普通/race 全通过。未读取或验证学习者根 internal/cmd；未验证真实 I/O、崩溃恢复或跨进程状态。每条公开行为、非法参数、迟到结果、取消/截止错误、所有权和并发承诺见 Day16 完整测试与验证记录。

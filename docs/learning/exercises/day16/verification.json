@@ -1,0 +1,30 @@
+{
+  "go": "go version go1.22.2 linux/amd64",
+  "days": {
+    "16": {
+      "compile": 0,
+      "red": 1,
+      "green_race": 0,
+      "expected_todo": true,
+      "target_tests_ran": true,
+      "compile_log": "ok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/runstate\t0.004s [no tests to run]\n",
+      "red_log": "=== RUN   TestDay16NewAndContext\n--- FAIL: TestDay16NewAndContext (0.00s)\npanic: TODO: implement NewRun [recovered]\n\tpanic: TODO: implement NewRun\n\ngoroutine 18 [running]:\ntesting.tRunner.func1.2({0x538d00, 0x59d940})\n\t/tmp/agent-runtime-day16-toolchain/go/src/testing/testing.go:1631 +0x24a\ntesting.tRunner.func1()\n\t/tmp/agent-runtime-day16-toolchain/go/src/testing/testing.go:1634 +0x377\npanic({0x538d00?, 0x59d940?})\n\t/tmp/agent-runtime-day16-toolchain/go/src/runtime/panic.go:770 +0x132\ngithub.com/linko-zhao/mini-agent-runtime/internal/runstate.NewRun(...)\n\t/tmp/learning-verify-5e0fa95t/day16-red/internal/runstate/run.go:16\ngithub.com/linko-zhao/mini-agent-runtime/internal/runstate_test.mustRun16(0x59ef00?, {0xc0000a8420?, 0x53e5c0?}, {0x6e5180?, 0x538d00?}, 0x59d980?)\n\t/tmp/learning-verify-5e0fa95t/day16-red/internal/runstate/day16_contract_test.go:18 +0x29\ngithub.com/linko-zhao/mini-agent-runtime/internal/runstate_test.TestDay16NewAndContext(0xc0000d04e0)\n\t/tmp/learning-verify-5e0fa95t/day16-red/internal/runstate/day16_contract_test.go:38 +0x7f\ntesting.tRunner(0xc0000d04e0, 0x572ed8)\n\t/tmp/agent-runtime-day16-toolchain/go/src/testing/testing.go:1689 +0xfb\ncreated by testing.(*T).Run in goroutine 1\n\t/tmp/agent-runtime-day16-toolchain/go/src/testing/testing.go:1742 +0x390\nFAIL\tgithub.com/linko-zhao/mini-agent-runtime/internal/runstate\t0.004s\nFAIL\n",
+      "green_log": "=== RUN   TestDay16NewAndContext\n--- PASS: TestDay16NewAndContext (0.00s)\n=== RUN   TestDay16RoundTrip\n--- PASS: TestDay16RoundTrip (0.00s)\n=== RUN   TestDay16RejectedAndOwned\n--- PASS: TestDay16RejectedAndOwned (0.00s)\n=== RUN   TestDay16Cancellation\n=== RUN   TestDay16Cancellation/cancel\n=== RUN   TestDay16Cancellation/deadline\n--- PASS: TestDay16Cancellation (0.00s)\n    --- PASS: TestDay16Cancellation/cancel (0.00s)\n    --- PASS: TestDay16Cancellation/deadline (0.00s)\n=== RUN   TestDay16ConcurrentUpdates\n--- PASS: TestDay16ConcurrentUpdates (0.00s)\n=== RUN   TestDay16ToolsAndExplicitCancel\n--- PASS: TestDay16ToolsAndExplicitCancel (0.00s)\nPASS\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/runstate\t1.015s\n"
+    }
+  },
+  "cumulative": {
+    "command": "go test ./... -timeout 60s",
+    "mode": "compatible reference in isolated copy, including matched cmd baseline",
+    "exit_code": 0,
+    "log": "?   \tgithub.com/linko-zhao/mini-agent-runtime/cmd/access\t[no test files]\n?   \tgithub.com/linko-zhao/mini-agent-runtime/cmd/demo\t[no test files]\n?   \tgithub.com/linko-zhao/mini-agent-runtime/cmd/knowledge\t[no test files]\n?   \tgithub.com/linko-zhao/mini-agent-runtime/cmd/mcp\t[no test files]\n?   \tgithub.com/linko-zhao/mini-agent-runtime/cmd/mcpagent\t[no test files]\n?   \tgithub.com/linko-zhao/mini-agent-runtime/examples/cmd/access\t[no test files]\n?   \tgithub.com/linko-zhao/mini-agent-runtime/examples/cmd/demo\t[no test files]\n?   \tgithub.com/linko-zhao/mini-agent-runtime/examples/cmd/knowledge\t[no test files]\n?   \tgithub.com/linko-zhao/mini-agent-runtime/examples/cmd/mcp\t[no test files]\n?   \tgithub.com/linko-zhao/mini-agent-runtime/examples/cmd/mcpagent\t[no test files]\n?   \tgithub.com/linko-zhao/mini-agent-runtime/examples/cmd/state\t[no test files]\nok  \tgithub.com/linko-zhao/mini-agent-runtime/examples/integration\t0.026s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/examples/internal/agent\t0.016s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/examples/internal/assembly\t0.027s\n?   \tgithub.com/linko-zhao/mini-agent-runtime/examples/internal/model\t[no test files]\nok  \tgithub.com/linko-zhao/mini-agent-runtime/examples/internal/mcp\t0.023s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/examples/internal/model/openai\t0.015s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/examples/internal/runstate\t0.017s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/examples/internal/tool\t0.024s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/examples/internal/tool/calculator\t0.002s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/examples/internal/tool/knowledge\t0.037s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/examples/internal/tool/mcptool\t0.015s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/agent\t0.050s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/assembly\t0.083s\n?   \tgithub.com/linko-zhao/mini-agent-runtime/internal/model\t[no test files]\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/mcp\t0.046s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/model/openai\t0.011s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/runstate\t0.006s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/tool\t0.011s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/tool/calculator\t0.007s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/tool/knowledge\t0.009s\nok  \tgithub.com/linko-zhao/mini-agent-runtime/internal/tool/mcptool\t0.007s\n"
+  },
+  "examples": {
+    "commands": [
+      "go test ./examples/...",
+      "go test -race ./examples/..."
+    ],
+    "result": "PASS",
+    "working_directory": "reference repository root",
+    "scope": "All examples packages, including new Day16 tests; learner source not read or modified"
+  }
+}

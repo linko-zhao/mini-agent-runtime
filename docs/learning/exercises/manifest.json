@@ -357,5 +357,28 @@
         "file": "day07/tests/internal/assembly/day07_contract_test.go.txt"
       }
     ]
+  },
+  "16": {
+    "package": "./internal/runstate",
+    "pattern": "^TestDay16",
+    "targets": [
+      {
+        "path": "internal/runstate/run.go",
+        "reference": "day16/reference/internal/runstate/run.go.txt",
+        "skeleton": "day16/skeleton/internal/runstate/run.go.txt"
+      }
+    ],
+    "tests": [
+      {
+        "path": "internal/runstate/day16_contract_test.go",
+        "file": "day16/tests/internal/runstate/day16_contract_test.go.txt"
+      }
+    ],
+    "support": [
+      {
+        "path": "internal/runstate/state.go",
+        "file": "day16/support/internal/runstate/state.go.txt"
+      }
+    ]
   }
 }
