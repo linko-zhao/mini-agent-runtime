@@ -3,7 +3,7 @@
 
 figure{margin-inline:0}p,.node,figcaption{overflow-wrap:anywhere}.file-label{overflow-wrap:anywhere}.phase{font-weight:700;color:#183561}.copy-status{font-size:13px;color:#52617a}details>pre{margin-bottom:12px}
 
-body{font-size:18px;line-height:1.8}h2{font-size:23px}h3{font-size:19px}main{max-width:840px}.node small{display:block}.code-file{min-width:0}section{min-width:0}@media(max-width:600px){body{font-size:17px}h2{font-size:21px}}</style></head><body><main><header class="hero"><div class="eyebrow">MINI AGENT RUNTIME · WEEK 03 · DAY 16 / 56</div><h1>运行上下文与状态更新</h1><p>今天实现每次运行的状态管理，让宿主能安全更新进度、读取副本，并把取消信号交给模型和工具。</p><div class="chips"><span>阅读 20 分钟</span><span>Go练习 80 分钟</span><span>测试复盘 20 分钟</span></div></header>
+body{font-size:18px;line-height:1.8}h2{font-size:23px}h3{font-size:19px}main{max-width:840px}.node small{display:block}.code-file{min-width:0}section{min-width:0}@media(max-width:600px){body{font-size:17px}h2{font-size:21px}}</style><link rel="stylesheet" href="assets/learning.css"></head><body><main><header class="hero"><div class="eyebrow">MINI AGENT RUNTIME · WEEK 03 · DAY 16 / 56</div><h1>运行上下文与状态更新</h1><p>今天实现每次运行的状态管理，让宿主能安全更新进度、读取副本，并把取消信号交给模型和工具。</p><div class="chips"><span>阅读 20 分钟</span><span>Go练习 80 分钟</span><span>测试复盘 20 分钟</span></div></header>
 <nav aria-label="本页导航" class="toplinks"><a href="#concepts">先懂设计</a><a href="#rules">行为契约</a><a href="#skeleton">骨架与测试</a><a href="#tasks">分步实现</a><a href="#answer">最后看答案</a></nav>
 <section><h2>今天只解决什么？</h2><p>输入还是“读取 doc-1”。Day15已能用事件计算下一份状态；今天要解决的是：这次运行的当前状态由谁保存，宿主怎样更新它，取消后怎样拒收迟到结果。</p><p>把当前状态散放在多个闭包里，容易发生旧消息覆盖新消息。我们新增一个每次运行独有的 Run 对象，让所有更新经过同一个入口。</p><p class="goal">完成后：NewRun 创建独立运行，Context 把原取消信号交给下游，Apply 提交单个合法事件，Snapshot 返回独立副本。</p><p>今天不接管旧 Agent.Run，不执行真实模型或工具，也不保存 Checkpoint。自动化只修改参考 examples 和学习材料；学习者原 internal/cmd 不会被改写。</p></section>
 <section id="concepts"><h2>先分清三个概念</h2>
@@ -571,7 +571,7 @@ func (r *Run) Apply(e Event) (State, error) {
 	return cloneState(r.state), nil
 }
 </code></pre><button type="button" data-copy="day16-reference-internal-runstate-run-go-txt">复制本文件</button></details><h3>为什么明天开始 Checkpoint？</h3><p>今天统一了内存中的当前状态与更新入口，但进程退出仍会丢失状态。Day17将讨论哪些边界能保存快照、保存成功如何影响继续执行；持久化不自动解决外部副作用与重复调用。</p></section>
-<footer><a href="agent-runtime-day-15.html">前一天 Day15</a> · <a href="../../index.html">返回学习首页</a><p>Day16 / 56 · 第三周 · 正文、图示、骨架与测试离线可读</p></footer></main><script>
+<footer><nav class="page-navigation" aria-label="页面导航"><a class="page-nav-button" href="agent-runtime-day-15.html">上一项</a><a class="page-nav-button" href="../../index.html">返回主页</a><span class="page-nav-button is-disabled" aria-disabled="true">下一项</span></nav><p class="page-meta">Day16 / 56 第三周 正文、图示、骨架与测试离线可读</p></footer></main><script>
 const items=["用自己的话解释当天三个概念", "根据两张图讲清输入、职责和返回", "完成官方阅读并写下问题答案", "确认骨架可编译且目标出现预期红灯", "按任务卡逐步完成当天实现", "完整目标与 race 测试通过", "记录累计回归实际结果和未验证项", "合上代码完成需求变化与失败边界复盘"];const key="mini-agent-runtime-day-16-tdd-v1";
 let saved=[];try{const value=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(value))saved=value}catch(_){}
 const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const percent=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=percent+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(percent))}

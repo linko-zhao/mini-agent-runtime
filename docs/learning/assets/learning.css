@@ -1,0 +1,114 @@
+/* Shared visual system for the learning pages. Content structure stays page-owned. */
+:root {
+  color-scheme: light;
+  --page-bg: #f5f7fb;
+  --surface: #fff;
+  --ink: #182337;
+  --muted: #58667b;
+  --line: #dce4ef;
+  --accent: #2459bd;
+  --accent-dark: #183561;
+  --accent-pale: #edf3ff;
+  --focus: #dc7900;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--page-bg);
+  color: var(--ink);
+  font: 16px/1.72 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+main {
+  width: min(100% - 32px, 920px);
+  margin: 0 auto;
+  padding: 28px 0 48px;
+}
+h1, h2, h3 { color: var(--ink); line-height: 1.4; }
+h1 { font-size: clamp(1.7rem, 4vw, 2.25rem); }
+h2 { font-size: clamp(1.25rem, 3vw, 1.55rem); }
+h3 { font-size: 1.1rem; }
+p, li { overflow-wrap: anywhere; }
+a { color: var(--accent); }
+a:hover { color: var(--accent-dark); }
+a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+header, .hero {
+  border-radius: 18px;
+  background: var(--accent-dark);
+  color: #fff;
+  padding: clamp(22px, 5vw, 34px);
+}
+header h1, .hero h1, header h2, .hero h2, header h3, .hero h3 { color: inherit; }
+header a, .hero a { color: #cce4ff; }
+section, main > nav:not(.page-navigation) {
+  margin-top: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: clamp(18px, 4vw, 28px);
+}
+article, .card, .rule, .step, .node {
+  border-color: var(--line);
+  border-radius: 10px;
+}
+pre {
+  max-width: 100%;
+  overflow: auto;
+  border-radius: 9px;
+}
+table { max-width: 100%; border-collapse: collapse; }
+img, video, iframe { max-width: 100%; }
+footer {
+  margin: 28px 0 0;
+  color: var(--muted);
+  text-align: center;
+}
+
+.page-navigation {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 28px 0 12px;
+}
+.page-nav-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #9ab0d0;
+  border-radius: 9px;
+  background: var(--accent-pale);
+  color: #153b70;
+  padding: 8px 12px;
+  font: inherit;
+  font-weight: 650;
+  line-height: 1.35;
+  text-align: center;
+  text-decoration: none;
+}
+.page-nav-button:hover {
+  border-color: var(--accent);
+  background: #dceaff;
+  color: #153b70;
+}
+.page-nav-button.is-disabled {
+  border-color: var(--line);
+  background: #f0f2f5;
+  color: #798496;
+  cursor: not-allowed;
+}
+.page-meta { margin: 8px 0 0; font-size: .9rem; }
+
+@media (max-width: 560px) {
+  main { width: min(100% - 20px, 920px); padding-top: 12px; }
+  .page-navigation { gap: 6px; }
+  .page-nav-button { min-height: 42px; padding: 7px 4px; font-size: .88rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
