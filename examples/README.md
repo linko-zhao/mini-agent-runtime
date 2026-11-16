@@ -1,6 +1,6 @@
 # Agent Runtime 累计示例
 
-这是依据 Day 01–16 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
+这是依据 Day 01–17 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
 
 共享仓库根目录的 `go.mod`（Go 1.22.2），无需新建 Module，也不导入根目录 `internal` 中的练习实现。所有命令在仓库根目录运行：
 
@@ -146,3 +146,13 @@ Day 09 的批次授权段提取为私有 authorizeBatch 插槽，Day 11 使用�
 本课没有把纯状态机接入 agent.RunWithState；旧观测 API 与 Step 含义全部保留。参考与练习仅映射 examples/internal 到 internal，不混用包类型。页面先提供可编译 TODO 和完整行为测试，答案在最后折叠。
 
 Go1.22.2 下原样骨架编译通过、目标在 TODO 处按预期失败，同一套测试对参考实现通过含 race。当前累计 `go test ./examples/...` 和 `go test -race ./examples/...` 均通过；学习者原实现、真实网络及持久恢复未验证。原始材料验证记录见 [Day16](../docs/learning/exercises/day16/verification.json)。
+
+## Day17：Checkpoint边界与快照
+
+新增 `examples/internal/runstate/checkpoint.go`、`checkpoint_test.go`。保留Day15 State/Event/Advance与Day16 Run：Checkpoint()只在Ready、ToolsPending或终态返回带标签的独立候选；ModelRunning/ToolsRunning返回零值及ErrCheckpointBoundary。Clone复用既有深拷贝，分类和拷贝在同一次Run锁内读取。
+
+捕获只读，不采样ctx、不增加轮次、不暂停驱动、不写入存储。候选产生后工具仍可能被宿主执行，旧候选不是未执行证明或恢复许可。终态归档保留Pending，不自动重开；Ready也不意味着模型预算尚余。没有修改旧Agent.RunWithState或其Step含义。
+
+Day17练习支持与页面全文包含可编译TODO、完整行为测试和折叠答案；prepare/verify日期范围扩展至17，固定baseline不变。所有类型共享原go.mod，不修改学习者internal/cmd。参见 [Day17页面](../docs/learning/agent-runtime-day-17.html)。
+
+本次Go1.22.2验证：骨架编译通过、目标在TODO处按预期失败；原样测试对隔离internal兼容参考通过含race，累计兼容副本与当前examples普通/race回归通过。原始记录见 [Day17验证](../docs/learning/exercises/day17/verification.json)。未验证真实模型、外部后端或持久恢复。

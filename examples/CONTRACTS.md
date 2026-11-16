@@ -237,3 +237,28 @@ Day 08 已提供 [图解与 TDD 正式课程](../docs/learning/agent-runtime-day
 新增 run.go 即可，旧 New/Advance 调用可继续使用；需要状态所有者的宿主改用 NewRun/Apply/Snapshot/Context。前置 state.go 保留 Day15；不替换旧 Agent.Event 或 RunSnapshot。教学 prepare/verify 支持 Day16，manifest 单列目标、完整测试与 Day15 support，固定 baseline 保持不动。
 
 官方 Go1.22.2 下原样 TODO 骨架可编译，目标因 TODO 失败；相同测试在隔离 internal 参考副本通过含 race，兼容副本累计回归通过。当前 examples 普通/race 全通过。未读取或验证学习者根 internal/cmd；未验证真实 I/O、崩溃恢复或跨进程状态。每条公开行为、非法参数、迟到结果、取消/截止错误、所有权和并发承诺见 Day16 完整测试与验证记录。
+
+## Day17 增量：Checkpoint候选的边界与所有权
+
+### 新增与兼容
+- 新增 `CheckpointBoundary`，常量 `CheckpointReady="ready"`、`CheckpointBeforeTools="before_tools"`、`CheckpointTerminal="terminal"`；`Checkpoint{Boundary CheckpointBoundary; State State}`；`ErrCheckpointBoundary`。
+- 新增 `(*Run).Checkpoint()(Checkpoint,error)`、`(Checkpoint).Clone() Checkpoint`。复用Day15 State与克隆、Day16 Run互斥；不修改state.go/run.go或旧Agent.Run/RunWithState。
+- 练习internal/runstate/checkpoint.go，累计答案examples/internal/runstate/checkpoint.go。仅映射import前缀，不混用model类型，共享根go.mod。
+
+### 捕获契约
+- Ready→CheckpointReady；ToolsPending→CheckpointBeforeTools；Completed/Failed/Cancelled→CheckpointTerminal；进行中或其他阶段返回零Checkpoint与可errors.Is识别的ErrCheckpointBoundary。使用NewRun产生的指针，沿Day16不支持零值/复制Run。
+- Boundary和State必须来自同一次互斥读取，不分两次快照拼接。成功/失败都不改变Run状态；只读方法不观察ctx、不调用Apply、不增加Step、不清Pending。
+- ctx取消但尚未Apply时仍按现有Phase捕获；Day16 Apply继续独立记录取消。终态候选保留原Pending/Failure，仅供观察归档，不允许重启。Ready阶段即使Step==MaxSteps仍可捕获，下次StartModel保持ErrMaxSteps。
+- Checkpoint.State完整深拷贝Messages/ToolCalls/Arguments与Pending，历史和Pending也不能互相别名。候选、Clone、Run、原响应之间互不串改。Clone保留所有字段，零值可克隆；不验证/修复调用方制造的候选。
+- Apply/Snapshot/Checkpoint可并发，Checkpoint按单次完整状态分类并复制；Clone源缓冲区不能被调用方并发改写。锁不跨后续保存/执行，不提供等待取消、公平或多步骤事务；复制成本随历史增长。
+
+### 范围与迁移
+- Snapshot()仍返回任意阶段的观察State；需要稳定候选的调用方另用Checkpoint并处理边界错误，读取cp.State，不静默更换旧签名。旧Agent.RunSnapshot与纯State尚未整合，Step语义保持前序区别。
+- Boundary不是ID/版本/幂等键/恢复位置证明。Checkpoint不含ctx、锁、Model、Tool或MCP连接，不是序列化或存储确认。保存、版本冲突、反序列化校验与恢复API尚未实现。
+- 宿主仍须单驱动并遵守检查/授权/执行边界；捕获不会阻止继续执行。旧ToolsPending候选可能产生于工具执行之前，之后外部操作仍可能已发生；不能据旧候选授权自动重放。终态Pending也不是未开始的证明。
+- State含私密输入、参数和正文，不能直接当公开事件。无外部依赖，存储故障注入不适用于本日方法；Day18再定义写入确认与版本契约。
+
+### 交付与真实验证
+新增完整骨架/测试/Day15与16支持文件、参考附件、manifest日期17及prepare/verify范围；固定baseline、根internal/cmd不变。测试覆盖所有边界、失败原子性、所有权、候选历史、取消读取/终态与并发一致性。
+
+官方Go1.22.2下原样骨架可编译，目标因TODO失败；相同测试在隔离internal参考副本通过含race，兼容副本累计回归通过。仓库根go test ./examples/...与go test -race ./examples/...均通过。未读取/验证学习者实现、真实模型/网络后端、持久化、崩溃恢复或exactly-once。

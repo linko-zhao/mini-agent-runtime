@@ -380,5 +380,32 @@
         "file": "day16/support/internal/runstate/state.go.txt"
       }
     ]
+  },
+  "17": {
+    "package": "./internal/runstate",
+    "pattern": "^TestDay17",
+    "targets": [
+      {
+        "path": "internal/runstate/checkpoint.go",
+        "reference": "day17/reference/internal/runstate/checkpoint.go.txt",
+        "skeleton": "day17/skeleton/internal/runstate/checkpoint.go.txt"
+      }
+    ],
+    "tests": [
+      {
+        "path": "internal/runstate/day17_contract_test.go",
+        "file": "day17/tests/internal/runstate/day17_contract_test.go.txt"
+      }
+    ],
+    "support": [
+      {
+        "path": "internal/runstate/state.go",
+        "file": "day17/support/internal/runstate/state.go.txt"
+      },
+      {
+        "path": "internal/runstate/run.go",
+        "file": "day17/support/internal/runstate/run.go.txt"
+      }
+    ]
   }
 }

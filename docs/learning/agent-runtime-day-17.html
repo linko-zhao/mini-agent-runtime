@@ -1,0 +1,608 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>Day 17 · Checkpoint 边界与快照</title><style>
+:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#52617a;--line:#dce4ef;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:820px;padding:28px 22px 64px;margin:auto}.hero{background:#183561;color:white;border-radius:18px;padding:30px}.hero h1{font-size:26px;line-height:1.45;margin:12px 0}.hero p{color:#e6eefa}.eyebrow,.time{font-size:13px;font-weight:700}.chips{display:flex;flex-wrap:wrap;gap:8px}.chips span{font-size:13px;border:1px solid #9cb5d9;border-radius:20px;padding:3px 12px}section,nav{background:white;border:1px solid var(--line);border-radius:14px;padding:26px;margin-top:20px}h2{font-size:19px;line-height:1.5;margin:0 0 20px}h3{font-size:16px;line-height:1.5;margin:24px 0 10px}p{margin:12px 0}a{color:var(--accent);text-underline-offset:3px}li{margin:10px 0}code{font-size:.88em;background:#edf1f7;padding:2px 4px;border-radius:4px;overflow-wrap:anywhere}pre{background:#142136;color:#e7f3ff;border-radius:10px;padding:18px;overflow:auto;font-size:13px;line-height:1.7;tab-size:4}pre code{background:none;padding:0;font-size:inherit;overflow-wrap:normal}.note,.goal{border-left:4px solid var(--accent);background:var(--pale);padding:14px 18px;border-radius:4px}.warn{border-left-color:#9b6500;background:#fff6e3}.card,.rule,.step{border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:18px 0}.card h3,.step h3{margin-top:0}.muted{color:var(--sub);font-size:13px}.flow{display:flex;flex-direction:column;gap:10px;margin:20px 0}.node{border:2px solid #9eb6db;border-radius:10px;padding:15px;background:#f4f8ff}.node strong{display:block}.arrow{text-align:center;color:#345276;font-size:16px}.branch{border:2px dashed #9b6500;background:#fff7e8}.time{color:var(--accent)}details{border:1px solid var(--line);border-radius:9px;padding:12px 16px;margin:16px 0}summary{cursor:pointer;font-weight:650}summary:focus-visible,a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid #c67800;outline-offset:4px}button{font:inherit;font-size:13px;background:#edf3ff;color:#183561;border:1px solid #9eb6db;border-radius:7px;padding:7px 12px;cursor:pointer}.check{display:flex;gap:12px;margin:14px 0}.check input{width:20px;height:20px;flex-shrink:0;margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer}.done label{color:var(--sub);text-decoration:line-through}.progress{background:#e3e9f2;height:12px;border-radius:8px;overflow:hidden}.fill{background:var(--accent);height:100%;width:0}.meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:13px}footer{font-size:13px;text-align:center;padding:24px}.toplinks{display:flex;flex-wrap:wrap;gap:10px 22px}.download{font-size:13px}.code-actions{display:flex;gap:12px;align-items:center;margin-top:12px}.copy-state{font-size:13px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@media(max-width:600px){main{padding:12px 10px 36px}section,nav{padding:20px 16px}.hero{padding:23px 20px}.hero h1{font-size:24px}h2{font-size:19px}pre{padding:14px;font-size:12px}.card,.rule,.step{padding:14px}body{font-size:15px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+
+figure{margin-inline:0}p,.node,figcaption{overflow-wrap:anywhere}.file-label{overflow-wrap:anywhere}.phase{font-weight:700;color:#183561}.copy-status{font-size:13px;color:#52617a}details>pre{margin-bottom:12px}
+
+body{font-size:18px;line-height:1.8}h2{font-size:23px}h3{font-size:19px}main{max-width:840px}.node small{display:block}.code-file{min-width:0}section{min-width:0}@media(max-width:600px){body{font-size:17px}h2{font-size:21px}}</style></head><body><main><header class="hero"><div class="eyebrow">MINI AGENT RUNTIME · WEEK 03 · DAY 17 / 56</div><h1>Checkpoint 边界与快照</h1><p>今天实现有边界限制的内存 Checkpoint，让宿主知道“捕获了哪一步”，并保留一份不会随运行继续改变的状态副本。</p><div class="chips"><span>阅读 20 分钟</span><span>Go练习 80 分钟</span><span>测试复盘 20 分钟</span></div></header>
+<nav aria-label="本页导航" class="toplinks"><a href="#concepts">先懂设计</a><a href="#rules">行为契约</a><a href="#skeleton">骨架与测试</a><a href="#tasks">分步实现</a><a href="#answer">最后看答案</a></nav>
+<section><h2>今天只解决什么？</h2><p>仍然处理“读取 doc-1”。Day16已经有独立 Run 和安全更新入口，但任何阶段都能读 Snapshot；模型或工具进行中取得的副本，并不适合直接当作下一步的保存候选。</p><p>今天新增 Checkpoint()：在确定的稳定阶段返回“边界标签 + State副本”，进行中的阶段明确报错。这样，未来保存层可以先获得有明确语义的输入。</p><p class="goal">完成后能区分：读取观察快照、捕获 Checkpoint 候选、存储确认、恢复执行。这四件事没有合并成一次方法调用。</p><p>本日只捕获内存候选，不接存储、不暂停驱动、不恢复、不自动重放，也不改造旧 Agent.Run/RunWithState。</p></section>
+<section id="concepts"><h2>先理解三个概念</h2>
+<article class="card"><h3>边界：状态机确认的一个停靠位置</h3><p>Ready 是模型调用前或一批结果已被接纳后；ToolsPending 是模型请求已接受、宿主尚未记录工具开始的阶段。它们比“任意时刻复制内存”更容易解释。</p><p>本日仅依赖 Run 记录的 Phase 判断边界。它不能证明其他代码没有绕过驱动调用外部工具，宿主仍须遵守前序单驱动与授权规则。</p></article>
+<article class="card"><h3>Checkpoint 候选：带边界标签的独立副本</h3><p>它把同一时刻的标签和 State 放在一起。捕获后 Run 可以继续前进，候选保留旧阶段，不会跟着变。</p><p>Boundary 是分类，不是保存ID、序号或恢复令牌。State 继续使用 Day15 的消息与调用结构，不重建另一套模型。</p></article>
+<article class="card"><h3>确认：保存成功与外部执行是否发生</h3><p>拿到内存副本没有磁盘或数据库确认。即使未来保存成功，也不能直接推断外部工具没有执行过。</p><p>今天先定义候选边界；Day18再加入存储与版本控制。遇到不确定调用，仍需后续恢复、确认与幂等设计。</p></article></section>
+<section><h2>职责图：捕获层位于哪里？</h2>
+<figure aria-label="宿主驱动 Run；Checkpoint 原子读取边界与状态；保存层留给下一日"><div class="flow">
+<div class="node"><strong>宿主 / 单个驱动</strong>按前序规则发事件；在 I/O 之外选择捕获时机</div>
+<div class="arrow">↓ Apply(Event) 更新；Checkpoint() 读取</div>
+<div class="node"><strong>Run · 当前内存状态</strong>Day16 所有权与互斥；Day15 Advance 校验阶段</div>
+<div class="arrow">↓ 同一次锁内读取 Phase 与深拷贝 State</div>
+<div class="node"><strong>Checkpoint 候选</strong>Boundary + State；交给宿主，后续 Run 更新不影响它</div>
+<div class="arrow">↓ 未来的输入，今天不执行</div>
+<div class="node branch"><strong>存储 / 恢复层 · 尚未实现</strong>序列化、写入确认、版本冲突、重新校验权限和不确定调用</div>
+<div class="node branch"><strong>失败出口</strong>ModelRunning / ToolsRunning → ErrCheckpointBoundary，零 Checkpoint，无状态变化</div></div>
+<figcaption>模型、工具和 MCP 连接不进入 Checkpoint；ctx 与锁也不在 State 中。今天没有存储依赖，因此不会产生“写入成功”或“写入失败”的返回。</figcaption></figure></section>
+<section><h2>编号运行图：同一个 doc-1 请求在哪里捕获？</h2>
+<figure aria-label="从初始 Ready 到工具前、工具后与终态的候选，进行中拒绝"><div class="flow">
+<div class="node"><strong>① 新建 Run → Ready</strong>CheckpointReady；Step=0，1条 user 消息，无 Pending</div>
+<div class="arrow">↓ StartModel → ModelRunning：捕获拒绝</div>
+<div class="node"><strong>② ModelReturned → ToolsPending</strong>CheckpointBeforeTools；Step=1，2条历史，Pending=[call-1/get_document]</div>
+<div class="arrow">↓ 宿主检查/授权后 StartTools → ToolsRunning：捕获拒绝</div>
+<div class="node"><strong>③ ToolsReturned → Ready</strong>CheckpointReady；Step=1，3条历史，Pending 已清空</div>
+<div class="arrow">↓ StartModel → ModelRunning；接纳文本响应</div>
+<div class="node"><strong>④ Completed → 终态</strong>CheckpointTerminal；Step=2，4条历史，Result=已读取</div></div>
+<figcaption>①与③标签相同但历史不同。Boundary不是序号；需要结合 State.Step、消息和阶段理解，未来的保存版本也不能用 Step 简单代替。</figcaption></figure>
+<p class="note">反例：②捕获候选后，宿主继续执行工具，进程在记录结果前退出。旧候选仍显示 ToolsPending，却不能证明工具没执行；捕获与执行之间没有事务。</p></section>
+<section><h2>为什么拒绝“进行中”，又允许终态？</h2><p>ModelRunning 与 ToolsRunning 尚没有已接纳结果。若直接当成待执行边界，会混淆“尚未调用”与“调用结果不确定”。本日选择拒绝，而非假装实现了恢复策略。</p><p>终态可捕获是为了归档观察，不代表可继续执行。Failed/Cancelled 可能保留 Pending；它们不能被改成 Ready 后重新交回 Run。</p><p>Ready 也不保证下次 StartModel 会成功：预算可能耗尽，context可能已取消，授权或依赖也可能变化。边界分类不授予执行权限。</p></section>
+<section><h2>字段与方法：每一个承诺都有限定</h2>
+<article class="card"><h3>CheckpointBoundary 与三个常量</h3><p>CheckpointReady="ready" 对应 Ready；CheckpointBeforeTools="before_tools" 对应 ToolsPending；CheckpointTerminal="terminal" 对应 Completed、Failed、Cancelled。</p><p>终态的具体原因仍看 State.Phase/Failure。标签不会替换 Phase，也不表示幂等键、唯一编号或版本。</p></article>
+<article class="card"><h3>Checkpoint：Boundary + State</h3><p>Boundary 和 State 来自同一次受保护读取，不能分两次读取后拼接。State 是独立副本，调用者可以修改自己的数据，但这不会修改 Run。</p><p>公开字段方便宿主检查；它不是可信凭据。调用者能手动造出或改坏 Checkpoint，本日没有外部数据校验/反序列化入口，不能把伪造对象当作可恢复状态。</p></article>
+<article class="card"><h3>复用的 State 字段</h3><p>RunID 是本次运行身份；Phase 是阶段；Step 是已开始的模型轮次；MaxSteps 是预算。两者都是轮次计数，不是保存版本。</p><p>Messages 是已接纳历史，内含 ToolCalls/Arguments；Pending 是待确认调用；Result 是已完成文本，Failure 是原状态的受控原因。每个字段原样保留，不重新解释或自动清理。</p><p>State 不含 context、锁、Model、Tool、MCP会话、cancel函数或原始 Go error；这些不能靠复制 State 来恢复。</p></article>
+<article class="card"><h3>Run.Checkpoint() (Checkpoint, error)</h3><p>接收 Day16 NewRun 返回的 Run 指针，无额外参数。合法阶段返回候选和 nil；其他阶段返回零 Checkpoint 与 ErrCheckpointBoundary，可用 errors.Is 识别。</p><p>只读取，不增加 Step、不清 Pending、不执行 I/O、不调用 Apply，也不观察 ctx.Err。即使 ctx 已取消，只要状态还在稳定阶段，捕获仍可成功；取消状态由下一次 Apply 记录。</p><p>它与 Apply/Snapshot 可并发，分类与复制是同一瞬间的内存观察。锁不跨越方法返回和后续保存；等待锁不可用 context 中断，克隆成本随历史增长。</p></article>
+<article class="card"><h3>Checkpoint.Clone() Checkpoint</h3><p>返回另一份独立副本，Boundary原样保留，State沿前序深拷贝。零值可克隆；克隆不修复、不验证也不签发任何权限。</p><p>调用方不得在 Clone 读取源对象的同时修改其切片；不同读者应先各自持有独立副本。对象包含私密输入/参数/正文，不是公开审计事件。</p></article></section>
+<section id="rules"><h2>行为契约：明确输入与可观察结果</h2>
+<article class="rule"><h3>R1 · 稳定边界映射</h3><p>Ready→CheckpointReady；ToolsPending→CheckpointBeforeTools；三个终态→CheckpointTerminal。完整保存 State，调用前后 Run.Snapshot 必须相同。</p><p>测试：TestDay17Boundaries、TestDay17CancellationAndTerminal。</p></article>
+<article class="rule"><h3>R2 · 拒绝进行中</h3><p>ModelRunning、ToolsRunning→零 Checkpoint + ErrCheckpointBoundary。捕获失败不修改阶段、Step、Messages、Pending。</p><p>Run仍遵守 Day16“不可使用零值或复制 Run”的约定；本日不新增接收任意 State 的构造器。</p><p>测试：TestDay17Boundaries、TestDay17HistoricalCandidate。</p></article>
+<article class="rule"><h3>R3 · 深拷贝与历史候选</h3><p>候选不与 Run、原模型响应或其他候选共享 Messages/ToolCalls/Arguments/Pending 的可变切片。候选历史与候选 Pending 的字节也相互独立。</p><p>Clone保留所有字段和值；零值克隆仍为零值。Run后续前进或调用方修改候选，不会互相改变。</p><p>测试：TestDay17Ownership、TestDay17HistoricalCandidate。</p></article>
+<article class="rule"><h3>R4 · 取消读取与终态归档</h3><p>取消后尚未 Apply 时，捕获原 ToolsPending 成功。下一次 Apply 返回 context.Canceled 并记录 Cancelled，随后捕获的是 CheckpointTerminal。</p><p>在 ToolsRunning 中显式 Abort/Cancel 后，终态保留原 Pending 和历史。只有候选，没有重启 API；归档成功不是未执行证明。</p><p>测试：TestDay17CancellationAndTerminal。Checkpoint没有context错误返回策略；deadline与取消一样不被该只读方法采样，Day16的 Apply/NewRun 继续负责它们。</p></article>
+<article class="rule"><h3>R5 · 并发一致的单次观察</h3><p>捕获与一个宿主更新并发时，只能返回某个完整稳定状态，或 ErrCheckpointBoundary。不能返回 Ready标签配 ToolsPending历史之类的混合快照。</p><p>四个读者与30轮模型/工具事件并发，读者修改自己的副本不影响 Run；最终31轮、Completed。测试：TestDay17ConcurrentCapture。</p></article>
+<article class="rule"><h3>R6 · 捕获不停止执行，不检查预算</h3><p>ToolsPending捕获后，宿主仍可 StartTools 并接纳结果，旧候选保持原样。Ready 即使 Step 已达 MaxSteps 仍可捕获，下次 StartModel 继续返回 ErrMaxSteps。</p><p>测试：TestDay17HistoricalCandidate。没有存储/模型/工具依赖，所以本方法不适用网络依赖故障注入；存储错误与版本冲突留待Day18。</p></article></section>
+<section id="read"><h2>带着问题读 Eino：20分钟</h2>
+<article class="card"><h3>12分钟 · 状态对象之外，还要保存什么？</h3><p>阅读 <a href="https://github.com/cloudwego/eino/blob/main/compose/checkpoint.go">compose/checkpoint.go</a>：定位 checkpoint、WithCheckPointStore、WithCheckPointID、Serializer、checkPointer.set。</p><p>问题：checkpoint 为什么同时有 State、Inputs、Channels、RerunNodes？set 为什么先 Marshal 再调用 store.Set？错误在哪层返回？</p><p>产出：画“运行位置/输入 + 状态 → 序列化 → 保存”的三层图。映射到本课：Boundary+State只是第一层的教学候选，尚无Eino图调度通道、存储与恢复协议；不要直接宣称它足够恢复任意图。</p></article>
+<article class="card"><h3>8分钟 · 同一时刻的状态怎样读取？</h3><p>阅读 <a href="https://github.com/cloudwego/eino/blob/main/compose/state.go">compose/state.go</a>：定位 internalState、ProcessState、getState。观察状态对应哪一把锁、handler持锁范围。</p><p>问题：若先读 Phase，放锁，再复制历史，会有什么组合错误？产出一条并发时间线，对照本课分类与复制必须共享读取边界的契约。</p></article>
+<p class="muted">官方main路径与符号本次已读取核对：checkpoint.go blob ebb79b24bf94，state.go blob f3506018b2f9。链接main会演进；本课没有引入Eino依赖，也不照搬其序列化和恢复策略。</p></section>
+<section><h2>承接前序设计与本日增量</h2>
+<p><strong>复用：</strong>Day15 state.go 的 State/Event/Phase/New/Advance/深拷贝；Day16 run.go 的 NewRun/Context/Apply/Snapshot 和私有状态所有权。model.Message/ToolCall/Response、错误与授权契约保持不变。</p>
+<p><strong>新增：</strong>练习 internal/runstate/checkpoint.go、day17_contract_test.go；参考 examples/internal/runstate/checkpoint.go、checkpoint_test.go。全部共享原根 go.mod，不新建每日module。</p>
+<p><strong>修改：</strong>参考 README/CONTRACTS、本日练习附件与 manifest、prepare/verify的日期支持、当天HTML与首页路由。原 run.go/state.go、固定baseline和根 internal/cmd 不修改。</p>
+<p><strong>兼容与迁移：</strong>旧 Snapshot() State → 继续用于任何阶段观察；新增 Checkpoint() (Checkpoint,error) → 只在稳定阶段捕获候选。需要标签的调用方增加错误处理并读取 cp.State，不把旧 Snapshot 静默替换成另一个类型。</p>
+<p>原 agent.RunWithState/RunSnapshot 是实际Loop的最终观测；本课继续扩展独立纯runstate链，尚未整合到旧Agent。其 Step 语义不能互换；没有增加 Restore、Resume 或 State setter。</p>
+<pre><code># 原仓库根：生成仓库外练习副本
+python3 docs/learning/exercises/prepare.py 17
+# 进入打印的绝对目录，再编辑 internal/runstate/checkpoint.go</code></pre>
+<p>Python3.9+、Go1.22.2+；不用API Key。副本从固定baseline提供基础依赖，并显式加入Day15 state.go、Day16 run.go；本日目标为TODO，测试import指向副本internal。</p>
+<p>已有兼容实现时保留它，只应用完整测试，不为制造红灯挖空已完成代码。手工应用只新增本日文件，先核对前序签名，避免重复定义。</p></section>
+<section id="skeleton"><h2>完整骨架：方法体留给你</h2><p>先按行为契约实现；字段、常量和签名齐全。构造Run继续使用Day16 NewRun，不新增另一套身份或消息。</p><h3 class="file-label">新增 · internal/runstate/checkpoint.go</h3><p class="download"><a href="exercises/day17/skeleton/internal/runstate/checkpoint.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="skeleton" data-source="day17/skeleton/internal/runstate/checkpoint.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day17-skeleton-internal-runstate-checkpoint-go-txt"><code>package runstate
+
+import &quot;errors&quot;
+
+type CheckpointBoundary string
+
+const (
+	CheckpointReady       CheckpointBoundary = &quot;ready&quot;
+	CheckpointBeforeTools CheckpointBoundary = &quot;before_tools&quot;
+	CheckpointTerminal    CheckpointBoundary = &quot;terminal&quot;
+)
+
+var ErrCheckpointBoundary = errors.New(&quot;runstate: checkpoint requires a stable boundary&quot;)
+
+type Checkpoint struct {
+	Boundary CheckpointBoundary
+	State    State
+}
+
+func (c Checkpoint) Clone() Checkpoint {
+	panic(&quot;TODO: implement Checkpoint.Clone&quot;)
+}
+func (r *Run) Checkpoint() (Checkpoint, error) {
+	panic(&quot;TODO: implement Run.Checkpoint&quot;)
+}
+</code></pre><button type="button" data-copy="day17-skeleton-internal-runstate-checkpoint-go-txt">复制本文件</button></details><details><summary>前置支持文件：复用Day15/16（完整，可离线查阅）</summary><p>prepare已准备；手工使用时按路径保存且不要重复定义。它们不是今天的待实现方法。</p><h3>internal/runstate/state.go</h3><pre><code>// Package runstate models in-memory transitions. It is not a checkpoint store.
+package runstate
+
+import (
+	&quot;errors&quot;
+	&quot;strings&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+)
+
+type Phase string
+
+const (
+	Ready        Phase = &quot;ready&quot;
+	ModelRunning Phase = &quot;model_running&quot;
+	ToolsPending Phase = &quot;tools_pending&quot;
+	ToolsRunning Phase = &quot;tools_running&quot;
+	Completed    Phase = &quot;completed&quot;
+	Failed       Phase = &quot;failed&quot;
+	Cancelled    Phase = &quot;cancelled&quot;
+)
+
+type EventKind string
+
+const (
+	StartModel    EventKind = &quot;start_model&quot;
+	ModelReturned EventKind = &quot;model_returned&quot;
+	StartTools    EventKind = &quot;start_tools&quot;
+	ToolsReturned EventKind = &quot;tools_returned&quot;
+	Abort         EventKind = &quot;abort&quot;
+	Cancel        EventKind = &quot;cancel&quot;
+)
+
+var (
+	ErrTransition = errors.New(&quot;runstate: invalid transition&quot;)
+	ErrMaxSteps   = errors.New(&quot;runstate: max model rounds exceeded&quot;)
+)
+
+type State struct {
+	RunID           string
+	Phase           Phase
+	Step, MaxSteps  int
+	Messages        []model.Message
+	Pending         []model.ToolCall
+	Result, Failure string
+}
+type Event struct {
+	Kind     EventKind
+	Response *model.Response
+	Results  []model.Message
+	Reason   string
+}
+
+func New(runID, input string, maxSteps int) (State, error) {
+	if strings.TrimSpace(runID) == &quot;&quot; || maxSteps &lt;= 0 {
+		return State{}, ErrTransition
+	}
+	return State{RunID: runID, Phase: Ready, MaxSteps: maxSteps, Messages: []model.Message{{Role: &quot;user&quot;, Content: input}}}, nil
+}
+func cloneCalls(calls []model.ToolCall) []model.ToolCall {
+	if calls == nil {
+		return nil
+	}
+	out := append([]model.ToolCall{}, calls...)
+	for i := range out {
+		out[i].Arguments = append([]byte(nil), out[i].Arguments...)
+	}
+	return out
+}
+func cloneMessages(ms []model.Message) []model.Message {
+	if ms == nil {
+		return nil
+	}
+	out := append([]model.Message{}, ms...)
+	for i := range out {
+		out[i].ToolCalls = cloneCalls(out[i].ToolCalls)
+	}
+	return out
+}
+func cloneState(s State) State {
+	s.Messages = cloneMessages(s.Messages)
+	s.Pending = cloneCalls(s.Pending)
+	return s
+}
+func terminal(p Phase) bool { return p == Completed || p == Failed || p == Cancelled }
+
+// Advance has no I/O. The host performs calls between start/returned events.
+// It accepts states from New/Advance and never mutates input state/event buffers.
+func Advance(current State, e Event) (State, error) {
+	if terminal(current.Phase) {
+		return State{}, ErrTransition
+	}
+	next := cloneState(current)
+	switch e.Kind {
+	case StartModel:
+		if current.Phase != Ready {
+			return State{}, ErrTransition
+		}
+		if current.Step &gt;= current.MaxSteps {
+			return State{}, ErrMaxSteps
+		}
+		next.Step++
+		next.Phase = ModelRunning
+	case ModelReturned:
+		if current.Phase != ModelRunning || e.Response == nil || e.Response.Message.Role != &quot;assistant&quot; {
+			return State{}, ErrTransition
+		}
+		msg := e.Response.Message
+		ids := map[string]bool{}
+		for _, call := range msg.ToolCalls {
+			if call.ID == &quot;&quot; || strings.TrimSpace(call.Name) == &quot;&quot; || ids[call.ID] {
+				return State{}, ErrTransition
+			}
+			ids[call.ID] = true
+		}
+		next.Messages = append(next.Messages, cloneMessages([]model.Message{msg})...)
+		if len(msg.ToolCalls) == 0 {
+			next.Phase = Completed
+			next.Result = msg.Content
+		} else {
+			next.Phase = ToolsPending
+			next.Pending = cloneCalls(msg.ToolCalls)
+		}
+	case StartTools:
+		if current.Phase != ToolsPending {
+			return State{}, ErrTransition
+		}
+		next.Phase = ToolsRunning
+	case ToolsReturned:
+		if current.Phase != ToolsRunning || len(e.Results) != len(current.Pending) {
+			return State{}, ErrTransition
+		}
+		for i, msg := range e.Results {
+			if msg.Role != &quot;tool&quot; || msg.ToolCallID != current.Pending[i].ID {
+				return State{}, ErrTransition
+			}
+		}
+		next.Messages = append(next.Messages, cloneMessages(e.Results)...)
+		next.Pending = nil
+		next.Phase = Ready
+	case Abort:
+		if strings.TrimSpace(e.Reason) == &quot;&quot; {
+			return State{}, ErrTransition
+		}
+		next.Phase = Failed
+		next.Failure = e.Reason
+	case Cancel:
+		next.Phase = Cancelled
+		next.Failure = &quot;cancelled&quot;
+	default:
+		return State{}, ErrTransition
+	}
+	return next, nil
+}
+</code></pre><h3>internal/runstate/run.go</h3><pre><code>package runstate
+
+import (
+	&quot;context&quot;
+	&quot;sync&quot;
+)
+
+// Run owns one in-memory State. Use its pointer; do not copy it after use.
+// The zero value is not usable; construct with NewRun.
+type Run struct {
+	ctx   context.Context
+	mu    sync.Mutex
+	state State
+}
+
+// NewRun retains ctx for cancellation/deadlines, not for storing State.
+// A cancelled context rejects construction; invalid identity/budget uses ErrTransition.
+func NewRun(ctx context.Context, runID, input string, maxSteps int) (*Run, error) {
+	if ctx == nil {
+		return nil, ErrTransition
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	s, err := New(runID, input, maxSteps)
+	if err != nil {
+		return nil, err
+	}
+	return &amp;Run{ctx: ctx, state: s}, nil
+}
+
+// Context returns the original context. The host owns any cancel function.
+// Model/tool I/O must use this context outside Apply, never while holding its lock.
+func (r *Run) Context() context.Context { return r.ctx }
+
+// Snapshot returns an independent copy without triggering transitions.
+func (r *Run) Snapshot() State {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return cloneState(r.state)
+}
+
+// Apply commits exactly one valid event, or returns the unchanged current copy.
+// For a nonterminal Run, observed context cancellation commits Cancel and rejects
+// the event with the original context error. A terminal State is never overwritten.
+// This serializes transitions, not a snapshot -&gt; external I/O -&gt; Apply transaction.
+func (r *Run) Apply(e Event) (State, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if terminal(r.state.Phase) {
+		return cloneState(r.state), ErrTransition
+	}
+	if err := r.ctx.Err(); err != nil {
+		next, transitionErr := Advance(r.state, Event{Kind: Cancel})
+		if transitionErr != nil {
+			return cloneState(r.state), transitionErr
+		}
+		r.state = next
+		return cloneState(r.state), err
+	}
+	next, err := Advance(r.state, e)
+	if err != nil {
+		return cloneState(r.state), err
+	}
+	r.state = next
+	return cloneState(r.state), nil
+}
+</code></pre></details></section><section><h2>完整测试：始终测试练习 internal</h2><p>测试只使用公开行为，含全部数据和并发夹具。网络、持久存储和真实模型不参与；没有使用sleep猜测顺序。</p><h3 class="file-label">新增 · internal/runstate/day17_contract_test.go</h3><p class="download"><a href="exercises/day17/tests/internal/runstate/day17_contract_test.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="tests" data-source="day17/tests/internal/runstate/day17_contract_test.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day17-tests-internal-runstate-day17_contract_test-go-txt"><code>package runstate_test
+
+import (
+	&quot;context&quot;
+	&quot;errors&quot;
+	&quot;fmt&quot;
+	&quot;reflect&quot;
+	&quot;runtime&quot;
+	&quot;sync&quot;
+	&quot;testing&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/runstate&quot;
+)
+
+func run17(t *testing.T, ctx context.Context) *runstate.Run {
+	t.Helper()
+	r, err := runstate.NewRun(ctx, &quot;run-17&quot;, &quot;读取 doc-1&quot;, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+func event17(t *testing.T, r *runstate.Run, e runstate.Event) {
+	t.Helper()
+	if _, err := r.Apply(e); err != nil {
+		t.Fatal(err)
+	}
+}
+func response17(id string) *model.Response {
+	return &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, ToolCalls: []model.ToolCall{{ID: id, Name: &quot;get_document&quot;, Arguments: []byte(`{&quot;id&quot;:&quot;doc-1&quot;}`)}}}}
+}
+func checkpoint17(t *testing.T, r *runstate.Run, b runstate.CheckpointBoundary) runstate.Checkpoint {
+	t.Helper()
+	before := r.Snapshot()
+	cp, err := r.Checkpoint()
+	if err != nil || cp.Boundary != b || !reflect.DeepEqual(before, cp.State) || !reflect.DeepEqual(before, r.Snapshot()) {
+		t.Fatal(cp, err)
+	}
+	return cp
+}
+func reject17(t *testing.T, r *runstate.Run) {
+	t.Helper()
+	before := r.Snapshot()
+	cp, err := r.Checkpoint()
+	if !errors.Is(err, runstate.ErrCheckpointBoundary) || !reflect.DeepEqual(cp, runstate.Checkpoint{}) || !reflect.DeepEqual(before, r.Snapshot()) {
+		t.Fatal(cp, err)
+	}
+}
+func TestDay17Boundaries(t *testing.T) {
+	r := run17(t, context.Background())
+	cp := checkpoint17(t, r, runstate.CheckpointReady)
+	if cp.State.Step != 0 || len(cp.State.Messages) != 1 || cp.State.MaxSteps != 100 {
+		t.Fatal(cp)
+	}
+	event17(t, r, runstate.Event{Kind: runstate.StartModel})
+	reject17(t, r)
+	event17(t, r, runstate.Event{Kind: runstate.ModelReturned, Response: response17(&quot;call-1&quot;)})
+	cp = checkpoint17(t, r, runstate.CheckpointBeforeTools)
+	if cp.State.Phase != runstate.ToolsPending || cp.State.Pending[0].ID != &quot;call-1&quot; || len(cp.State.Messages) != 2 {
+		t.Fatal(cp)
+	}
+	event17(t, r, runstate.Event{Kind: runstate.StartTools})
+	reject17(t, r)
+	event17(t, r, runstate.Event{Kind: runstate.ToolsReturned, Results: []model.Message{{Role: &quot;tool&quot;, ToolCallID: &quot;call-1&quot;, Content: &quot;正文&quot;}}})
+	cp = checkpoint17(t, r, runstate.CheckpointReady)
+	if cp.State.Step != 1 || len(cp.State.Messages) != 3 || len(cp.State.Pending) != 0 {
+		t.Fatal(cp)
+	}
+	event17(t, r, runstate.Event{Kind: runstate.StartModel})
+	event17(t, r, runstate.Event{Kind: runstate.ModelReturned, Response: &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, Content: &quot;已读取&quot;}}})
+	cp = checkpoint17(t, r, runstate.CheckpointTerminal)
+	if cp.State.Phase != runstate.Completed || cp.State.Result != &quot;已读取&quot; || cp.State.Step != 2 || len(cp.State.Messages) != 4 {
+		t.Fatal(cp)
+	}
+	if _, err := r.Apply(runstate.Event{Kind: runstate.StartModel}); !errors.Is(err, runstate.ErrTransition) {
+		t.Fatal(err)
+	}
+}
+func TestDay17Ownership(t *testing.T) {
+	r := run17(t, context.Background())
+	event17(t, r, runstate.Event{Kind: runstate.StartModel})
+	resp := response17(&quot;call-1&quot;)
+	event17(t, r, runstate.Event{Kind: runstate.ModelReturned, Response: resp})
+	cp := checkpoint17(t, r, runstate.CheckpointBeforeTools)
+	original := cp.Clone()
+	resp.Message.ToolCalls[0].Arguments[0] = &#x27;x&#x27;
+	cp.State.Messages[1].ToolCalls[0].Arguments[0] = &#x27;m&#x27;
+	if cp.State.Pending[0].Arguments[0] != &#x27;{&#x27; {
+		t.Fatal(&quot;history and Pending share bytes&quot;)
+	}
+	cp.State.Pending[0].Arguments[0] = &#x27;p&#x27;
+	cp.State.RunID = &quot;local&quot;
+	if !reflect.DeepEqual(original.State, r.Snapshot()) {
+		t.Fatal(&quot;checkpoint aliases Run&quot;)
+	}
+	if original.State.Pending[0].Arguments[0] != &#x27;{&#x27; || original.State.Messages[1].ToolCalls[0].Arguments[0] != &#x27;{&#x27; {
+		t.Fatal(&quot;Clone aliases source&quot;)
+	}
+	event17(t, r, runstate.Event{Kind: runstate.StartTools})
+	if original.State.Phase != runstate.ToolsPending {
+		t.Fatal(&quot;later update changed checkpoint&quot;)
+	}
+	var zero runstate.Checkpoint
+	if !reflect.DeepEqual(zero, zero.Clone()) {
+		t.Fatal(&quot;zero clone&quot;)
+	}
+}
+func TestDay17CancellationAndTerminal(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	r := run17(t, ctx)
+	event17(t, r, runstate.Event{Kind: runstate.StartModel})
+	event17(t, r, runstate.Event{Kind: runstate.ModelReturned, Response: response17(&quot;call-1&quot;)})
+	cancel()
+	// Capture is a read; unlike Apply, it does not observe cancellation.
+	checkpoint17(t, r, runstate.CheckpointBeforeTools)
+	if _, err := r.Apply(runstate.Event{Kind: runstate.StartTools}); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	cp := checkpoint17(t, r, runstate.CheckpointTerminal)
+	if cp.State.Phase != runstate.Cancelled || cp.State.Failure != &quot;cancelled&quot; || len(cp.State.Pending) != 1 {
+		t.Fatal(cp)
+	}
+	// Terminal capture retains unconfirmed work but never reopens the Run.
+	for _, kind := range []runstate.EventKind{runstate.Abort, runstate.Cancel} {
+		other := run17(t, context.Background())
+		event17(t, other, runstate.Event{Kind: runstate.StartModel})
+		event17(t, other, runstate.Event{Kind: runstate.ModelReturned, Response: response17(&quot;pending&quot;)})
+		event17(t, other, runstate.Event{Kind: runstate.StartTools})
+		event17(t, other, runstate.Event{Kind: kind, Reason: &quot;controlled_failure&quot;})
+		terminal := checkpoint17(t, other, runstate.CheckpointTerminal)
+		if len(terminal.State.Pending) != 1 || len(terminal.State.Messages) != 2 {
+			t.Fatal(terminal)
+		}
+		if kind == runstate.Abort &amp;&amp; (terminal.State.Phase != runstate.Failed || terminal.State.Failure != &quot;controlled_failure&quot;) {
+			t.Fatal(terminal)
+		}
+		if kind == runstate.Cancel &amp;&amp; terminal.State.Phase != runstate.Cancelled {
+			t.Fatal(terminal)
+		}
+	}
+}
+func TestDay17HistoricalCandidate(t *testing.T) {
+	r, err := runstate.NewRun(context.Background(), &quot;budget-17&quot;, &quot;读取 doc-1&quot;, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event17(t, r, runstate.Event{Kind: runstate.StartModel})
+	event17(t, r, runstate.Event{Kind: runstate.ModelReturned, Response: response17(&quot;call-1&quot;)})
+	candidate := checkpoint17(t, r, runstate.CheckpointBeforeTools)
+	// This models a host continuing after capture. No store or pause exists.
+	event17(t, r, runstate.Event{Kind: runstate.StartTools})
+	reject17(t, r)
+	event17(t, r, runstate.Event{Kind: runstate.ToolsReturned, Results: []model.Message{{Role: &quot;tool&quot;, ToolCallID: &quot;call-1&quot;, Content: &quot;accepted&quot;}}})
+	if candidate.State.Phase != runstate.ToolsPending || len(candidate.State.Messages) != 2 || r.Snapshot().Phase != runstate.Ready {
+		t.Fatal(&quot;candidate was not historical&quot;)
+	}
+	// Editing a candidate grants no state update or retry capability.
+	candidate.State.Phase = runstate.Completed
+	if r.Snapshot().Phase != runstate.Ready {
+		t.Fatal(&quot;candidate can alter Run&quot;)
+	}
+	if _, err = r.Apply(runstate.Event{Kind: runstate.StartModel}); !errors.Is(err, runstate.ErrMaxSteps) {
+		t.Fatal(err)
+	}
+	checkpoint17(t, r, runstate.CheckpointReady)
+}
+func TestDay17ConcurrentCapture(t *testing.T) {
+	r := run17(t, context.Background())
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for n := 0; n &lt; 4; n++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			&lt;-start
+			for i := 0; i &lt; 250; i++ {
+				cp, err := r.Checkpoint()
+				if err != nil {
+					if !errors.Is(err, runstate.ErrCheckpointBoundary) {
+						t.Error(err)
+					}
+					runtime.Gosched()
+					continue
+				}
+				switch cp.Boundary {
+				case runstate.CheckpointReady:
+					if cp.State.Phase != runstate.Ready || len(cp.State.Pending) != 0 || len(cp.State.Messages) != 1+2*cp.State.Step {
+						t.Error(&quot;mixed Ready snapshot&quot;, cp)
+					}
+				case runstate.CheckpointBeforeTools:
+					if cp.State.Phase != runstate.ToolsPending || len(cp.State.Pending) != 1 || len(cp.State.Messages) != 2*cp.State.Step || cp.State.Pending[0].ID != fmt.Sprintf(&quot;call-%d&quot;, cp.State.Step) {
+						t.Error(&quot;mixed tools snapshot&quot;, cp)
+					}
+				case runstate.CheckpointTerminal:
+					if cp.State.Phase != runstate.Completed || len(cp.State.Messages) != 2*cp.State.Step {
+						t.Error(&quot;mixed terminal snapshot&quot;, cp)
+					}
+				default:
+					t.Error(&quot;unknown boundary&quot;, cp)
+				}
+				cp.State.Messages[0].Content = &quot;reader-owned&quot;
+				runtime.Gosched()
+			}
+		}()
+	}
+	close(start)
+	for i := 1; i &lt;= 30; i++ {
+		id := fmt.Sprintf(&quot;call-%d&quot;, i)
+		event17(t, r, runstate.Event{Kind: runstate.StartModel})
+		event17(t, r, runstate.Event{Kind: runstate.ModelReturned, Response: response17(id)})
+		event17(t, r, runstate.Event{Kind: runstate.StartTools})
+		event17(t, r, runstate.Event{Kind: runstate.ToolsReturned, Results: []model.Message{{Role: &quot;tool&quot;, ToolCallID: id, Content: &quot;ok&quot;}}})
+	}
+	event17(t, r, runstate.Event{Kind: runstate.StartModel})
+	event17(t, r, runstate.Event{Kind: runstate.ModelReturned, Response: &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, Content: &quot;done&quot;}}})
+	wg.Wait()
+	cp := checkpoint17(t, r, runstate.CheckpointTerminal)
+	if cp.State.Step != 31 || cp.State.Messages[0].Content != &quot;读取 doc-1&quot; {
+		t.Fatal(cp)
+	}
+}
+</code></pre><button type="button" data-copy="day17-tests-internal-runstate-day17_contract_test-go-txt">复制本文件</button></details><pre><code># 练习副本根：先确认可编译，再看预期红灯
+go test ./internal/runstate -run '^$'
+go test ./internal/runstate -run '^TestDay17' -count=1 -v -timeout 20s</code></pre><p>第一条编译通过不算行为完成；第二条必须匹配目标并在TODO处失败。缺包、语法错误和“无测试匹配”都不是有效红灯。</p></section>
+<section id="tasks"><h2>80分钟：四步实现同一增量</h2>
+<article class="step"><h3>1 · 15分钟：先写出稳定边界的契约</h3><p><strong>为什么：</strong>先决定在哪些事实已确认的位置捕获。<strong>位置：</strong>新增 checkpoint.go 的 CheckpointBoundary、Checkpoint、Run.Checkpoint。</p><p><strong>动作：</strong>不看答案，用doc-1例子列出七个Phase与三个标签/拒绝的对应；补齐返回形状。Day15/16规则不变，不在捕获中调用模型。</p><pre><code>go test ./internal/runstate -run '^TestDay17Boundaries$' -count=1 -v</code></pre><p><strong>完成证据：</strong>四个正常捕获位置数据完整；两类进行中状态被拒绝，错误不改变Run。</p><details><summary>卡住时的提示</summary><p>终态标签分类不够表达完成或失败，具体原因仍在State中。</p></details></article>
+<article class="step"><h3>2 · 25分钟：确保副本在运行继续后仍成立</h3><p><strong>为什么：</strong>捕获后保存可能较慢，运行状态仍可能变化。<strong>位置：</strong>Checkpoint.Clone、Run.Checkpoint返回值。</p><p><strong>动作：</strong>沿R3复用旧克隆能力，画Messages→ToolCalls→Arguments及Pending的引用关系；预测修改任一副本的影响。</p><pre><code>go test ./internal/runstate -run '^(TestDay17Ownership|TestDay17HistoricalCandidate)$' -count=1 -v</code></pre><p><strong>完成证据：</strong>改候选不改Run，后续运行不改候选，候选历史与Pending互不别名；预算耗尽仍可读取稳定候选。</p><details><summary>卡住时的提示</summary><p>只拷贝最外层Checkpoint结构，内部切片仍可能指向同一块字节。</p></details></article>
+<article class="step"><h3>3 · 20分钟：取消不是捕获的副作用</h3><p><strong>为什么：</strong>读取进度不应悄悄推进状态，终态归档也不能变成重新执行。<strong>位置：</strong>Run.Checkpoint只读路径，对照Day16 Apply。</p><p><strong>动作：</strong>沿R4演算ctx取消后、Apply前和Apply后三个观察点；再演算ToolsRunning→Abort/Cancel。保留Pending，解释为什么不能自动重放。</p><pre><code>go test ./internal/runstate -run '^TestDay17CancellationAndTerminal$' -count=1 -v</code></pre><p><strong>完成证据：</strong>捕获不采样ctx，Apply继续保留原取消错误，终态仍可归档但不能重开。</p><details><summary>卡住时的提示</summary><p>Checkpoint的错误只描述边界；不要顺手把它改成会调用Apply的方法。</p></details></article>
+<article class="step"><h3>4 · 20分钟：让标签和状态属于同一次观察</h3><p><strong>为什么：</strong>并发写入时，分开读标签和历史会拼出不存在的状态。<strong>位置：</strong>Run.Checkpoint对当前状态的读取范围。</p><p><strong>动作：</strong>先画一条读写交错时间线，再实现R5；不把后续保存或工具调用放入锁。让四个读者与30轮更新共同运行。</p><pre><code>go test ./internal/runstate -run '^TestDay17ConcurrentCapture$' -count=1 -v
+go test -race ./internal/runstate -run '^TestDay17' -count=1</code></pre><p><strong>完成证据：</strong>每份候选阶段、Pending与历史一致，各读者能改自己的数据；最终31轮Completed。全绿后整理重复逻辑，再跑同一断言。</p><details><summary>卡住时的提示</summary><p>方法内的原子读取与方法外的保存/执行事务是两种不同保证。</p></details></article></section>
+<section><h2>20分钟测试与复盘</h2><div class="time">12分钟 · 目标与累计验收</div>
+<pre><code># 练习副本根
+go test ./internal/runstate -run '^TestDay17' -count=1 -v -timeout 20s
+go test -race ./internal/runstate -timeout 30s
+go test ./internal/... -timeout 60s
+# 参考仓库根
+go test ./examples/...
+go test -race ./examples/...</code></pre>
+<p>这些是建议练习命令，不声称学习者已经执行。参考材料的验证不能替代你自己的实现测试。</p>
+<div class="time">8分钟 · 合上代码回答</div><ol><li>用“读取doc-1”讲清Snapshot、Checkpoint、存储确认、恢复各在哪一层。</li><li>ToolsPending候选产生后工具已执行，崩溃时为什么不能直接重放？</li><li>若要求“保存失败不能继续调用工具”，应由哪个驱动步骤控制？锁能单独解决吗？</li><li>未来增加版本冲突或跨进程读取，今天哪些类型能复用，缺少哪些契约？</li></ol>
+<h3>完成定义</h3><p><strong>实作：</strong>稳定/拒绝阶段、只读、深拷贝和并发断言通过，累计结果真实记录。</p><p><strong>理解：</strong>不看代码讲数据流与失败出口，解释候选不等于保存确认，知道为什么Pending不能授权重放；需求改变时能指出应修改的层。</p>
+<h3>本次发布验证</h3><p class="note">Go1.22.2 linux/amd64：原样骨架编译通过、目标在TODO处按预期失败；相同完整测试在隔离internal兼容参考通过（含race），兼容副本累计回归通过。仓库根examples普通与race均退出码0。未读取或验证学习者原实现、真实模型/网络及持久恢复。</p><p><a href="exercises/day17/verification.json">原始红绿与累计测试记录</a> · <a href="exercises/day17/browser-verification.json">离线浏览器检查</a></p>
+<h3>学习清单</h3><div class="meta"><span>本浏览器自评进度</span><span id="count">0 / 8</span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill" id="fill"></div></div><div id="checks"></div><noscript><p>关闭脚本仍可离线阅读正文、图、骨架、测试及答案，清单不自动保存。</p></noscript></section>
+<section id="answer"><h2>最后再看：兼容参考答案</h2><p>练习import使用根internal；累计答案位于examples/internal，只有包路径前缀映射，行为断言一致。先完成自己的方法，再对照取舍。</p><h3 class="file-label">参考 · internal/runstate/checkpoint.go</h3><p class="download"><a href="exercises/day17/reference/internal/runstate/checkpoint.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="reference" data-source="day17/reference/internal/runstate/checkpoint.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day17-reference-internal-runstate-checkpoint-go-txt"><code>package runstate
+
+import &quot;errors&quot;
+
+type CheckpointBoundary string
+
+const (
+	CheckpointReady       CheckpointBoundary = &quot;ready&quot;
+	CheckpointBeforeTools CheckpointBoundary = &quot;before_tools&quot;
+	CheckpointTerminal    CheckpointBoundary = &quot;terminal&quot;
+)
+
+var ErrCheckpointBoundary = errors.New(&quot;runstate: checkpoint requires a stable boundary&quot;)
+
+// Checkpoint is an in-memory candidate, not a storage acknowledgement or resume token.
+// State uses the existing message/call contract. Boundary classifies State.Phase.
+type Checkpoint struct {
+	Boundary CheckpointBoundary
+	State    State
+}
+
+// Clone copies nested mutable state. It does not validate or authorize a checkpoint.
+func (c Checkpoint) Clone() Checkpoint {
+	c.State = cloneState(c.State)
+	return c
+}
+
+// Checkpoint samples boundary and state under the same lock.
+// It does not observe context cancellation, advance state, pause the driver,
+// perform I/O, or promise that an external tool has not already taken effect.
+func (r *Run) Checkpoint() (Checkpoint, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var boundary CheckpointBoundary
+	switch r.state.Phase {
+	case Ready:
+		boundary = CheckpointReady
+	case ToolsPending:
+		boundary = CheckpointBeforeTools
+	case Completed, Failed, Cancelled:
+		boundary = CheckpointTerminal
+	default:
+		return Checkpoint{}, ErrCheckpointBoundary
+	}
+	return Checkpoint{Boundary: boundary, State: cloneState(r.state)}, nil
+}
+</code></pre><button type="button" data-copy="day17-reference-internal-runstate-checkpoint-go-txt">复制本文件</button></details><h3>Day18为什么需要存储与版本？</h3><p>今天定义了候选的边界与所有权，但进程退出仍会丢失它。明天为保存、读取和版本控制补充契约，让“取得候选”与“确认保存”有明确分界；外部调用确认与恢复策略随后继续。</p></section>
+<footer><a href="agent-runtime-day-16.html">前一天Day16</a> · <a href="../../index.html">返回学习首页</a><p>Day17 / 56 · 第三周 · 正文、图示、骨架与完整测试离线可读</p></footer></main><script>
+const items=["用自己的话解释当天三个概念", "根据两张图讲清输入、职责和返回", "完成官方阅读并写下问题答案", "确认骨架可编译且目标出现预期红灯", "按任务卡逐步完成当天实现", "完整目标与 race 测试通过", "记录累计回归实际结果和未验证项", "合上代码完成需求变化与失败边界复盘"];const key="mini-agent-runtime-day-17-tdd-v1";
+let saved=[];try{const value=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(value))saved=value}catch(_){}
+const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const percent=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=percent+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(percent))}
+items.forEach((s,i)=>{const row=document.createElement("div");row.className="check";const input=document.createElement("input");input.type="checkbox";input.id="task-"+i;input.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=input.id;label.textContent=s;row.append(input,label);box.append(row);input.onchange=()=>{saved[i]=input.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+document.querySelectorAll("button[data-copy]").forEach(button=>button.addEventListener("click",async()=>{const target=document.getElementById(button.dataset.copy);try{await navigator.clipboard.writeText(target.textContent);button.textContent="已复制"}catch(_){const range=document.createRange();range.selectNodeContents(target);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);button.textContent="已选中，请手动复制"}}));
+</script></body></html>

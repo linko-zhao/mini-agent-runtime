@@ -1,0 +1,25 @@
+package runstate
+
+import "errors"
+
+type CheckpointBoundary string
+
+const (
+	CheckpointReady       CheckpointBoundary = "ready"
+	CheckpointBeforeTools CheckpointBoundary = "before_tools"
+	CheckpointTerminal    CheckpointBoundary = "terminal"
+)
+
+var ErrCheckpointBoundary = errors.New("runstate: checkpoint requires a stable boundary")
+
+type Checkpoint struct {
+	Boundary CheckpointBoundary
+	State    State
+}
+
+func (c Checkpoint) Clone() Checkpoint {
+	panic("TODO: implement Checkpoint.Clone")
+}
+func (r *Run) Checkpoint() (Checkpoint, error) {
+	panic("TODO: implement Run.Checkpoint")
+}

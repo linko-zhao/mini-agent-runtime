@@ -98,3 +98,11 @@ main 在本批讲义准备期间新增了 agent.RunWithState、RunSnapshot 与�
 在原仓库根运行 `python3 docs/learning/exercises/prepare.py 16`，进入打印的仓库外副本。编译 `go test ./internal/runstate -run '^$'`；目标 `go test ./internal/runstate -run '^TestDay16' -count=1 -v`。骨架预期在 TODO 处失败，参考通过含 race；不触碰原 internal/cmd。
 
 重跑材料验证：`python3 docs/learning/exercises/verify.py --go /你的Go/bin/go --days 16 --report /tmp/day16-verification.json`。本日原始报告见 [day16/verification.json](day16/verification.json)。当前累计 examples 普通/race 也实际通过；不据此判断学习者已完成或跨进程恢复可靠。
+
+## Day17：Checkpoint边界与快照
+
+[Day17页面](../agent-runtime-day-17.html) 与day17/的完整骨架、测试、支持和参考保持逐字一致。新增练习internal/runstate/checkpoint.go；支持文件复用Day15 state.go及Day16 run.go，共享固定baseline和根go.mod，没有每日独立module。
+
+原仓库根运行 `python3 docs/learning/exercises/prepare.py 17`，进入打印的仓库外副本。先编译 `go test ./internal/runstate -run '^$'`，再执行 `go test ./internal/runstate -run '^TestDay17' -count=1 -v`；目标应在TODO处失败。兼容参考使用同一测试和internal路径通过含race，不绕到examples。
+
+重跑：`python3 docs/learning/exercises/verify.py --go /你的Go/bin/go --days 17 --report /tmp/day17-verification.json`。本日 [红绿/累计记录](day17/verification.json)、[离线浏览器记录](day17/browser-verification.json)。当前examples普通/race也实际通过；原学习者实现未读取或覆盖，真实网络与持久恢复未验证。
