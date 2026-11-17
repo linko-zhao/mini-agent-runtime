@@ -1,0 +1,776 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>Day 18 · Checkpoint 存储与版本控制</title><style>
+:root{color-scheme:light;--bg:#f5f7fb;--paper:#fff;--ink:#182337;--sub:#52617a;--line:#dce4ef;--accent:#2459bd;--pale:#edf3ff}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.72 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}main{max-width:820px;padding:28px 22px 64px;margin:auto}.hero{background:#183561;color:white;border-radius:18px;padding:30px}.hero h1{font-size:26px;line-height:1.45;margin:12px 0}.hero p{color:#e6eefa}.eyebrow,.time{font-size:13px;font-weight:700}.chips{display:flex;flex-wrap:wrap;gap:8px}.chips span{font-size:13px;border:1px solid #9cb5d9;border-radius:20px;padding:3px 12px}section,nav{background:white;border:1px solid var(--line);border-radius:14px;padding:26px;margin-top:20px}h2{font-size:19px;line-height:1.5;margin:0 0 20px}h3{font-size:16px;line-height:1.5;margin:24px 0 10px}p{margin:12px 0}a{color:var(--accent);text-underline-offset:3px}li{margin:10px 0}code{font-size:.88em;background:#edf1f7;padding:2px 4px;border-radius:4px;overflow-wrap:anywhere}pre{background:#142136;color:#e7f3ff;border-radius:10px;padding:18px;overflow:auto;font-size:13px;line-height:1.7;tab-size:4}pre code{background:none;padding:0;font-size:inherit;overflow-wrap:normal}.note,.goal{border-left:4px solid var(--accent);background:var(--pale);padding:14px 18px;border-radius:4px}.warn{border-left-color:#9b6500;background:#fff6e3}.card,.rule,.step{border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:18px 0}.card h3,.step h3{margin-top:0}.muted{color:var(--sub);font-size:13px}.flow{display:flex;flex-direction:column;gap:10px;margin:20px 0}.node{border:2px solid #9eb6db;border-radius:10px;padding:15px;background:#f4f8ff}.node strong{display:block}.arrow{text-align:center;color:#345276;font-size:16px}.branch{border:2px dashed #9b6500;background:#fff7e8}.time{color:var(--accent)}details{border:1px solid var(--line);border-radius:9px;padding:12px 16px;margin:16px 0}summary{cursor:pointer;font-weight:650}summary:focus-visible,a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid #c67800;outline-offset:4px}button{font:inherit;font-size:13px;background:#edf3ff;color:#183561;border:1px solid #9eb6db;border-radius:7px;padding:7px 12px;cursor:pointer}.check{display:flex;gap:12px;margin:14px 0}.check input{width:20px;height:20px;flex-shrink:0;margin-top:7px;accent-color:var(--accent)}.check label{cursor:pointer}.done label{color:var(--sub);text-decoration:line-through}.progress{background:#e3e9f2;height:12px;border-radius:8px;overflow:hidden}.fill{background:var(--accent);height:100%;width:0}.meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;font-size:13px}footer{font-size:13px;text-align:center;padding:24px}.toplinks{display:flex;flex-wrap:wrap;gap:10px 22px}.download{font-size:13px}.code-actions{display:flex;gap:12px;align-items:center;margin-top:12px}.copy-state{font-size:13px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@media(max-width:600px){main{padding:12px 10px 36px}section,nav{padding:20px 16px}.hero{padding:23px 20px}.hero h1{font-size:24px}h2{font-size:19px}pre{padding:14px;font-size:12px}.card,.rule,.step{padding:14px}body{font-size:15px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+
+figure{margin-inline:0}p,.node,figcaption{overflow-wrap:anywhere}.file-label{overflow-wrap:anywhere}.phase{font-weight:700;color:#183561}.copy-status{font-size:13px;color:#52617a}details>pre{margin-bottom:12px}
+
+body{font-size:18px;line-height:1.8}h2{font-size:23px}h3{font-size:19px}main{max-width:840px}.node small{display:block}.code-file{min-width:0}section{min-width:0}@media(max-width:600px){body{font-size:17px}h2{font-size:21px}}</style></head><body><main><header class="hero"><div class="eyebrow">MINI AGENT RUNTIME · WEEK 03 · DAY 18 / 56</div><h1>Checkpoint 存储与版本控制</h1><p>今天实现保存/读取接口和内存参考存储，让宿主用“我读过的版本”更新 Checkpoint，避免旧写入静默覆盖新记录。</p><div class="chips"><span>阅读 20 分钟</span><span>Go练习 80 分钟</span><span>测试复盘 20 分钟</span></div></header>
+<nav aria-label="本页导航" class="toplinks"><a href="#concepts">先懂设计</a><a href="#rules">行为契约</a><a href="#skeleton">骨架与测试</a><a href="#tasks">分步实现</a><a href="#answer">最后看答案</a></nav>
+<section><h2>今天只解决什么？</h2><p>继续处理“读取 doc-1”。Day17已经能在ToolsPending捕获候选，但还没有保存接口；两个宿主拿着旧候选先后写入时，也没有发现覆盖的办法。</p><p>今天把候选交给CheckpointStore保存，用保存版本防止旧写覆盖。先用MemoryCheckpointStore跑通同一个接口的行为契约，便于未来替换存储后端。</p><p class="goal">完成后：创建版本1、读出独立副本、携带当前版本更新、明确拒绝冲突；能解释保存确认、模型轮次、恢复权限的区别。</p><p>本日参考实现只保存在当前进程内，进程退出就丢失。没有磁盘/数据库、序列化格式、跨进程持久性、恢复或自动重放。</p></section>
+<section id="concepts"><h2>先讲清三个概念</h2>
+<article class="card"><h3>存储端口：宿主只约定如何存取</h3><p>CheckpointStore是Load/Save两种行为的接口，输入仍是Day17 Checkpoint，不把网络连接、ctx或锁塞进数据。</p><p>MemoryCheckpointStore是该接口的内存实现。换成数据库时要实现同样的比较更新、错误和副本语义，并另外证明持久性；不能把换一个map当作跨进程保存。</p></article>
+<article class="card"><h3>版本比较更新：只接受仍然有效的旧版本</h3><p>这就是比较后交换（CAS）：保存时说“我基于版本1修改”，仅当当前还是1才成功。若另一个写入已产生2，返回冲突。</p><p>expected=0只创建不存在的记录；成功后返回1。Version由存储为每个RunID单独递增，不是State.Step，也不是结构格式版本。</p></article>
+<article class="card"><h3>确认：必须看具体实现承诺</h3><p>本日Save返回nil，表示该内存对象已接纳完整记录，随后Load能读到它。它没有磁盘刷写或远端事务确认。</p><p>未来远端超时可能伴随写入已发生，不能沿用内存实现的“返回错误即没写入”推断。宿主需要后端的确认与查询协议，不自动重试外部工具。</p></article></section>
+<section><h2>职责图：运行状态与保存记录分开</h2>
+<figure aria-label="宿主捕获Run候选，通过CheckpointStore保存，内存实现比较版本后返回完整记录"><div class="flow">
+<div class="node"><strong>宿主 / 单驱动</strong>读取doc-1流程；选择捕获和保存时机；决定下一步是否继续</div>
+<div class="arrow">↓ Run.Checkpoint() → Day17候选</div>
+<div class="node"><strong>CheckpointStore端口</strong>Save(storageCtx, cp, expected) → StoredCheckpoint / error<br>Load(storageCtx, runID) → StoredCheckpoint / error</div>
+<div class="arrow">↓ 相同接口，本日装配内存实现</div>
+<div class="node"><strong>MemoryCheckpointStore</strong>校验候选信封；原子比较版本与更新；各方向深拷贝</div>
+<div class="arrow">↑ 成功返回新Version+Checkpoint；失败返回零值+可识别错误</div>
+<div class="node branch"><strong>失败出口</strong>未找到 / 版本冲突 / 非法请求 / 观察到取消；本实现错误不修改已有记录</div></div>
+<figcaption>存储不调用Apply，不执行模型/工具，不自动推进Run。真实后端的序列化、持久性和身份控制不在这个内存对象里。</figcaption></figure></section>
+<section><h2>编号运行图：两份旧候选如何发生冲突？</h2>
+<figure aria-label="版本1被两个写入者读取，一个更新成功得到2，另一个旧版本写入被拒绝"><div class="flow">
+<div class="node"><strong>① 创建</strong>Run处于ToolsPending；cp含call-1/get_document<br>Save(ctx, cp, 0) → Version=1</div>
+<div class="arrow">↓ 两个调用方分别Load("r18")，都读到版本1与各自副本</div>
+<div class="node"><strong>② A先保存</strong>Save(ctx, cpA, 1) → Version=2</div>
+<div class="arrow">↓ 当前版本已是2</div>
+<div class="node branch"><strong>③ B仍带旧版本</strong>Save(ctx, cpB, 1) → ErrCheckpointConflict<br>不返回半份记录，也不覆盖A</div>
+<div class="arrow">↓ 宿主停止当前写入流程，重新读取并判断</div>
+<div class="node"><strong>④ 重新判断下一步</strong>Load → 最新版本2；由宿主核对工作归属与进度<br>不自动把expected改成2重试旧候选，不自动重跑工具</div></div>
+<figcaption>CAS只检测“读取后记录有没有被更新”。即使有最新版本，宿主仍可能提交语义上过期的候选；本日存储不推断状态前进、执行权或业务正确性。</figcaption></figure>
+<p class="note">同一候选重复保存也会产生新版本，Step可以一直为1；Version不是幂等键。保存成功也不是执行租约，两个宿主不能仅凭这个返回值同时驱动同一Run。</p></section>
+<section><h2>接口与字段：为什么这样分？</h2>
+<article class="card"><h3>StoredCheckpoint</h3><p>Version为uint64的每RunID保存计数，已保存值从1开始；Checkpoint沿用Day17 Boundary+State。两者作为同一记录返回，不能把新版本与旧正文拼接。</p><p>State.Step/MaxSteps仍是模型轮次和预算；State.RunID是精确键，前后非空白字符不被规范化。不同RunID各自从1计数；新存储对象从空开始。</p></article>
+<article class="card"><h3>CheckpointStore.Load(ctx, runID)</h3><p>返回当前最新记录的独立副本；不存在返回零StoredCheckpoint和ErrCheckpointNotFound。runID不得全为空白，不自动去除两端空格。</p><p>不查找历史版本，不创建记录，不恢复Run。存储ctx独立于原Run的ctx，因此可用另一个有效ctx归档已取消Run。</p></article>
+<article class="card"><h3>CheckpointStore.Save(ctx, cp, expected)</h3><p>expected=0仅创建；否则必须与当前Version精确相等，不存在却expected&gt;0也算冲突。成功保存expected+1，原样保留Checkpoint数据并返回独立副本。</p><p>每次成功都递增，即使正文完全一样。expected为uint64最大值直接拒绝为ErrInvalidCheckpoint，避免版本溢出回到0。</p><p>Save不检查State语义是否比旧记录更新，不限制终态被更高版本的其他候选替换；工作归属和合法进度由宿主协议控制，不能把CAS误称为执行锁。</p></article>
+<article class="card"><h3>MemoryCheckpointStore与构造</h3><p>NewMemoryCheckpointStore()返回空对象；零值也可使用。它内部保存互斥和最新记录表，首次使用后不能复制。</p><p>并发Load/Save安全；输入候选在Save期间不得被调用方并发改写。存储只保留每键最新值，不提供删除、TTL、历史查询、容量限制或持久化。</p></article>
+<article class="card"><h3>三类业务错误与context错误</h3><p>ErrCheckpointNotFound用于Load缺失；ErrCheckpointConflict用于Save版本不匹配；ErrInvalidCheckpoint用于nil ctx、空白键、非法候选信封或版本上限。用errors.Is判断，不匹配完整文本。</p><p>先检查ctx是否nil及ctx.Err，再校验参数；持锁后在实际读写前再次检查ctx.Err。观察到取消/截止时间则返回原错误和零记录，Save不写入。</p><p>锁等待不可被context打断；取消若发生在最后检查之后，当前操作仍可能成功。不存在“物理取消发生的一刻绝不提交”的承诺。</p></article></section>
+<section id="rules"><h2>行为契约：每条都有确定断言</h2>
+<article class="rule"><h3>R1 · 创建、更新、缺失、冲突</h3><p>创建0→1；匹配1→2；同内容也递增。旧版本、重复创建和不存在却expected&gt;0均冲突；Load缺失为NotFound。所有错误返回零StoredCheckpoint，已有记录不变。</p><p>测试：TestDay18CreateLoadCAS。</p></article>
+<article class="rule"><h3>R2 · 只校验可信候选的基本信封</h3><p>RunID非全空白，MaxSteps&gt;0，0≤Step≤MaxSteps。Boundary必须匹配Ready、ToolsPending或三个终态；进行中阶段、未知标签与标签/阶段不符均拒绝。</p><p>不重复校验整个消息历史、不验签、不处理不可信JSON。候选应来自已有Run.Checkpoint；公开字段可被手工改坏，这些基础检查不构成可信恢复验证。</p><p>nil ctx、空白Load键、expected=最大uint64也拒绝。测试：TestDay18Validation。</p></article>
+<article class="rule"><h3>R3 · 存储context与运行context分开</h3><p>预取消/已过期ctx用于Load或Save，原样返回context.Canceled/DeadlineExceeded且无写入。用活的存储ctx可以归档Cancelled终态，不改动原Run。</p><p>测试：TestDay18Cancellation。无网络或磁盘依赖，远端断连/部分写入不适用于本实现；未来适配器需独立测试这些故障。</p></article>
+<article class="rule"><h3>R4 · 所有方向都是独立副本</h3><p>输入cp、保存返回值、后续每个Load返回值与存储内部互不共享可变字节。继续复用Messages→ToolCalls→Arguments及Pending深拷贝，历史和Pending也不互相别名。</p><p>测试：TestDay18Ownership。副本含私密输入与正文，不应当作公开审计数据。</p></article>
+<article class="rule"><h3>R5 · 原子的版本与正文</h3><p>16个写者携带相同expected竞争，同一轮只有一个成功，版本只加1；其余冲突。并发读者取得完整版本与候选，修改自己的副本不影响存储。</p><p>测试：TestDay18ConcurrentCAS。两个独立MemoryCheckpointStore对象不共享任何记录，不是跨进程竞争控制。</p></article>
+<article class="rule"><h3>R6 · 精确键、零值与全稳定阶段</h3><p>"r"和" r "是两个键，不静默改名；不同键独立版本。零值存储可用，新实例没有旧记录；Ready/ToolsPending/全部终态候选均可保存。</p><p>测试：TestDay18CreateLoadCAS、TestDay18Validation。终态可保存不等于允许重新执行；没有Restore/Resume API。</p></article></section>
+<section id="read"><h2>带着问题读Eino：20分钟</h2>
+<article class="card"><h3>12分钟 · 保存端口和序列化不是同一层</h3><p>阅读<a href="https://github.com/cloudwego/eino/blob/main/compose/checkpoint.go">compose/checkpoint.go</a>：定位CheckPointStore别名、Serializer、WithCheckPointStore、checkPointer.get/set。</p><p>问题：Marshal、store.Set、store.Get、Unmarshal分别在哪个顺序发生？哪一层返回未找到或错误？产出一张“对象→字节→存储→字节→对象”的图。</p><p>映射：本日CheckpointStore直接保存类型化候选，Memory实现没有序列化步骤。源码中set调用store.Set不能推出本课CAS契约；版本比较是我们额外明确设计的要求。</p></article>
+<article class="card"><h3>8分钟 · 保存版本不等于格式版本</h3><p>继续定位同文件的MigrateCheckpointState、migrateCheckpoint、WithCheckPointID、WithWriteToCheckPointID。问题：格式迁移回调处理什么对象？换保存ID与增加版本计数有何区别？</p><p>产出三列对照：存储CAS版本、类型/格式兼容、图恢复位置。本日仅实现第一项的内存语义，尚无格式版本、兼容迁移或图执行恢复。</p></article>
+<p class="muted">本次已读取官方main确认路径与符号，checkpoint.go blob ebb79b24bf94。main会变化，阅读时记录版本；Eino只作对照，不是课程运行依赖。</p></section>
+<section><h2>承接前序设计与本日增量</h2><p><strong>复用：</strong>Day15 State/Event、Day16 Run、Day17 Checkpoint及Clone，model消息与工具协议不改。旧Checkpoint()仍只捕获，不自动保存；旧Agent.Run/RunWithState仍保留，尚未接入这条纯状态链。</p>
+<p><strong>新增：</strong>练习internal/runstate/store.go、day18_contract_test.go；参考examples/internal/runstate/store.go、store_test.go。新增接口、记录和内存实现，所有示例共享根go.mod。</p>
+<p><strong>修改：</strong>README/CONTRACTS、当日附件与manifest、prepare/verify支持18、HTML和首页入口。state.go/run.go/checkpoint.go及固定baseline不改，根internal/cmd不写入。</p>
+<p><strong>迁移：</strong>旧Run.Checkpoint()→继续原样使用；需要保存的宿主新增store.Save(storageCtx, cp, expected)，成功后保存返回Version供下次比较。Load得到的是记录，不是新的可执行Run。</p>
+<p>若需求是“保存成功后才进入工具阶段”，宿主必须在Save成功后才发StartTools；冲突/错误就停下这条推进路径。本日只规定存储行为，未把该驱动策略集成到旧Agent，也未提供执行租约。</p>
+<pre><code># 原仓库根：只创建仓库外的新练习副本
+python3 docs/learning/exercises/prepare.py 18
+# 进入打印的目录，再编辑 internal/runstate/store.go</code></pre>
+<p>Python3.9+、Go1.22.2+，不需要API Key。prepare提供固定baseline及Day15–17三个支持文件；测试import指向练习internal，参考只映射为examples/internal，不混用两套model类型。</p><p>已有实现先保留，只应用完整测试；不挖空已有代码制造红灯，也不整包重建或新建每日module。</p></section>
+<section id="skeleton"><h2>完整骨架：先完成契约，再看答案</h2><p>字段、接口和签名齐全，核心方法留TODO。可以使用其他内部写法，但必须保持本页公开行为。</p><h3 class="file-label">新增 · internal/runstate/store.go</h3><p class="download"><a href="exercises/day18/skeleton/internal/runstate/store.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="skeleton" data-source="day18/skeleton/internal/runstate/store.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day18-skeleton-internal-runstate-store-go-txt"><code>package runstate
+
+import (
+	&quot;context&quot;
+	&quot;errors&quot;
+	&quot;sync&quot;
+)
+
+var (
+	ErrCheckpointNotFound = errors.New(&quot;runstate: checkpoint not found&quot;)
+	ErrCheckpointConflict = errors.New(&quot;runstate: checkpoint version conflict&quot;)
+	ErrInvalidCheckpoint  = errors.New(&quot;runstate: invalid checkpoint request&quot;)
+)
+
+type StoredCheckpoint struct {
+	Version    uint64
+	Checkpoint Checkpoint
+}
+type CheckpointStore interface {
+	Load(context.Context, string) (StoredCheckpoint, error)
+	Save(context.Context, Checkpoint, uint64) (StoredCheckpoint, error)
+}
+type MemoryCheckpointStore struct {
+	mu      sync.Mutex
+	records map[string]StoredCheckpoint
+}
+
+func NewMemoryCheckpointStore() *MemoryCheckpointStore {
+	panic(&quot;TODO: implement NewMemoryCheckpointStore&quot;)
+}
+func (s *MemoryCheckpointStore) Load(ctx context.Context, runID string) (StoredCheckpoint, error) {
+	panic(&quot;TODO: implement Load&quot;)
+}
+func (s *MemoryCheckpointStore) Save(ctx context.Context, cp Checkpoint, expected uint64) (StoredCheckpoint, error) {
+	panic(&quot;TODO: implement Save&quot;)
+}
+</code></pre><button type="button" data-copy="day18-skeleton-internal-runstate-store-go-txt">复制本文件</button></details><details><summary>复用前置支持文件（完整离线内容）</summary><p>prepare已提供；手工应用时核对签名，不重复定义旧类型。</p><h3>internal/runstate/state.go</h3><pre><code>// Package runstate models in-memory transitions. It is not a checkpoint store.
+package runstate
+
+import (
+	&quot;errors&quot;
+	&quot;strings&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+)
+
+type Phase string
+
+const (
+	Ready        Phase = &quot;ready&quot;
+	ModelRunning Phase = &quot;model_running&quot;
+	ToolsPending Phase = &quot;tools_pending&quot;
+	ToolsRunning Phase = &quot;tools_running&quot;
+	Completed    Phase = &quot;completed&quot;
+	Failed       Phase = &quot;failed&quot;
+	Cancelled    Phase = &quot;cancelled&quot;
+)
+
+type EventKind string
+
+const (
+	StartModel    EventKind = &quot;start_model&quot;
+	ModelReturned EventKind = &quot;model_returned&quot;
+	StartTools    EventKind = &quot;start_tools&quot;
+	ToolsReturned EventKind = &quot;tools_returned&quot;
+	Abort         EventKind = &quot;abort&quot;
+	Cancel        EventKind = &quot;cancel&quot;
+)
+
+var (
+	ErrTransition = errors.New(&quot;runstate: invalid transition&quot;)
+	ErrMaxSteps   = errors.New(&quot;runstate: max model rounds exceeded&quot;)
+)
+
+type State struct {
+	RunID           string
+	Phase           Phase
+	Step, MaxSteps  int
+	Messages        []model.Message
+	Pending         []model.ToolCall
+	Result, Failure string
+}
+type Event struct {
+	Kind     EventKind
+	Response *model.Response
+	Results  []model.Message
+	Reason   string
+}
+
+func New(runID, input string, maxSteps int) (State, error) {
+	if strings.TrimSpace(runID) == &quot;&quot; || maxSteps &lt;= 0 {
+		return State{}, ErrTransition
+	}
+	return State{RunID: runID, Phase: Ready, MaxSteps: maxSteps, Messages: []model.Message{{Role: &quot;user&quot;, Content: input}}}, nil
+}
+func cloneCalls(calls []model.ToolCall) []model.ToolCall {
+	if calls == nil {
+		return nil
+	}
+	out := append([]model.ToolCall{}, calls...)
+	for i := range out {
+		out[i].Arguments = append([]byte(nil), out[i].Arguments...)
+	}
+	return out
+}
+func cloneMessages(ms []model.Message) []model.Message {
+	if ms == nil {
+		return nil
+	}
+	out := append([]model.Message{}, ms...)
+	for i := range out {
+		out[i].ToolCalls = cloneCalls(out[i].ToolCalls)
+	}
+	return out
+}
+func cloneState(s State) State {
+	s.Messages = cloneMessages(s.Messages)
+	s.Pending = cloneCalls(s.Pending)
+	return s
+}
+func terminal(p Phase) bool { return p == Completed || p == Failed || p == Cancelled }
+
+// Advance has no I/O. The host performs calls between start/returned events.
+// It accepts states from New/Advance and never mutates input state/event buffers.
+func Advance(current State, e Event) (State, error) {
+	if terminal(current.Phase) {
+		return State{}, ErrTransition
+	}
+	next := cloneState(current)
+	switch e.Kind {
+	case StartModel:
+		if current.Phase != Ready {
+			return State{}, ErrTransition
+		}
+		if current.Step &gt;= current.MaxSteps {
+			return State{}, ErrMaxSteps
+		}
+		next.Step++
+		next.Phase = ModelRunning
+	case ModelReturned:
+		if current.Phase != ModelRunning || e.Response == nil || e.Response.Message.Role != &quot;assistant&quot; {
+			return State{}, ErrTransition
+		}
+		msg := e.Response.Message
+		ids := map[string]bool{}
+		for _, call := range msg.ToolCalls {
+			if call.ID == &quot;&quot; || strings.TrimSpace(call.Name) == &quot;&quot; || ids[call.ID] {
+				return State{}, ErrTransition
+			}
+			ids[call.ID] = true
+		}
+		next.Messages = append(next.Messages, cloneMessages([]model.Message{msg})...)
+		if len(msg.ToolCalls) == 0 {
+			next.Phase = Completed
+			next.Result = msg.Content
+		} else {
+			next.Phase = ToolsPending
+			next.Pending = cloneCalls(msg.ToolCalls)
+		}
+	case StartTools:
+		if current.Phase != ToolsPending {
+			return State{}, ErrTransition
+		}
+		next.Phase = ToolsRunning
+	case ToolsReturned:
+		if current.Phase != ToolsRunning || len(e.Results) != len(current.Pending) {
+			return State{}, ErrTransition
+		}
+		for i, msg := range e.Results {
+			if msg.Role != &quot;tool&quot; || msg.ToolCallID != current.Pending[i].ID {
+				return State{}, ErrTransition
+			}
+		}
+		next.Messages = append(next.Messages, cloneMessages(e.Results)...)
+		next.Pending = nil
+		next.Phase = Ready
+	case Abort:
+		if strings.TrimSpace(e.Reason) == &quot;&quot; {
+			return State{}, ErrTransition
+		}
+		next.Phase = Failed
+		next.Failure = e.Reason
+	case Cancel:
+		next.Phase = Cancelled
+		next.Failure = &quot;cancelled&quot;
+	default:
+		return State{}, ErrTransition
+	}
+	return next, nil
+}
+</code></pre><h3>internal/runstate/run.go</h3><pre><code>package runstate
+
+import (
+	&quot;context&quot;
+	&quot;sync&quot;
+)
+
+// Run owns one in-memory State. Use its pointer; do not copy it after use.
+// The zero value is not usable; construct with NewRun.
+type Run struct {
+	ctx   context.Context
+	mu    sync.Mutex
+	state State
+}
+
+// NewRun retains ctx for cancellation/deadlines, not for storing State.
+// A cancelled context rejects construction; invalid identity/budget uses ErrTransition.
+func NewRun(ctx context.Context, runID, input string, maxSteps int) (*Run, error) {
+	if ctx == nil {
+		return nil, ErrTransition
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	s, err := New(runID, input, maxSteps)
+	if err != nil {
+		return nil, err
+	}
+	return &amp;Run{ctx: ctx, state: s}, nil
+}
+
+// Context returns the original context. The host owns any cancel function.
+// Model/tool I/O must use this context outside Apply, never while holding its lock.
+func (r *Run) Context() context.Context { return r.ctx }
+
+// Snapshot returns an independent copy without triggering transitions.
+func (r *Run) Snapshot() State {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return cloneState(r.state)
+}
+
+// Apply commits exactly one valid event, or returns the unchanged current copy.
+// For a nonterminal Run, observed context cancellation commits Cancel and rejects
+// the event with the original context error. A terminal State is never overwritten.
+// This serializes transitions, not a snapshot -&gt; external I/O -&gt; Apply transaction.
+func (r *Run) Apply(e Event) (State, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if terminal(r.state.Phase) {
+		return cloneState(r.state), ErrTransition
+	}
+	if err := r.ctx.Err(); err != nil {
+		next, transitionErr := Advance(r.state, Event{Kind: Cancel})
+		if transitionErr != nil {
+			return cloneState(r.state), transitionErr
+		}
+		r.state = next
+		return cloneState(r.state), err
+	}
+	next, err := Advance(r.state, e)
+	if err != nil {
+		return cloneState(r.state), err
+	}
+	r.state = next
+	return cloneState(r.state), nil
+}
+</code></pre><h3>internal/runstate/checkpoint.go</h3><pre><code>package runstate
+
+import &quot;errors&quot;
+
+type CheckpointBoundary string
+
+const (
+	CheckpointReady       CheckpointBoundary = &quot;ready&quot;
+	CheckpointBeforeTools CheckpointBoundary = &quot;before_tools&quot;
+	CheckpointTerminal    CheckpointBoundary = &quot;terminal&quot;
+)
+
+var ErrCheckpointBoundary = errors.New(&quot;runstate: checkpoint requires a stable boundary&quot;)
+
+// Checkpoint is an in-memory candidate, not a storage acknowledgement or resume token.
+// State uses the existing message/call contract. Boundary classifies State.Phase.
+type Checkpoint struct {
+	Boundary CheckpointBoundary
+	State    State
+}
+
+// Clone copies nested mutable state. It does not validate or authorize a checkpoint.
+func (c Checkpoint) Clone() Checkpoint {
+	c.State = cloneState(c.State)
+	return c
+}
+
+// Checkpoint samples boundary and state under the same lock.
+// It does not observe context cancellation, advance state, pause the driver,
+// perform I/O, or promise that an external tool has not already taken effect.
+func (r *Run) Checkpoint() (Checkpoint, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var boundary CheckpointBoundary
+	switch r.state.Phase {
+	case Ready:
+		boundary = CheckpointReady
+	case ToolsPending:
+		boundary = CheckpointBeforeTools
+	case Completed, Failed, Cancelled:
+		boundary = CheckpointTerminal
+	default:
+		return Checkpoint{}, ErrCheckpointBoundary
+	}
+	return Checkpoint{Boundary: boundary, State: cloneState(r.state)}, nil
+}
+</code></pre></details></section><section><h2>完整测试：测试练习代码，不绕到答案</h2><p>全部测试数据、context和并发夹具均在下面。它们只使用公开方法，不读取私有map或锁，也不连接真实网络。</p><h3 class="file-label">新增 · internal/runstate/day18_contract_test.go</h3><p class="download"><a href="exercises/day18/tests/internal/runstate/day18_contract_test.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="tests" data-source="day18/tests/internal/runstate/day18_contract_test.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day18-tests-internal-runstate-day18_contract_test-go-txt"><code>package runstate_test
+
+import (
+	&quot;context&quot;
+	&quot;errors&quot;
+	&quot;reflect&quot;
+	&quot;sync&quot;
+	&quot;sync/atomic&quot;
+	&quot;testing&quot;
+	&quot;time&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/runstate&quot;
+)
+
+func candidate18(t *testing.T, id string) runstate.Checkpoint {
+	t.Helper()
+	r, e := runstate.NewRun(context.Background(), id, &quot;读取 doc-1&quot;, 2)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = r.Apply(runstate.Event{Kind: runstate.StartModel}); e != nil {
+		t.Fatal(e)
+	}
+	response := &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, ToolCalls: []model.ToolCall{{ID: &quot;call-1&quot;, Name: &quot;get_document&quot;, Arguments: []byte(`{&quot;id&quot;:&quot;doc-1&quot;}`)}}}}
+	if _, e = r.Apply(runstate.Event{Kind: runstate.ModelReturned, Response: response}); e != nil {
+		t.Fatal(e)
+	}
+	cp, e := r.Checkpoint()
+	if e != nil {
+		t.Fatal(e)
+	}
+	return cp
+}
+func error18(t *testing.T, v runstate.StoredCheckpoint, err, want error) {
+	t.Helper()
+	if !errors.Is(err, want) || !reflect.DeepEqual(v, runstate.StoredCheckpoint{}) {
+		t.Fatal(v, err, want)
+	}
+}
+func TestDay18CreateLoadCAS(t *testing.T) {
+	ctx := context.Background()
+	var store runstate.CheckpointStore = runstate.NewMemoryCheckpointStore()
+	cp := candidate18(t, &quot;r&quot;)
+	v, e := store.Load(ctx, &quot;r&quot;)
+	error18(t, v, e, runstate.ErrCheckpointNotFound)
+	v, e = store.Save(ctx, cp, 0)
+	if e != nil || v.Version != 1 || !reflect.DeepEqual(v.Checkpoint, cp) {
+		t.Fatal(v, e)
+	}
+	v, e = store.Save(ctx, cp, 1)
+	if e != nil || v.Version != 2 || v.Checkpoint.State.Step != 1 {
+		t.Fatal(v, e)
+	}
+	latest := v
+	for _, old := range []uint64{0, 1, 9} {
+		v, e = store.Save(ctx, cp, old)
+		error18(t, v, e, runstate.ErrCheckpointConflict)
+	}
+	loaded, e := store.Load(ctx, &quot;r&quot;)
+	if e != nil || !reflect.DeepEqual(latest, loaded) {
+		t.Fatal(loaded, e)
+	}
+	cp2 := candidate18(t, &quot;other&quot;)
+	v, e = store.Save(ctx, cp2, 0)
+	if e != nil || v.Version != 1 {
+		t.Fatal(v, e)
+	}
+	// Zero-value store is usable and a new instance has no persisted records.
+	var zero runstate.MemoryCheckpointStore
+	v, e = zero.Load(ctx, &quot;r&quot;)
+	error18(t, v, e, runstate.ErrCheckpointNotFound)
+	v, e = zero.Save(ctx, cp, 0)
+	if e != nil || v.Version != 1 {
+		t.Fatal(v, e)
+	}
+	// RunID is an exact key; nonempty surrounding spaces are not normalized.
+	spaced := candidate18(t, &quot; r &quot;)
+	v, e = store.Save(ctx, spaced, 0)
+	if e != nil || v.Version != 1 {
+		t.Fatal(v, e)
+	}
+	loaded, e = store.Load(ctx, &quot;r&quot;)
+	if e != nil || loaded.Version != 2 {
+		t.Fatal(loaded, e)
+	}
+	v, e = store.Save(ctx, candidate18(t, &quot;absent&quot;), 4)
+	error18(t, v, e, runstate.ErrCheckpointConflict)
+	v, e = store.Load(ctx, &quot;absent&quot;)
+	error18(t, v, e, runstate.ErrCheckpointNotFound)
+}
+func TestDay18Validation(t *testing.T) {
+	ctx := context.Background()
+	s := runstate.NewMemoryCheckpointStore()
+	cp := candidate18(t, &quot;r&quot;)
+	if _, e := s.Save(ctx, cp, 0); e != nil {
+		t.Fatal(e)
+	}
+	mutations := []func(*runstate.Checkpoint){
+		func(c *runstate.Checkpoint) { c.State.RunID = &quot; &quot; },
+		func(c *runstate.Checkpoint) { c.State.MaxSteps = 0 },
+		func(c *runstate.Checkpoint) { c.State.Step = -1 },
+		func(c *runstate.Checkpoint) { c.State.Step = c.State.MaxSteps + 1 },
+		func(c *runstate.Checkpoint) { c.Boundary = &quot;unknown&quot; },
+		func(c *runstate.Checkpoint) { c.State.Phase = runstate.ToolsRunning },
+		func(c *runstate.Checkpoint) { c.Boundary = runstate.CheckpointReady },
+	}
+	for _, change := range mutations {
+		bad := cp.Clone()
+		change(&amp;bad)
+		v, e := s.Save(ctx, bad, 1)
+		error18(t, v, e, runstate.ErrInvalidCheckpoint)
+	}
+	v, e := s.Save(ctx, cp, ^uint64(0))
+	error18(t, v, e, runstate.ErrInvalidCheckpoint)
+	for _, id := range []string{&quot;&quot;, &quot;  &quot;} {
+		v, e = s.Load(ctx, id)
+		error18(t, v, e, runstate.ErrInvalidCheckpoint)
+	}
+	v, e = s.Load(nil, &quot;r&quot;)
+	error18(t, v, e, runstate.ErrInvalidCheckpoint)
+	v, e = s.Save(nil, cp, 1)
+	error18(t, v, e, runstate.ErrInvalidCheckpoint)
+	v, e = s.Load(ctx, &quot;r&quot;)
+	if e != nil || v.Version != 1 || !reflect.DeepEqual(v.Checkpoint, cp) {
+		t.Fatal(v, e)
+	}
+	// All Day17 stable classes are valid store envelopes.
+	for _, phase := range []runstate.Phase{runstate.Ready, runstate.Completed, runstate.Failed, runstate.Cancelled} {
+		r, e := runstate.NewRun(ctx, string(phase), &quot;&quot;, 2)
+		if e != nil {
+			t.Fatal(e)
+		}
+		switch phase {
+		case runstate.Completed:
+			r.Apply(runstate.Event{Kind: runstate.StartModel})
+			if _, e = r.Apply(runstate.Event{Kind: runstate.ModelReturned, Response: &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, Content: &quot;ok&quot;}}}); e != nil {
+				t.Fatal(e)
+			}
+		case runstate.Failed:
+			if _, e = r.Apply(runstate.Event{Kind: runstate.Abort, Reason: &quot;controlled&quot;}); e != nil {
+				t.Fatal(e)
+			}
+		case runstate.Cancelled:
+			if _, e = r.Apply(runstate.Event{Kind: runstate.Cancel}); e != nil {
+				t.Fatal(e)
+			}
+		}
+		c, e := r.Checkpoint()
+		if e != nil {
+			t.Fatal(e)
+		}
+		v, e = s.Save(ctx, c, 0)
+		if e != nil || v.Checkpoint.State.Phase != phase {
+			t.Fatal(v, e)
+		}
+	}
+}
+func TestDay18Cancellation(t *testing.T) {
+	s := runstate.NewMemoryCheckpointStore()
+	cp := candidate18(t, &quot;r&quot;)
+	ctx := context.Background()
+	if _, e := s.Save(ctx, cp, 0); e != nil {
+		t.Fatal(e)
+	}
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	expired, finish := context.WithDeadline(ctx, time.Unix(1, 0))
+	defer finish()
+	for _, tc := range []struct {
+		ctx  context.Context
+		want error
+	}{{canceled, context.Canceled}, {expired, context.DeadlineExceeded}} {
+		v, e := s.Load(tc.ctx, &quot;r&quot;)
+		error18(t, v, e, tc.want)
+		v, e = s.Save(tc.ctx, cp, 1)
+		error18(t, v, e, tc.want)
+		v, e = s.Save(tc.ctx, candidate18(t, &quot;new&quot;), 0)
+		error18(t, v, e, tc.want)
+	}
+	v, e := s.Load(ctx, &quot;r&quot;)
+	if e != nil || v.Version != 1 {
+		t.Fatal(v, e)
+	}
+	v, e = s.Load(ctx, &quot;new&quot;)
+	error18(t, v, e, runstate.ErrCheckpointNotFound)
+	// A stopped Run can be archived with a separate live storage context.
+	runctx, c := context.WithCancel(ctx)
+	r, e := runstate.NewRun(runctx, &quot;archive&quot;, &quot;&quot;, 2)
+	if e != nil {
+		t.Fatal(e)
+	}
+	c()
+	if _, e = r.Apply(runstate.Event{Kind: runstate.StartModel}); !errors.Is(e, context.Canceled) {
+		t.Fatal(e)
+	}
+	terminal, e := r.Checkpoint()
+	if e != nil {
+		t.Fatal(e)
+	}
+	v, e = s.Save(ctx, terminal, 0)
+	if e != nil || v.Checkpoint.State.Phase != runstate.Cancelled {
+		t.Fatal(v, e)
+	}
+}
+func TestDay18Ownership(t *testing.T) {
+	s := runstate.NewMemoryCheckpointStore()
+	cp := candidate18(t, &quot;r&quot;)
+	want := cp.Clone()
+	ctx := context.Background()
+	saved, e := s.Save(ctx, cp, 0)
+	if e != nil {
+		t.Fatal(e)
+	}
+	cp.State.Pending[0].Arguments[0] = &#x27;p&#x27;
+	cp.State.Messages[1].ToolCalls[0].Arguments[0] = &#x27;m&#x27;
+	saved.Checkpoint.State.Pending[0].Arguments[0] = &#x27;s&#x27;
+	saved.Checkpoint.State.Messages[0].Content = &quot;changed&quot;
+	loaded, e := s.Load(ctx, &quot;r&quot;)
+	if e != nil || !reflect.DeepEqual(loaded.Checkpoint, want) {
+		t.Fatal(loaded, e)
+	}
+	loaded.Checkpoint.State.Pending[0].Arguments[0] = &#x27;l&#x27;
+	if loaded.Checkpoint.State.Messages[1].ToolCalls[0].Arguments[0] != &#x27;{&#x27; {
+		t.Fatal(&quot;history aliases Pending&quot;)
+	}
+	loaded.Checkpoint.State.Messages[1].ToolCalls[0].Arguments[0] = &#x27;x&#x27;
+	second, e := s.Load(ctx, &quot;r&quot;)
+	if e != nil || !reflect.DeepEqual(second.Checkpoint, want) {
+		t.Fatal(second, e)
+	}
+}
+func TestDay18ConcurrentCAS(t *testing.T) {
+	ctx := context.Background()
+	s := runstate.NewMemoryCheckpointStore()
+	cp := candidate18(t, &quot;r&quot;)
+	for _, expected := range []uint64{0, 1} {
+		var wins atomic.Int32
+		var wg sync.WaitGroup
+		start := make(chan struct{})
+		for n := 0; n &lt; 16; n++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				&lt;-start
+				v, e := s.Save(ctx, cp, expected)
+				if e == nil {
+					wins.Add(1)
+					if v.Version != expected+1 {
+						t.Error(v)
+					}
+				} else if !errors.Is(e, runstate.ErrCheckpointConflict) {
+					t.Error(e)
+				}
+				v, e = s.Load(ctx, &quot;r&quot;)
+				if e != nil {
+					t.Error(e)
+					return
+				}
+				if v.Version != expected+1 || v.Checkpoint.State.RunID != &quot;r&quot; {
+					t.Error(v)
+				}
+				v.Checkpoint.State.Pending[0].Arguments[0] = &#x27;x&#x27;
+			}()
+		}
+		close(start)
+		wg.Wait()
+		v, e := s.Load(ctx, &quot;r&quot;)
+		if wins.Load() != 1 || e != nil || v.Version != expected+1 || v.Checkpoint.State.Pending[0].Arguments[0] != &#x27;{&#x27; {
+			t.Fatal(wins.Load(), v, e)
+		}
+	}
+}
+</code></pre><button type="button" data-copy="day18-tests-internal-runstate-day18_contract_test-go-txt">复制本文件</button></details><pre><code># 练习副本根：编译与预期红灯
+go test ./internal/runstate -run '^$'
+go test ./internal/runstate -run '^TestDay18' -count=1 -v -timeout 20s</code></pre><p>骨架应编译成功，目标测试在TODO处失败。缺包、语法错误或没有匹配测试不算红灯；已有实现全绿时保留结果，再核对契约。</p></section>
+<section id="tasks"><h2>80分钟：四步完成同一存储增量</h2>
+<article class="step"><h3>1 · 15分钟：创建与读取独立记录</h3><p><strong>为什么：</strong>先明确保存值属于谁。<strong>位置：</strong>新增store.go的构造、Load及Save创建路径。</p><p><strong>动作：</strong>用doc-1候选演算0→1；明确缺失返回和精确RunID键。复用Checkpoint.Clone，不再定义消息类型。</p><pre><code>go test ./internal/runstate -run '^TestDay18CreateLoadCAS$' -count=1 -v</code></pre><p><strong>完成证据：</strong>逐步补齐创建、读取、其他键和零值行为；该测试里的更新/冲突断言在下一步完成。</p><details><summary>卡住时提示</summary><p>不存在与版本0的含义要一致，实际保存的版本从1开始。</p></details></article>
+<article class="step"><h3>2 · 25分钟：版本比较和写入合为一次操作</h3><p><strong>为什么：</strong>分开比较和写入会让两个旧写者都成功。<strong>位置：</strong>Save比较更新和返回记录。</p><p><strong>动作：</strong>沿R1/R5实现匹配才写入、成功版本+1；同内容也递增。画出两个expected=1写者竞争的先后。</p><pre><code>go test ./internal/runstate -run '^(TestDay18CreateLoadCAS|TestDay18ConcurrentCAS)$' -count=1 -v</code></pre><p><strong>完成证据：</strong>一轮竞争仅一个成功；失败不覆盖记录，正文与版本对应，不把最新expected自动补给旧候选。</p><details><summary>卡住时提示</summary><p>一次互斥保护的范围应包含“检查当前版本”和“接纳新记录”，不是只有map赋值。</p></details></article>
+<article class="step"><h3>3 · 20分钟：明确非法输入和取消边界</h3><p><strong>为什么：</strong>错误返回必须可解释，不能把取消误判成冲突。<strong>位置：</strong>Load/Save入口和实际读写前。</p><p><strong>动作：</strong>沿R2/R3校验基本信封，保留context原因；拒绝版本上限。用活存储ctx归档已取消Run，解释两种ctx的作用。</p><pre><code>go test ./internal/runstate -run '^(TestDay18Validation|TestDay18Cancellation)$' -count=1 -v</code></pre><p><strong>完成证据：</strong>错误返回零记录，已有版本不变；取消不产生新键，终态可用独立ctx归档。</p><details><summary>卡住时提示</summary><p>输入校验不是完整历史验真；不要擅自加入测试未说明的消息格式重建规则。</p></details></article>
+<article class="step"><h3>4 · 20分钟：把所有权与并发承诺验证完整</h3><p><strong>为什么：</strong>有锁但共享返回切片，调用方仍能改坏存储。<strong>位置：</strong>保存输入、Save返回值、Load返回值。</p><p><strong>动作：</strong>沿R4画引用关系，再修改候选与每个返回副本，检查内部数据不变。全绿后重构重复逻辑，再跑同一组断言。</p><pre><code>go test ./internal/runstate -run '^(TestDay18Ownership|TestDay18ConcurrentCAS)$' -count=1 -v
+go test -race ./internal/runstate -run '^TestDay18' -count=1</code></pre><p><strong>完成证据：</strong>嵌套参数与Pending互不污染，并发回归无race。</p><details><summary>卡住时提示</summary><p>写入时复制还不够，返回给写者和读者的对象也必须独立。</p></details></article></section>
+<section><h2>20分钟测试与复盘</h2><div class="time">12分钟 · 从目标到累计回归</div><pre><code># 练习副本根
+go test ./internal/runstate -run '^TestDay18' -count=1 -v -timeout 20s
+go test -race ./internal/runstate -timeout 30s
+go test ./internal/... -timeout 60s
+# 参考仓库根
+go test ./examples/...
+go test -race ./examples/...</code></pre><p>这些是建议练习命令，不代表学习者已执行。参考材料验证不替代你自己的代码验收。</p>
+<div class="time">8分钟 · 合上代码回答</div><ol><li>用doc-1讲清Run→Checkpoint→StoredCheckpoint→宿主的数据流，错误在哪一层处理？</li><li>Step不变而Version增加，为什么合理？格式迁移又是另一件什么事？</li><li>如果换成数据库，哪些接口能保留，哪些原子性、持久性和错误证据必须补齐？</li><li>保存成功为什么不是执行权？冲突后直接用最新版本重写旧候选有什么问题？</li></ol>
+<h3>完成定义</h3><p><strong>实作：</strong>正常、缺失、冲突、非法输入、取消、所有权与并发测试通过，累计结果真实记录。</p><p><strong>理解：</strong>能解释版本比较只解决覆盖问题，能区分内存确认与持久性，并指出替换后端或增加恢复要改哪一层。</p>
+<h3>本次发布验证</h3><p class="note">Go1.22.2 linux/amd64：原样骨架编译通过，目标在TODO处按预期失败；相同测试对隔离internal兼容参考通过（含race），兼容副本累计回归通过。仓库根examples普通/race均退出码0。学习者原实现、真实持久后端/网络、跨进程与崩溃恢复未验证。</p><p><a href="exercises/day18/verification.json">红绿与累计测试记录</a> · <a href="exercises/day18/browser-verification.json">离线浏览器记录</a></p>
+<h3>学习清单</h3><div class="meta"><span>本浏览器自评进度</span><span id="count">0 / 8</span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="fill" class="fill"></div></div><div id="checks"></div><noscript><p>关闭脚本仍可离线阅读图、骨架、测试和答案，清单不自动保存。</p></noscript></section>
+<section id="answer"><h2>最后再看：兼容参考答案</h2><p>练习import为根internal，累计答案位于examples/internal；只有路径前缀映射，测试断言一致。先独立实现，再比较边界与取舍。</p><h3 class="file-label">参考 · internal/runstate/store.go</h3><p class="download"><a href="exercises/day18/reference/internal/runstate/store.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="reference" data-source="day18/reference/internal/runstate/store.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day18-reference-internal-runstate-store-go-txt"><code>package runstate
+
+import (
+	&quot;context&quot;
+	&quot;errors&quot;
+	&quot;strings&quot;
+	&quot;sync&quot;
+)
+
+var (
+	ErrCheckpointNotFound = errors.New(&quot;runstate: checkpoint not found&quot;)
+	ErrCheckpointConflict = errors.New(&quot;runstate: checkpoint version conflict&quot;)
+	ErrInvalidCheckpoint  = errors.New(&quot;runstate: invalid checkpoint request&quot;)
+)
+
+// StoredCheckpoint is the latest saved value. Version is a per-RunID CAS token,
+// not State.Step, a schema version, an execution lease or a resume permission.
+type StoredCheckpoint struct {
+	Version    uint64
+	Checkpoint Checkpoint
+}
+
+type CheckpointStore interface {
+	Load(context.Context, string) (StoredCheckpoint, error)
+	Save(context.Context, Checkpoint, uint64) (StoredCheckpoint, error)
+}
+
+// MemoryCheckpointStore is process-local and not durable. Its zero value works.
+// Do not copy after use. It retains only the latest record for each exact RunID.
+type MemoryCheckpointStore struct {
+	mu      sync.Mutex
+	records map[string]StoredCheckpoint
+}
+
+func NewMemoryCheckpointStore() *MemoryCheckpointStore { return &amp;MemoryCheckpointStore{} }
+
+func cloneStored(v StoredCheckpoint) StoredCheckpoint {
+	v.Checkpoint = v.Checkpoint.Clone()
+	return v
+}
+func storeContext(ctx context.Context) error {
+	if ctx == nil {
+		return ErrInvalidCheckpoint
+	}
+	return ctx.Err()
+}
+
+// validateCandidate checks only the trusted candidate envelope, not full message
+// history, authorization, authenticity or an untrusted serialized payload.
+func validateCandidate(cp Checkpoint) bool {
+	s := cp.State
+	if strings.TrimSpace(s.RunID) == &quot;&quot; || s.MaxSteps &lt;= 0 || s.Step &lt; 0 || s.Step &gt; s.MaxSteps {
+		return false
+	}
+	switch cp.Boundary {
+	case CheckpointReady:
+		return s.Phase == Ready
+	case CheckpointBeforeTools:
+		return s.Phase == ToolsPending
+	case CheckpointTerminal:
+		return terminal(s.Phase)
+	default:
+		return false
+	}
+}
+
+func (s *MemoryCheckpointStore) Load(ctx context.Context, runID string) (StoredCheckpoint, error) {
+	if err := storeContext(ctx); err != nil {
+		return StoredCheckpoint{}, err
+	}
+	if strings.TrimSpace(runID) == &quot;&quot; {
+		return StoredCheckpoint{}, ErrInvalidCheckpoint
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return StoredCheckpoint{}, err
+	}
+	v, ok := s.records[runID]
+	if !ok {
+		return StoredCheckpoint{}, ErrCheckpointNotFound
+	}
+	return cloneStored(v), nil
+}
+
+// Save: expected=0 creates only if absent; otherwise it must equal current Version.
+// A successful write increments Version even for identical content.
+// Errors in this in-memory implementation return zero and leave stored data intact.
+// Cancellation is sampled before and after locking; later cancellation can still
+// accompany a committed success. The lock wait itself is not context-interruptible.
+func (s *MemoryCheckpointStore) Save(ctx context.Context, cp Checkpoint, expected uint64) (StoredCheckpoint, error) {
+	if err := storeContext(ctx); err != nil {
+		return StoredCheckpoint{}, err
+	}
+	if expected == ^uint64(0) || !validateCandidate(cp) {
+		return StoredCheckpoint{}, ErrInvalidCheckpoint
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return StoredCheckpoint{}, err
+	}
+	current := s.records[cp.State.RunID]
+	if current.Version != expected {
+		return StoredCheckpoint{}, ErrCheckpointConflict
+	}
+	next := StoredCheckpoint{Version: expected + 1, Checkpoint: cp.Clone()}
+	if s.records == nil {
+		s.records = make(map[string]StoredCheckpoint)
+	}
+	s.records[cp.State.RunID] = next
+	return cloneStored(next), nil
+}
+</code></pre><button type="button" data-copy="day18-reference-internal-runstate-store-go-txt">复制本文件</button></details><h3>Day19为什么还要设计恢复位置？</h3><p>今天有了保存记录、读取和版本冲突语义，但读出候选还不是恢复运行。明天继续判断恢复位置与待确认调用，明确哪些事实已确认、哪些工作不能直接重放；内存Store仍不提供跨进程可靠性。</p></section>
+<footer><a href="agent-runtime-day-17.html">前一天Day17</a> · <a href="../../index.html">返回学习首页</a><p>Day18 / 56 · 第三周 · 正文、图示、骨架与完整测试离线可读</p></footer></main><script>
+const items=["用自己的话解释当天三个概念", "根据两张图讲清输入、职责和返回", "完成官方阅读并写下问题答案", "确认骨架可编译且目标出现预期红灯", "按任务卡逐步完成当天实现", "完整目标与 race 测试通过", "记录累计回归实际结果和未验证项", "合上代码完成需求变化与失败边界复盘"];const key="mini-agent-runtime-day-18-tdd-v1";
+let saved=[];try{const value=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(value))saved=value}catch(_){}
+const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const percent=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=percent+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(percent))}
+items.forEach((s,i)=>{const row=document.createElement("div");row.className="check";const input=document.createElement("input");input.type="checkbox";input.id="task-"+i;input.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=input.id;label.textContent=s;row.append(input,label);box.append(row);input.onchange=()=>{saved[i]=input.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+document.querySelectorAll("button[data-copy]").forEach(button=>button.addEventListener("click",async()=>{const target=document.getElementById(button.dataset.copy);try{await navigator.clipboard.writeText(target.textContent);button.textContent="已复制"}catch(_){const range=document.createRange();range.selectNodeContents(target);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);button.textContent="已选中，请手动复制"}}));
+</script></body></html>

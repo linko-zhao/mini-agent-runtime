@@ -1,6 +1,6 @@
 # Agent Runtime 累计示例
 
-这是依据 Day 01–17 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
+这是依据 Day 01–18 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
 
 共享仓库根目录的 `go.mod`（Go 1.22.2），无需新建 Module，也不导入根目录 `internal` 中的练习实现。所有命令在仓库根目录运行：
 
@@ -156,3 +156,13 @@ Go1.22.2 下原样骨架编译通过、目标在 TODO 处按预期失败，同�
 Day17练习支持与页面全文包含可编译TODO、完整行为测试和折叠答案；prepare/verify日期范围扩展至17，固定baseline不变。所有类型共享原go.mod，不修改学习者internal/cmd。参见 [Day17页面](../docs/learning/agent-runtime-day-17.html)。
 
 本次Go1.22.2验证：骨架编译通过、目标在TODO处按预期失败；原样测试对隔离internal兼容参考通过含race，累计兼容副本与当前examples普通/race回归通过。原始记录见 [Day17验证](../docs/learning/exercises/day17/verification.json)。未验证真实模型、外部后端或持久恢复。
+
+## Day18：Checkpoint存储与版本控制
+
+新增 examples/internal/runstate/store.go、store_test.go：CheckpointStore.Load/Save、StoredCheckpoint、MemoryCheckpointStore。复用Day17 Checkpoint/Clone，不改State、Run、消息协议或旧Agent接口。
+
+每个精确RunID单独计数；expected=0只创建，其他值须匹配当前Version；成功递增，即使候选正文相同。冲突不覆盖；Load/Save返回独立深拷贝。零值内存Store可用，不可复制已使用对象；新实例为空，只有最新记录，无持久性或跨进程共享。
+
+输入校验只覆盖可信候选的基本信封，不是完整历史/真实性校验。nilctx/空键/非法边界和预算/版本溢出被拒绝；观察到取消或截止时间保留context错误。存储ctx与Runctx独立，可归档取消终态。CAS不是执行租约、模型轮次、格式版本或幂等键；没有Restore/Resume或工具自动重放。
+
+原样TODO骨架可编译，目标在TODO处失败；相同测试在隔离internal参考副本通过含race，兼容副本累计回归通过；当前仓库根examples普通/race均通过（Go1.22.2）。[Day18页面](../docs/learning/agent-runtime-day-18.html)、[验证记录](../docs/learning/exercises/day18/verification.json)。学习者原实现、真实持久后端/网络、崩溃恢复未验证。

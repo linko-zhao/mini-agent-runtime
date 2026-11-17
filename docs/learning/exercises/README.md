@@ -106,3 +106,11 @@ main 在本批讲义准备期间新增了 agent.RunWithState、RunSnapshot 与�
 原仓库根运行 `python3 docs/learning/exercises/prepare.py 17`，进入打印的仓库外副本。先编译 `go test ./internal/runstate -run '^$'`，再执行 `go test ./internal/runstate -run '^TestDay17' -count=1 -v`；目标应在TODO处失败。兼容参考使用同一测试和internal路径通过含race，不绕到examples。
 
 重跑：`python3 docs/learning/exercises/verify.py --go /你的Go/bin/go --days 17 --report /tmp/day17-verification.json`。本日 [红绿/累计记录](day17/verification.json)、[离线浏览器记录](day17/browser-verification.json)。当前examples普通/race也实际通过；原学习者实现未读取或覆盖，真实网络与持久恢复未验证。
+
+## Day18：Checkpoint存储与版本控制
+
+[Day18页面](../agent-runtime-day-18.html) 与day18/完整骨架、测试、支持和参考逐字一致。新增练习internal/runstate/store.go，复用Day15–17三个支持文件；参考位于examples/internal/runstate，全部共用根go.mod。
+
+原仓库根执行 `python3 docs/learning/exercises/prepare.py 18`，进入打印的仓库外副本。编译 `go test ./internal/runstate -run '^$'`；红灯目标 `go test ./internal/runstate -run '^TestDay18' -count=1 -v`。原样骨架因TODO失败，相同测试在internal兼容参考通过含race，不绕到examples。
+
+重跑 `python3 docs/learning/exercises/verify.py --go /你的Go/bin/go --days 18 --report /tmp/day18-verification.json`。本日[原始测试记录](day18/verification.json)、[离线浏览器记录](day18/browser-verification.json)。内存Store只验证CAS与副本语义，不代表持久恢复；学习者原实现不读取、不覆盖。

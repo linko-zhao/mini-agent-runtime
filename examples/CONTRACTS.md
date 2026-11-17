@@ -262,3 +262,29 @@ Day 08 已提供 [图解与 TDD 正式课程](../docs/learning/agent-runtime-day
 新增完整骨架/测试/Day15与16支持文件、参考附件、manifest日期17及prepare/verify范围；固定baseline、根internal/cmd不变。测试覆盖所有边界、失败原子性、所有权、候选历史、取消读取/终态与并发一致性。
 
 官方Go1.22.2下原样骨架可编译，目标因TODO失败；相同测试在隔离internal参考副本通过含race，兼容副本累计回归通过。仓库根go test ./examples/...与go test -race ./examples/...均通过。未读取/验证学习者实现、真实模型/网络后端、持久化、崩溃恢复或exactly-once。
+
+## Day18 增量：版本化Checkpoint存储端口与内存实现
+
+### 新增与兼容
+- 新增StoredCheckpoint{Version uint64; Checkpoint Checkpoint}、CheckpointStore接口：Load(context.Context,string)(StoredCheckpoint,error)、Save(context.Context,Checkpoint,uint64)(StoredCheckpoint,error)。
+- 新增NewMemoryCheckpointStore()*MemoryCheckpointStore；零值Store也可用，首次使用后不可复制。只保留每个精确RunID的最新记录，没有删除/TTL/历史查询或容量限制。
+- 复用Day15–17 State/Run/Checkpoint及深拷贝；旧捕获、Agent.Run/RunWithState不变，不混用Step和Version。不新增module，不改根internal/cmd。
+
+### 保存、读取和错误
+- Save(ctx,cp,expected)：不存在时expected=0创建版本1；存在时expected必须等于当前Version。成功产生expected+1，即使正文相同也递增；不存在却expected>0同样冲突。
+- Load缺失为ErrCheckpointNotFound；Save版本不符为ErrCheckpointConflict；nilctx、空白Load键、非法候选信封或expected=最大uint64为ErrInvalidCheckpoint，保护版本不回绕。
+- 信封校验仅要求RunID非全空白、MaxSteps>0、0<=Step<=MaxSteps，以及Boundary与Ready/ToolsPending/终态匹配；不校验完整历史、签名、身份或不可信序列化输入。候选应来自可信Run.Checkpoint。
+- RunID按原字符串作键，非全空白的两端空格不被裁剪。不同键独立版本，新的内存Store实例没有旧记录。
+- ctx检查先于参数；互斥后实际读写前再采样ctx.Err。观察到取消/截止时间返回原错误；锁等待不可取消，最后检查后发生取消仍可能提交成功。存储ctx独立于Runctx。
+- 本内存实现所有错误返回零StoredCheckpoint，Save错误不修改记录；成功返回完整新记录。远端后端超时可能伴随已提交，不能把内存实现的无写入结论自动推广到远端。接口适配器必须明确确认/查询契约。
+
+### 原子性、所有权与范围
+- 比较版本与更新在一个原子操作内；Load返回对应的完整版本和正文。Save输入、Save返回、每次Load返回与内部记录均深拷贝，复用Checkpoint.Clone。
+- Store可并发Load/Save，候选输入在Save期间不可被调用方并发改写；不提供执行租约或Run驱动互斥。CAS不校验候选相对旧记录的语义前进，持有最新版本仍可能覆盖为旧内容，宿主负责工作归属与进度协议。
+- Save不调用Apply、不自动推进模型/工具；若要求保存成功再执行，宿主必须显式在成功后进入StartTools。错误/冲突不自动换expected重试，更不重跑外部工具。
+- Version不是Step、格式版本、幂等键或恢复许可。内存实现不序列化、不落盘、不提供跨进程共享或崩溃恢复。候选含私密输入和正文，不能当公开审计信号。真实后端的ACL/持久性与恢复校验另行设计。
+
+### 交付与真实验证
+新增练习internal/runstate/store.go及完整测试；参考examples/internal/runstate/store.go/store_test.go。新增Day15–17支持附件、manifest18、prepare/verify日期支持；固定baseline和旧接口不变，import仅映射internal与examples/internal。
+
+Go1.22.2下原样骨架编译通过、TODO红灯符合预期；同一行为测试对隔离internal兼容参考通过含race，兼容副本累计回归通过。仓库根go test ./examples/...、go test -race ./examples/...实际均通过。未读取/验证学习者实现、真实存储/网络、持久性、崩溃恢复或exactly-once。

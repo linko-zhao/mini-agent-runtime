@@ -1,0 +1,36 @@
+package runstate
+
+import (
+	"context"
+	"errors"
+	"sync"
+)
+
+var (
+	ErrCheckpointNotFound = errors.New("runstate: checkpoint not found")
+	ErrCheckpointConflict = errors.New("runstate: checkpoint version conflict")
+	ErrInvalidCheckpoint  = errors.New("runstate: invalid checkpoint request")
+)
+
+type StoredCheckpoint struct {
+	Version    uint64
+	Checkpoint Checkpoint
+}
+type CheckpointStore interface {
+	Load(context.Context, string) (StoredCheckpoint, error)
+	Save(context.Context, Checkpoint, uint64) (StoredCheckpoint, error)
+}
+type MemoryCheckpointStore struct {
+	mu      sync.Mutex
+	records map[string]StoredCheckpoint
+}
+
+func NewMemoryCheckpointStore() *MemoryCheckpointStore {
+	panic("TODO: implement NewMemoryCheckpointStore")
+}
+func (s *MemoryCheckpointStore) Load(ctx context.Context, runID string) (StoredCheckpoint, error) {
+	panic("TODO: implement Load")
+}
+func (s *MemoryCheckpointStore) Save(ctx context.Context, cp Checkpoint, expected uint64) (StoredCheckpoint, error) {
+	panic("TODO: implement Save")
+}

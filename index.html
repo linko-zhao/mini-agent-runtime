@@ -14,7 +14,7 @@
 </head>
 <body><main>
 <header class="hero"><div class="eyebrow">MINI AGENT RUNTIME · LEARNING PATH</div><h1>Agent Runtime 学习文档</h1><p>八周、56 天，从 Runtime 与 Agent Loop 出发，逐步完成工具编排、状态恢复、记忆、调度、评估与部署。每天 20 分钟阅读、80 分钟编码、20 分钟测试与复盘。</p><div class="chips"><span class="chip">8 周 · 56 天</span><span class="chip">Go 实战</span><span class="chip">独立离线 HTML</span><span class="chip">周日集成复盘</span></div></header>
-<section class="intro"><p><strong>怎么使用：</strong>新版课程按“具体例子 → 图解设计 → 代码骨架 → 完整测试 → 自己实现”学习。先运行测试看到预期失败，每次补一个方法，最后回归并讲清数据流。编写要求见 <a href="docs/learning/daily-lesson-standard.md">每日教学交付规范</a>；Day 01–17 已采用新规范；Day 01–07 补齐了图解、骨架、完整测试与隔离验证。清单进度保存在浏览器 localStorage 中；前序练习未完成时，可借助 examples 累计参考基线继续学习。</p></section>
+<section class="intro"><p><strong>怎么使用：</strong>新版课程按“具体例子 → 图解设计 → 代码骨架 → 完整测试 → 自己实现”学习。先运行测试看到预期失败，每次补一个方法，最后回归并讲清数据流。编写要求见 <a href="docs/learning/daily-lesson-standard.md">每日教学交付规范</a>；Day 01–18 已采用新规范；Day 01–07 补齐了图解、骨架、完整测试与隔离验证。清单进度保存在浏览器 localStorage 中；前序练习未完成时，可借助 examples 累计参考基线继续学习。</p></section>
 <section class="week"><div class="week-head"><h2>第 1 周 · Runtime 与 Agent Loop</h2><span>Day 01–07 · 基础、模型接口、执行闭环</span></div><div class="cards">
 <a class="card" href="docs/learning/agent-runtime-day-01.html"><div class="card-top"><span class="day">DAY 01</span><span class="status">图解 · TDD</span></div><h3>Runtime 核心抽象与最小 Agent Loop</h3><p>今天实现最小 Agent Loop，让“读取 doc-1”的请求能够经历模型 → 工具 → 模型并返回回答。</p></a>
 <a class="card" href="docs/learning/agent-runtime-day-02.html"><div class="card-top"><span class="day">DAY 02</span><span class="status">图解 · TDD</span></div><h3>模型适配层与响应规范化</h3><p>今天实现 HTTP 模型适配层，让 Runtime 能消费 Provider 的非流式 Chat Completions 响应。</p></a>
@@ -37,7 +37,7 @@
 <a class="card" href="docs/learning/agent-runtime-day-15.html"><div class="card-top"><span class="day">DAY 15</span><span class="status">图解 · TDD</span></div><h3>运行到哪一步？把进度写成状态机</h3><p>阶段、事件、消息快照、合法转换与终态</p></a>
 <a class="card" href="docs/learning/agent-runtime-day-16.html"><div class="card-top"><span class="day">DAY 16</span><span class="status">图解 · TDD</span></div><h3>运行上下文与状态更新</h3><p>每次运行的状态所有权、取消边界与并发副本</p></a>
 <a class="card" href="docs/learning/agent-runtime-day-17.html"><div class="card-top"><span class="day">DAY 17</span><span class="status">图解 · TDD</span></div><h3>Checkpoint边界与快照</h3><p>稳定边界、独立候选与保存确认的区别</p></a>
-<div class="card future"><div class="card-top"><span class="day">DAY 18</span><span class="status">待生成</span></div><h3>Checkpoint存储与版本控制</h3><p>按课程设计逐日发布</p></div>
+<a class="card" href="docs/learning/agent-runtime-day-18.html"><div class="card-top"><span class="day">DAY 18</span><span class="status">图解 · TDD</span></div><h3>Checkpoint存储与版本控制</h3><p>保存读取、版本比较更新与冲突语义</p></a>
 <div class="card future"><div class="card-top"><span class="day">DAY 19</span><span class="status">待生成</span></div><h3>恢复位置与待确认调用</h3><p>按课程设计逐日发布</p></div>
 <div class="card future"><div class="card-top"><span class="day">DAY 20</span><span class="status">待生成</span></div><h3>重放与幂等边界</h3><p>按课程设计逐日发布</p></div>
 <div class="card future"><div class="card-top"><span class="day">DAY 21</span><span class="status">待生成</span></div><h3>第三周集成复盘</h3><p>按课程设计逐日发布</p></div>
