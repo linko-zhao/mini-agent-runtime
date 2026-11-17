@@ -11,9 +11,9 @@ import (
 )
 
 type DemoServer struct {
-	mu sync.Mutex
-	state string
-	spec tool.Spec
+	mu     sync.Mutex
+	state  string
+	spec   tool.Spec
 	target tool.Invokable
 }
 

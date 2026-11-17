@@ -188,8 +188,8 @@ func (c *Client) CallTool(ctx context.Context, name string, args json.RawMessage
 	if strings.TrimSpace(name) == "" || json.Unmarshal(args, &object) != nil || object == nil {
 		return result, fmt.Errorf("mcp: nonempty tool name and object arguments required")
 	}
-	raw, err := c.rpc(ctx, "tools/call", struct{
-		Name string `json:"name"`
+	raw, err := c.rpc(ctx, "tools/call", struct {
+		Name      string          `json:"name"`
 		Arguments json.RawMessage `json:"arguments"`
 	}{name, args})
 	if err != nil {

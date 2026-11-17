@@ -40,21 +40,21 @@ type InitializeResult struct {
 }
 
 type Descriptor struct {
-	Name string `json:"name"`
-	Description string `json:"description,omitempty"`
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
 	InputSchema json.RawMessage `json:"inputSchema"`
 	Annotations json.RawMessage `json:"annotations,omitempty"`
 }
 
 type ToolsPage struct {
-	Tools []Descriptor `json:"tools"`
-	NextCursor string `json:"nextCursor,omitempty"`
+	Tools      []Descriptor `json:"tools"`
+	NextCursor string       `json:"nextCursor,omitempty"`
 }
 
 type ToolResult struct {
-	Content []json.RawMessage `json:"content"`
-	IsError bool `json:"isError,omitempty"`
-	StructuredContent json.RawMessage `json:"structuredContent,omitempty"`
+	Content           []json.RawMessage `json:"content"`
+	IsError           bool              `json:"isError,omitempty"`
+	StructuredContent json.RawMessage   `json:"structuredContent,omitempty"`
 }
 
 type RPCError struct {

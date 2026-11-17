@@ -34,7 +34,7 @@ func main() {
 func run() error {
 	ctx := tool.WithPrincipal(context.Background(), tool.Principal{ID: "reader"})
 	store := knowledge.NewFakeStore([]knowledge.Document{{
-		ID: "doc-1",
+		ID:      "doc-1",
 		Summary: "MCP适配",
 		Content: "复用原有工具契约完成远端读取",
 	}})

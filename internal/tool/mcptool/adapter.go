@@ -99,7 +99,7 @@ func (t *remoteTool) Invoke(ctx context.Context, args json.RawMessage) (string, 
 	envelope := ResultEnvelope{Text: make([]string, 0, len(result.Content))}
 	for _, raw := range result.Content {
 		var block struct {
-			Type string `json:"type"`
+			Type string  `json:"type"`
 			Text *string `json:"text"`
 		}
 		if json.Unmarshal(raw, &block) != nil || block.Type == "" {

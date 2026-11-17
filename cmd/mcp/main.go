@@ -10,7 +10,6 @@ import (
 	"github.com/linko-zhao/mini-agent-runtime/internal/tool/knowledge"
 )
 
-
 func main() {
 	if err := run(); err != nil {
 		log.Fatal(err)
@@ -20,8 +19,8 @@ func main() {
 func run() error {
 	ctx := context.Background()
 	store := knowledge.NewFakeStore([]knowledge.Document{{
-		ID: "doc-1", 
-		Summary: "MCP协议", 
+		ID:      "doc-1",
+		Summary: "MCP协议",
 		Content: "发现能力不等于执行权限",
 	}})
 	server, err := mcp.NewDemoServer(ctx, &knowledge.GetDocument{Store: store})
