@@ -1,0 +1,21 @@
+package runstate
+
+import "context"
+
+type RecoveryPosition string
+
+const (
+	RecoveryReady         RecoveryPosition = "recorded_ready"
+	RecoveryReviewPending RecoveryPosition = "review_pending"
+	RecoveryTerminal      RecoveryPosition = "terminal"
+	RecoveryExhausted     RecoveryPosition = "budget_exhausted"
+)
+
+type RecoveryPlan struct {
+	Position RecoveryPosition
+	Record   StoredCheckpoint
+}
+
+func PlanRecovery(ctx context.Context, store CheckpointStore, runID string) (RecoveryPlan, error) {
+	panic("TODO: implement PlanRecovery")
+}

@@ -288,3 +288,30 @@ Day 08 已提供 [图解与 TDD 正式课程](../docs/learning/agent-runtime-day
 新增练习internal/runstate/store.go及完整测试；参考examples/internal/runstate/store.go/store_test.go。新增Day15–17支持附件、manifest18、prepare/verify日期支持；固定baseline和旧接口不变，import仅映射internal与examples/internal。
 
 Go1.22.2下原样骨架编译通过、TODO红灯符合预期；同一行为测试对隔离internal兼容参考通过含race，兼容副本累计回归通过。仓库根go test ./examples/...、go test -race ./examples/...实际均通过。未读取/验证学习者实现、真实存储/网络、持久性、崩溃恢复或exactly-once。
+
+## Day19 增量：只读恢复位置判读
+
+### 新增与兼容
+- 新增RecoveryPosition常量RecoveryReady="recorded_ready"、RecoveryReviewPending="review_pending"、RecoveryTerminal="terminal"、RecoveryExhausted="budget_exhausted"。
+- 新增RecoveryPlan{Position RecoveryPosition; Record StoredCheckpoint}与PlanRecovery(context.Context,CheckpointStore,string)(RecoveryPlan,error)。
+- 复用原CheckpointStore（只用Load）、StoredCheckpoint、State/Checkpoint克隆、ErrInvalidCheckpoint；不变更Save、Run、模型/工具或旧Agent接口。练习internal/runstate/recovery.go，参考examples/internal/runstate/recovery.go，仅映射import前缀，共享根go.mod。
+
+### 读取、错误与取消
+- 先storeContext检查nilctx与ctx.Err，再检查nil Store接口/空白key；输入非法不Load。原ctx与精确key传入，Load恰好一次，无重试或Save。
+- Load返回后先采样ctx.Err；观察到取消/截止时间则丢弃迟到值和同时返回的Store错误，返回原context错误。否则Load错误原样返回，保留errors.Is/As；所有错误均返回零RecoveryPlan。
+- Store必须合作取消、支持约定并发并在调用方检查/复制返回值时保持缓冲区稳定。无强杀goroutine；最后取消检查后仍可取消，成功返回不是未来持续有效的许可。
+
+### 局部检查与分类
+- Version>0；State.RunID精确匹配key；复用Day18正预算、Step范围与Boundary/Phase校验；Messages非空且首条Role=user。
+- Ready要求Pending为空且最后消息无ToolCalls；ToolsPending要求Pending非空。所有非空Pending（含失败/取消保留项）要求最后消息为assistant、调用数量相同，逐项ID/Name/Arguments字节与Pending一致，ID非空唯一、Name非空白。bytes.Equal允许nil与空字节相等，不重做业务JSON校验。
+- Completed另要求Pending为空、末消息为无调用assistant、Result等于末消息Content。Failed/Cancelled无Pending时不额外判断末消息。这些是有限一致性检查，不是完整历史重放、真实性/配置校验或格式迁移。
+- Ready且Step<MaxSteps→RecoveryReady；Ready预算耗尽→RecoveryExhausted（成功判读，不返回ErrMaxSteps）；ToolsPending→RecoveryReviewPending；三个终态→RecoveryTerminal。保留记录全部内容、版本和Pending；原Advance预算错误不变。
+- 成功返回cloneStored后的独立记录，Messages/ToolCalls/Arguments与Pending不共享可变引用；可并发判读且各自修改返回副本，不维护共享当前计划。
+
+### 边界与迁移
+旧store.Load保留；需要判读的宿主调用PlanRecovery并读取Position/Record，没有Restore/Resume、State setter或工具执行入口。旧Agent.RunWithState未整合到纯状态链，Step差异不变。
+Position只描述一次Load观察，不是执行归属、新鲜度、授权或幂等令牌。Pending不证明未执行，Ready也可能是旧记录；终态保留项不授权重开。Version只作后续核对信息，没有获取租约或自动CAS占用。MemoryStore的非持久限制继续成立。
+
+### 交付与真实验证
+新增完整TODO、测试、Day15–18四个支持附件和参考；manifest/prepare/verify扩展至19，固定baseline不变，根internal/cmd不读不改。测试覆盖全部位置、非法记录、缺失/Store错误链、输入、取消/迟到返回、无写入、所有权与并发。
+Go1.22.2下原样骨架编译通过，目标因TODO失败；相同测试对隔离internal参考通过含race，兼容副本累计回归通过；当前examples普通/race通过。学习者原实现、真实存储/模型/网络、完整可信恢复与跨进程恢复执行未验证。

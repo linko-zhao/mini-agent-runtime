@@ -114,3 +114,11 @@ main 在本批讲义准备期间新增了 agent.RunWithState、RunSnapshot 与�
 原仓库根执行 `python3 docs/learning/exercises/prepare.py 18`，进入打印的仓库外副本。编译 `go test ./internal/runstate -run '^$'`；红灯目标 `go test ./internal/runstate -run '^TestDay18' -count=1 -v`。原样骨架因TODO失败，相同测试在internal兼容参考通过含race，不绕到examples。
 
 重跑 `python3 docs/learning/exercises/verify.py --go /你的Go/bin/go --days 18 --report /tmp/day18-verification.json`。本日[原始测试记录](day18/verification.json)、[离线浏览器记录](day18/browser-verification.json)。内存Store只验证CAS与副本语义，不代表持久恢复；学习者原实现不读取、不覆盖。
+
+## Day19：恢复位置与待确认调用
+
+[Day19页面](../agent-runtime-day-19.html) 内嵌原样骨架、完整测试与Day15–18四个支持文件；参考位于examples/internal。共享根go.mod，不建立每日module或覆盖学习者实现。
+
+原仓库根运行 `python3 docs/learning/exercises/prepare.py 19`，进入打印的仓库外副本。先编译 `go test ./internal/runstate -run '^$'`，红灯目标 `go test ./internal/runstate -run '^TestDay19' -count=1 -v`；骨架应因TODO失败，兼容参考同一测试含race通过。
+
+重跑 `python3 docs/learning/exercises/verify.py --go /你的Go/bin/go --days 19 --report /tmp/day19-verification.json`。见[原始验证](day19/verification.json)与[离线页面记录](day19/browser-verification.json)。PlanRecovery只读一次并返回位置，不代表恢复执行、持久性或调用幂等确认已实现。
