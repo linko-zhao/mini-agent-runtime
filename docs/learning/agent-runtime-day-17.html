@@ -3,7 +3,7 @@
 
 figure{margin-inline:0}p,.node,figcaption{overflow-wrap:anywhere}.file-label{overflow-wrap:anywhere}.phase{font-weight:700;color:#183561}.copy-status{font-size:13px;color:#52617a}details>pre{margin-bottom:12px}
 
-body{font-size:18px;line-height:1.8}h2{font-size:23px}h3{font-size:19px}main{max-width:840px}.node small{display:block}.code-file{min-width:0}section{min-width:0}@media(max-width:600px){body{font-size:17px}h2{font-size:21px}}</style></head><body><main><header class="hero"><div class="eyebrow">MINI AGENT RUNTIME · WEEK 03 · DAY 17 / 56</div><h1>Checkpoint 边界与快照</h1><p>今天实现有边界限制的内存 Checkpoint，让宿主知道“捕获了哪一步”，并保留一份不会随运行继续改变的状态副本。</p><div class="chips"><span>阅读 20 分钟</span><span>Go练习 80 分钟</span><span>测试复盘 20 分钟</span></div></header>
+body{font-size:18px;line-height:1.8}h2{font-size:23px}h3{font-size:19px}main{max-width:840px}.node small{display:block}.code-file{min-width:0}section{min-width:0}@media(max-width:600px){body{font-size:17px}h2{font-size:21px}}</style><link rel="stylesheet" href="assets/learning.css"></head><body><main><header class="hero"><div class="eyebrow">MINI AGENT RUNTIME · WEEK 03 · DAY 17 / 56</div><h1>Checkpoint 边界与快照</h1><p>今天实现有边界限制的内存 Checkpoint，让宿主知道“捕获了哪一步”，并保留一份不会随运行继续改变的状态副本。</p><div class="chips"><span>阅读 20 分钟</span><span>Go练习 80 分钟</span><span>测试复盘 20 分钟</span></div></header>
 <nav aria-label="本页导航" class="toplinks"><a href="#concepts">先懂设计</a><a href="#rules">行为契约</a><a href="#skeleton">骨架与测试</a><a href="#tasks">分步实现</a><a href="#answer">最后看答案</a></nav>
 <section><h2>今天只解决什么？</h2><p>仍然处理“读取 doc-1”。Day16已经有独立 Run 和安全更新入口，但任何阶段都能读 Snapshot；模型或工具进行中取得的副本，并不适合直接当作下一步的保存候选。</p><p>今天新增 Checkpoint()：在确定的稳定阶段返回“边界标签 + State副本”，进行中的阶段明确报错。这样，未来保存层可以先获得有明确语义的输入。</p><p class="goal">完成后能区分：读取观察快照、捕获 Checkpoint 候选、存储确认、恢复执行。这四件事没有合并成一次方法调用。</p><p>本日只捕获内存候选，不接存储、不暂停驱动、不恢复、不自动重放，也不改造旧 Agent.Run/RunWithState。</p></section>
 <section id="concepts"><h2>先理解三个概念</h2>
@@ -599,7 +599,7 @@ func (r *Run) Checkpoint() (Checkpoint, error) {
 	return Checkpoint{Boundary: boundary, State: cloneState(r.state)}, nil
 }
 </code></pre><button type="button" data-copy="day17-reference-internal-runstate-checkpoint-go-txt">复制本文件</button></details><h3>Day18为什么需要存储与版本？</h3><p>今天定义了候选的边界与所有权，但进程退出仍会丢失它。明天为保存、读取和版本控制补充契约，让“取得候选”与“确认保存”有明确分界；外部调用确认与恢复策略随后继续。</p></section>
-<footer><a href="agent-runtime-day-16.html">前一天Day16</a> · <a href="../../index.html">返回学习首页</a><p>Day17 / 56 · 第三周 · 正文、图示、骨架与完整测试离线可读</p></footer></main><script>
+<footer><nav class="page-navigation" aria-label="页面导航"><a class="page-nav-button" href="agent-runtime-day-16.html">上一项</a><a class="page-nav-button" href="../../index.html">返回主页</a><a class="page-nav-button" href="agent-runtime-day-18.html">下一项</a></nav><p class="page-meta">Day 17 / 56 · 第三周 · 正文、图示、骨架与完整测试离线可读</p></footer></main><script>
 const items=["用自己的话解释当天三个概念", "根据两张图讲清输入、职责和返回", "完成官方阅读并写下问题答案", "确认骨架可编译且目标出现预期红灯", "按任务卡逐步完成当天实现", "完整目标与 race 测试通过", "记录累计回归实际结果和未验证项", "合上代码完成需求变化与失败边界复盘"];const key="mini-agent-runtime-day-17-tdd-v1";
 let saved=[];try{const value=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(value))saved=value}catch(_){}
 const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const percent=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=percent+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(percent))}

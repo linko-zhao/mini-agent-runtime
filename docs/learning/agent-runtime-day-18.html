@@ -3,7 +3,7 @@
 
 figure{margin-inline:0}p,.node,figcaption{overflow-wrap:anywhere}.file-label{overflow-wrap:anywhere}.phase{font-weight:700;color:#183561}.copy-status{font-size:13px;color:#52617a}details>pre{margin-bottom:12px}
 
-body{font-size:18px;line-height:1.8}h2{font-size:23px}h3{font-size:19px}main{max-width:840px}.node small{display:block}.code-file{min-width:0}section{min-width:0}@media(max-width:600px){body{font-size:17px}h2{font-size:21px}}</style></head><body><main><header class="hero"><div class="eyebrow">MINI AGENT RUNTIME · WEEK 03 · DAY 18 / 56</div><h1>Checkpoint 存储与版本控制</h1><p>今天实现保存/读取接口和内存参考存储，让宿主用“我读过的版本”更新 Checkpoint，避免旧写入静默覆盖新记录。</p><div class="chips"><span>阅读 20 分钟</span><span>Go练习 80 分钟</span><span>测试复盘 20 分钟</span></div></header>
+body{font-size:18px;line-height:1.8}h2{font-size:23px}h3{font-size:19px}main{max-width:840px}.node small{display:block}.code-file{min-width:0}section{min-width:0}@media(max-width:600px){body{font-size:17px}h2{font-size:21px}}</style><link rel="stylesheet" href="assets/learning.css"></head><body><main><header class="hero"><div class="eyebrow">MINI AGENT RUNTIME · WEEK 03 · DAY 18 / 56</div><h1>Checkpoint 存储与版本控制</h1><p>今天实现保存/读取接口和内存参考存储，让宿主用“我读过的版本”更新 Checkpoint，避免旧写入静默覆盖新记录。</p><div class="chips"><span>阅读 20 分钟</span><span>Go练习 80 分钟</span><span>测试复盘 20 分钟</span></div></header>
 <nav aria-label="本页导航" class="toplinks"><a href="#concepts">先懂设计</a><a href="#rules">行为契约</a><a href="#skeleton">骨架与测试</a><a href="#tasks">分步实现</a><a href="#answer">最后看答案</a></nav>
 <section><h2>今天只解决什么？</h2><p>继续处理“读取 doc-1”。Day17已经能在ToolsPending捕获候选，但还没有保存接口；两个宿主拿着旧候选先后写入时，也没有发现覆盖的办法。</p><p>今天把候选交给CheckpointStore保存，用保存版本防止旧写覆盖。先用MemoryCheckpointStore跑通同一个接口的行为契约，便于未来替换存储后端。</p><p class="goal">完成后：创建版本1、读出独立副本、携带当前版本更新、明确拒绝冲突；能解释保存确认、模型轮次、恢复权限的区别。</p><p>本日参考实现只保存在当前进程内，进程退出就丢失。没有磁盘/数据库、序列化格式、跨进程持久性、恢复或自动重放。</p></section>
 <section id="concepts"><h2>先讲清三个概念</h2>
@@ -767,7 +767,7 @@ func (s *MemoryCheckpointStore) Save(ctx context.Context, cp Checkpoint, expecte
 	return cloneStored(next), nil
 }
 </code></pre><button type="button" data-copy="day18-reference-internal-runstate-store-go-txt">复制本文件</button></details><h3>Day19为什么还要设计恢复位置？</h3><p>今天有了保存记录、读取和版本冲突语义，但读出候选还不是恢复运行。明天继续判断恢复位置与待确认调用，明确哪些事实已确认、哪些工作不能直接重放；内存Store仍不提供跨进程可靠性。</p></section>
-<footer><a href="agent-runtime-day-17.html">前一天Day17</a> · <a href="../../index.html">返回学习首页</a><p>Day18 / 56 · 第三周 · 正文、图示、骨架与完整测试离线可读</p></footer></main><script>
+<footer><nav class="page-navigation" aria-label="页面导航"><a class="page-nav-button" href="agent-runtime-day-17.html">上一项</a><a class="page-nav-button" href="../../index.html">返回主页</a><span class="page-nav-button is-disabled" aria-disabled="true">下一项</span></nav><p class="page-meta">Day 18 / 56 · 第三周 · 正文、图示、骨架与完整测试离线可读</p></footer></main><script>
 const items=["用自己的话解释当天三个概念", "根据两张图讲清输入、职责和返回", "完成官方阅读并写下问题答案", "确认骨架可编译且目标出现预期红灯", "按任务卡逐步完成当天实现", "完整目标与 race 测试通过", "记录累计回归实际结果和未验证项", "合上代码完成需求变化与失败边界复盘"];const key="mini-agent-runtime-day-18-tdd-v1";
 let saved=[];try{const value=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(value))saved=value}catch(_){}
 const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const percent=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=percent+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(percent))}
