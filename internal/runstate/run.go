@@ -39,9 +39,21 @@ func (r *Run) Snapshot() State {
 func (r *Run) Apply(e Event) (State, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	s, err := Advance(r.state, e)
+	if terminal(r.state.Phase) {
+		return cloneState(r.state), ErrTransition
+	}
+	if err := r.ctx.Err(); err != nil {
+		next, transitionErr := Advance(r.state, Event{Kind: Cancel})
+		if transitionErr != nil {
+			return cloneState(r.state), transitionErr
+		}
+		r.state = next
+		return cloneState(r.state), err
+	}
+	next, err := Advance(r.state, e)
 	if err != nil {
 		return cloneState(r.state), err
 	}
-	return s, nil
+	r.state = next
+	return cloneState(next), nil
 }

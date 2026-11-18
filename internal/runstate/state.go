@@ -55,14 +55,12 @@ func New(runID, input string, maxSteps int) (State, error) {
 	if strings.TrimSpace(runID) == "" || maxSteps <= 0 {
 		return State{}, ErrTransition
 	}
-	var s State
-	s.RunID = runID
-	s.MaxSteps = maxSteps
-	s.Phase = Ready
-	if input != "" {
-		s.Messages = append([]model.Message(nil), model.Message{Role: "user", Content: input})
-	}
-	return s, nil
+	return State{
+		RunID:    runID,
+		MaxSteps: maxSteps,
+		Phase:    Ready,
+		Messages: append([]model.Message(nil), model.Message{Role: "user", Content: input}),
+	}, nil
 }
 
 func cloneCalls(calls []model.ToolCall) []model.ToolCall {
