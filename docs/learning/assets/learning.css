@@ -18,7 +18,7 @@ body {
   margin: 0;
   background: var(--page-bg);
   color: var(--ink);
-  font: 18px/1.8 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font: 16px/1.72 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 main {
   width: min(100% - 32px, 840px);
@@ -27,12 +27,12 @@ main {
   padding: 28px 0 48px;
 }
 h1, h2, h3 { color: var(--ink); line-height: 1.45; }
-h1 { font-size: clamp(1.7rem, 4vw, 2rem); }
-h2 { margin: 0 0 20px; font-size: 23px; }
-h3 { font-size: 19px; }
+h1 { font-size: clamp(1.6rem, 4vw, 1.9rem); }
+h2 { margin: 0 0 18px; font-size: 20px; }
+h3 { font-size: 17px; }
 p, li, .node, figcaption { overflow-wrap: anywhere; }
-p { margin: 12px 0; }
-li { margin: 10px 0; }
+p { margin: 10px 0; }
+li { margin: 8px 0; }
 a { color: var(--accent); text-underline-offset: 3px; }
 a:hover { color: var(--accent-dark); }
 a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visible {
@@ -206,12 +206,12 @@ td code { overflow-wrap: anywhere; }
 
 img, video, iframe { max-width: 100%; }
 @media (max-width: 600px) {
-  body { font-size: 17px; }
   main { width: min(100% - 20px, 840px); padding-top: 12px; }
   section, main > nav:not(.page-navigation) { padding: 20px 16px; }
   header, .hero { padding: 23px 20px; }
-  .hero h1 { font-size: 24px; }
-  h2 { font-size: 21px; }
+  body { font-size: 15px; }
+  .hero h1 { font-size: 23px; }
+  h2 { font-size: 19px; }
   pre { padding: 14px; font-size: 12px; }
   article, .card, .rule, .step { padding: 14px; }
   .grid { grid-template-columns: 1fr; }
