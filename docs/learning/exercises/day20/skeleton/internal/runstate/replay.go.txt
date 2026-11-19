@@ -1,0 +1,54 @@
+package runstate
+
+import (
+	"context"
+	"errors"
+
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+)
+
+type ReplayBasis string
+
+const (
+	BasisUnknown      ReplayBasis = "unknown"
+	BasisNotStarted   ReplayBasis = "not_started"
+	BasisResultKnown  ReplayBasis = "result_known"
+	BasisBackendDedup ReplayBasis = "backend_dedup"
+)
+
+type ReplayAction string
+
+const (
+	ActionHold   ReplayAction = "hold"
+	ActionInvoke ReplayAction = "invoke"
+	ActionReuse  ReplayAction = "reuse_result"
+)
+
+var ErrReplayEvidence = errors.New("runstate: invalid replay evidence")
+
+type ReplayEvidence struct {
+	Call           model.ToolCall
+	Basis          ReplayBasis
+	Result         *model.Message
+	IdempotencyKey string
+}
+type ReplayEvidenceSet struct {
+	RunID   string
+	Version uint64
+	Calls   []ReplayEvidence
+}
+type ReplayStep struct {
+	Call           model.ToolCall
+	Action         ReplayAction
+	Result         *model.Message
+	IdempotencyKey string
+}
+type ReplayPlan struct {
+	Record  StoredCheckpoint
+	Steps   []ReplayStep
+	Blocked bool // any Hold blocks the entire batch before effects/history updates
+}
+
+func PlanReplay(ctx context.Context, recovery RecoveryPlan, evidence ReplayEvidenceSet) (ReplayPlan, error) {
+	panic("TODO: implement PlanReplay")
+}

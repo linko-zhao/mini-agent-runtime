@@ -1,6 +1,6 @@
 # Agent Runtime 累计示例
 
-这是依据 Day 01–19 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
+这是依据 Day 01–20 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
 
 共享仓库根目录的 `go.mod`（Go 1.22.2），无需新建 Module，也不导入根目录 `internal` 中的练习实现。所有命令在仓库根目录运行：
 
@@ -176,3 +176,13 @@ Day17练习支持与页面全文包含可编译TODO、完整行为测试和折�
 检查身份/版本/Day18信封、首条user、Ready无Pending/末消息无调用、Pending与最后assistant请求按ID/名称/参数/顺序匹配、Completed结果一致。它不是完整历史重放、可信反序列化或外部效果验证。预取消不Load，Load后观察到取消则拒收迟到结果；其他Load错误保持原因链，无重试。
 
 共享根go.mod，复用Day15–18所有接口；不修改学习者internal/cmd。原样骨架可编译、TODO红灯符合预期、相同测试对隔离internal参考通过含race；当前examples普通/race与兼容副本累计回归通过（Go1.22.2）。[Day19页面](../docs/learning/agent-runtime-day-19.html)、[验证记录](../docs/learning/exercises/day19/verification.json)。没有验证真实持久存储、真实模型/网络、租约或恢复执行。
+
+## Day20：重放与幂等边界
+
+新增examples/internal/runstate/replay.go与replay_test.go。PlanReplay接收Day19 ReviewPending计划及可信宿主证据，纯决策生成逐项Hold/Invoke/Reuse与整批Blocked；不Load/Save/Apply，不执行工具或恢复Run。
+
+依据为Unknown、NotStarted、ResultKnown、BackendDedup。Unknown使整批Blocked；已确认结果复用；肯定未开始证据或外部核验的后端去重契约才产生Invoke建议。单有键、缺少结果、MCP注解或readOnly不构成证明。未阻塞也没有授予执行归属或权限；现有Tool接口尚无通用键传递适配，不可丢弃键后执行。
+
+证据绑定RunID、Version与原Pending的顺序/ID/名称/参数；附加Result/键须匹配依据，重复后端键拒绝。计划Record、Steps和输入深拷贝隔离；取消保留原context错误。所有旧接口、消息和根go.mod保留，不修改学习者internal/cmd。
+
+Go1.22.2最终原样骨架编译通过、TODO红灯符合预期；同一套测试对隔离internal参考通过含race，兼容副本累计回归通过；仓库根examples普通/race通过。[Day20页面](../docs/learning/agent-runtime-day-20.html)、[原始验证](../docs/learning/exercises/day20/verification.json)。未验证真实后端去重、幂等键传输、持久性、执行租约或自动恢复。

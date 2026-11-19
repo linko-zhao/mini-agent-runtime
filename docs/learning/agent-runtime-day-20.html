@@ -1,0 +1,1196 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>Day 20 · 重放与幂等边界</title><style>/* Shared visual system for every learning page. Keep presentation here. */
+:root {
+  color-scheme: light;
+  --page-bg: #f5f7fb;
+  --surface: #fff;
+  --ink: #182337;
+  --muted: #58667b;
+  --line: #dce4ef;
+  --accent: #2459bd;
+  --accent-dark: #183561;
+  --accent-pale: #edf3ff;
+  --focus: #dc7900;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--page-bg);
+  color: var(--ink);
+  font: 16px/1.72 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+main {
+  width: min(100% - 32px, 840px);
+  min-width: 0;
+  margin: 0 auto;
+  padding: 28px 0 48px;
+}
+h1, h2, h3 { color: var(--ink); line-height: 1.45; }
+h1 { font-size: clamp(1.6rem, 4vw, 1.9rem); }
+h2 { margin: 0 0 18px; font-size: 20px; }
+h3 { font-size: 17px; }
+p, li, .node, figcaption { overflow-wrap: anywhere; }
+p { margin: 10px 0; }
+li { margin: 8px 0; }
+a { color: var(--accent); text-underline-offset: 3px; }
+a:hover { color: var(--accent-dark); }
+a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+header, .hero {
+  border-radius: 18px;
+  background: var(--accent-dark);
+  color: #fff;
+  padding: clamp(22px, 5vw, 34px);
+}
+header h1, .hero h1, header h2, .hero h2, header h3, .hero h3 { color: inherit; }
+header p, .hero p { color: #e6eefa; }
+header a, .hero a { color: #cce4ff; }
+.hero h1 { margin: 12px 0; }
+.eyebrow, .time { font-size: 13px; font-weight: 700; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips span, .chip {
+  border: 1px solid #9cb5d9;
+  border-radius: 20px;
+  padding: 3px 12px;
+  font-size: 13px;
+}
+
+section, main > nav:not(.page-navigation) {
+  min-width: 0;
+  margin-top: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: clamp(18px, 4vw, 28px);
+}
+section:target { scroll-margin-top: 18px; }
+article, .card, .rule, .step {
+  min-width: 0;
+  margin: 18px 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+.card h3, .step h3 { margin-top: 0; }
+figure { margin: 20px 0; }
+.flow { display: flex; flex-direction: column; gap: 10px; margin: 20px 0; }
+.node {
+  min-width: 0;
+  border: 2px solid #9eb6db;
+  border-radius: 10px;
+  background: #f4f8ff;
+  padding: 15px;
+}
+.node strong { display: block; }
+.node small { display: block; }
+.arrow { text-align: center; color: #345276; font-size: 16px; }
+.branch { border: 2px dashed #9b6500; background: #fff7e8; }
+.muted, figcaption { color: var(--muted); font-size: 13px; }
+.note, .goal, .info {
+  border-left: 4px solid var(--accent);
+  border-radius: 4px;
+  background: var(--accent-pale);
+  padding: 14px 18px;
+}
+.warn { border-left-color: #9b6500; background: #fff6e3; }
+.phase { color: var(--accent-dark); font-weight: 700; }
+
+code {
+  overflow-wrap: anywhere;
+  border-radius: 4px;
+  background: #edf1f7;
+  padding: 2px 4px;
+  font-size: .88em;
+}
+pre {
+  max-width: 100%;
+  overflow: auto;
+  border-radius: 10px;
+  background: #142136;
+  color: #e7f3ff;
+  padding: 18px;
+  font-size: 13px;
+  line-height: 1.7;
+  tab-size: 4;
+}
+pre code { overflow-wrap: normal; background: none; padding: 0; font-size: inherit; }
+details { margin: 16px 0; border: 1px solid var(--line); border-radius: 9px; padding: 12px 16px; }
+details > pre { margin-bottom: 12px; }
+summary { cursor: pointer; font-weight: 650; }
+button {
+  cursor: pointer;
+  border: 1px solid #9eb6db;
+  border-radius: 7px;
+  background: var(--accent-pale);
+  color: var(--accent-dark);
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 13px;
+}
+.file-label { overflow-wrap: anywhere; }
+.download { font-size: 13px; }
+.code-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; }
+.copy-state, .copy-status { color: var(--muted); font-size: 13px; }
+.code-file { min-width: 0; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+}
+
+.check, .checks label { display: flex; gap: 12px; margin: 14px 0; }
+.check input, .checks input {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-top: 7px;
+  accent-color: var(--accent);
+}
+.check label, .checks label { cursor: pointer; }
+.done label, .check.done label { color: var(--muted); text-decoration: line-through; }
+.progress { height: 12px; overflow: hidden; border-radius: 8px; background: #e3e9f2; }
+.fill, #fill { width: 0; height: 100%; background: var(--accent); }
+.meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-bottom: 12px; font-size: 13px; }
+
+.toplinks { display: flex; flex-wrap: wrap; gap: 10px 22px; }
+footer { margin: 28px 0 0; color: var(--muted); text-align: center; font-size: 13px; }
+.page-navigation {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 28px 0 12px;
+}
+.page-nav-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #9ab0d0;
+  border-radius: 9px;
+  background: var(--accent-pale);
+  color: #153b70;
+  padding: 8px 12px;
+  font: inherit;
+  font-weight: 650;
+  line-height: 1.35;
+  text-align: center;
+  text-decoration: none;
+}
+.page-nav-button:hover { border-color: var(--accent); background: #dceaff; color: #153b70; }
+.page-nav-button.is-disabled { cursor: not-allowed; border-color: var(--line); background: #f0f2f5; color: #798496; }
+.page-meta { margin: 8px 0 0; }
+
+/* Supplemental styles used by the snapshot reference page. */
+.matrix-scroll { overflow-x: auto; }
+.matrix-scroll table { min-width: 660px; }
+table { max-width: 100%; border-collapse: collapse; }
+th, td { border-bottom: 1px solid var(--line); padding: 9px; text-align: left; vertical-align: top; }
+th { background: #f4f7fc; }
+.tag { display: inline-block; margin-right: 6px; border-radius: 5px; background: #eaf0fc; color: var(--accent); padding: 2px 7px; font-size: 12px; }
+.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.grid > div { border-radius: 9px; background: #f6f8fc; padding: 12px; }
+.grid strong { display: block; font-size: 19px; }
+.grid span { color: var(--muted); font-size: 12px; }
+.hero small { opacity: .8; letter-spacing: 1px; }
+td code { overflow-wrap: anywhere; }
+
+img, video, iframe { max-width: 100%; }
+@media (max-width: 600px) {
+  main { width: min(100% - 20px, 840px); padding-top: 12px; }
+  section, main > nav:not(.page-navigation) { padding: 20px 16px; }
+  header, .hero { padding: 23px 20px; }
+  body { font-size: 15px; }
+  .hero h1 { font-size: 23px; }
+  h2 { font-size: 19px; }
+  pre { padding: 14px; font-size: 12px; }
+  article, .card, .rule, .step { padding: 14px; }
+  .grid { grid-template-columns: 1fr; }
+  .page-navigation { gap: 6px; }
+  .page-nav-button { min-height: 42px; padding: 7px 4px; font-size: .88rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+</style></head><body><main><header class="hero"><div class="eyebrow">MINI AGENT RUNTIME · WEEK 03 · DAY 20 / 56</div><h1>重放与幂等边界</h1><p>今天实现整批重放决策，让宿主根据明确证据区分等待确认、复用结果和调用建议，避免把未知调用直接重跑。</p><div class="chips"><span>阅读 20 分钟</span><span>Go练习 80 分钟</span><span>测试复盘 20 分钟</span></div></header>
+<nav aria-label="本页导航" class="toplinks"><a href="#concepts">先懂设计</a><a href="#rules">行为契约</a><a href="#skeleton">骨架与测试</a><a href="#tasks">分步实现</a><a href="#answer">最后看答案</a></nav>
+<section><h2>今天只解决什么？</h2><p>继续读取doc-1。Day19知道ToolsPending里有call-1，却不知道外部是否已经执行；直接重跑可能造成重复效果，直接填回结果又可能伪造事实。</p><p>今天新增PlanReplay，接收Day19 RecoveryPlan和可信宿主整理的证据，给出逐项建议及整批Blocked标记。它只做决策，不调用工具、保存或推进Run。</p><p class="goal">完成后能解释：缺少结果不是没执行，幂等键不是幂等性，复用已确认结果与再次调用是两种不同动作。</p><p>本日没有自动恢复执行器、后端去重服务、执行租约或可靠跨进程存储；MemoryStore仍只在进程内保存。</p></section>
+<section id="concepts"><h2>先讲三个概念</h2>
+<article class="card"><h3>重放：针对原逻辑调用作下一步判断</h3><p>保留原CallID、工具名和参数，不把模型新提出的请求当成旧调用。今天的证据必须与保存记录的原请求逐项匹配。</p><p>结果已确认时可以建议复用，而不是再次调用；状态未知时先等待确认。判断不等于实际执行。</p></article>
+<article class="card"><h3>幂等契约：同一操作重复提交的后端保证</h3><p>后端需要把键绑定到正确主体/租户、接口和有效载荷，在有效期内对同一逻辑操作去重，并说明如何取得结果。一个随机字符串本身不提供这些保证。</p><p>BasisBackendDedup表示可信宿主已经在外部核验上述契约，不是本函数查询或证明了它。模型参数、MCP注解、readOnly标签都不能自动生成这项证据。</p></article>
+<article class="card"><h3>整批门禁：先把所有项看清楚</h3><p>同一批有一项Unknown，就返回Blocked=true。宿主必须先检查error和Blocked，再考虑任何调用或消息回填。</p><p>已知项仍保留在计划里供诊断，但不能忽略阻塞标记后先执行前半批。延续Day09“整批检查后再执行”的设计。</p></article></section>
+<section><h2>职责图：谁提供事实，谁产生建议？</h2>
+<figure aria-label="宿主把恢复计划和外部核验后的证据交给纯决策函数，再由宿主决定执行"><div class="flow">
+<div class="node"><strong>Day19 PlanRecovery</strong>读出Record及ReviewPending位置，保留原Version与调用</div>
+<div class="arrow">↓ RecoveryPlan + 可信宿主整理的ReplayEvidenceSet</div>
+<div class="node"><strong>Day20 PlanReplay</strong>校验记录/证据绑定 → 逐项分类 → 深拷贝输出；没有外部依赖</div>
+<div class="arrow">↓ ReplayPlan{Record, Steps, Blocked}</div>
+<div class="node"><strong>宿主门禁</strong>error非nil：拒绝；Blocked=true：整批等待；否则仍需核对当前执行归属、权限与后端契约</div>
+<div class="arrow">↓ 后续适配与执行策略，今天不实现</div>
+<div class="node branch"><strong>执行/确认/持久化层</strong>真正传递幂等键、调用后端、接纳结果和保存新记录；不能靠本日枚举值替代</div></div>
+<figcaption>证据来自可信宿主或后端确认流程；本日函数不验证其来源真实性，不签发执行许可，也不会把工具调用藏进校验过程。</figcaption></figure></section>
+<section><h2>编号运行图：四个原读取请求，四种依据</h2>
+<figure aria-label="同批四个读取请求分别未知、未开始、已有结果、后端去重保障，未知项使整批阻塞"><div class="flow">
+<div class="node"><strong>① 保存记录Version=1</strong>Pending=[call-1/doc-1, call-2/doc-2, call-3/doc-3, call-4/doc-4]</div>
+<div class="arrow">↓ 宿主按原顺序提供四项证据</div>
+<div class="node"><strong>② 逐项建议</strong>call-1 Unknown → Hold<br>call-2 NotStarted → Invoke（无幂等键）<br>call-3 ResultKnown → Reuse（保留原tool消息）<br>call-4 BackendDedup → Invoke（保留原后端键）</div>
+<div class="arrow">↓ 存在Hold → Blocked=true</div>
+<div class="node branch"><strong>③ 整批暂停</strong>不调用任何工具，不部分回填已知结果，不保存新版本</div>
+<div class="arrow">↓ 若取得新的有效证据，宿主重新核对同一记录</div>
+<div class="node"><strong>④ 无Hold才得到未阻塞计划</strong>仍需当前驱动权、授权和实际键传递适配；计划不会自动执行</div></div>
+<figcaption>这是参考测试中的同一组文档读取，不改业务参数算法。真实外部效果与去重契约不由脚本测试证明。</figcaption></figure></section>
+<section><h2>四种依据：先解释，再使用枚举</h2>
+<article class="card"><h3>BasisUnknown = unknown</h3><p>没有足够事实确认调用结果或未开始。只能Hold，不能因为超时、缺少tool消息、查询暂未找到就升级为NotStarted。</p></article>
+<article class="card"><h3>BasisNotStarted = not_started</h3><p>宿主已获得未开始的肯定证据，并另行处理执行归属。建议Invoke一次；这个结论不能来自“内存台账为空”或“没有保存结果”。</p></article>
+<article class="card"><h3>BasisResultKnown = result_known</h3><p>已有可信、已投影为课程tool消息的结果，建议Reuse。结果可以是已接纳的受控业务失败，不因为不是成功文本就再执行。</p></article>
+<article class="card"><h3>BasisBackendDedup = backend_dedup</h3><p>外部状态可能未知，但宿主已核验可用的后端去重契约及原操作键；建议带原键Invoke。必须核验作用域、同一有效载荷、有效期及重复提交行为。</p><p>本地只检查声明的形状和调用绑定，不证明后端承诺。若键过期、接口不接键或无法取得契约证据，应改为Unknown，而不是自行重放。</p></article>
+<p class="note">现有Tool.Execute/Invoke没有通用幂等键参数。本日不更改它们，也不把键塞进模型Arguments。未来宿主/后端适配必须显式传键；丢弃IdempotencyKey后调用旧Execute，不符合BackendDedup建议的前提。</p></section>
+<section><h2>公开类型与字段：保持前序结构</h2>
+<article class="card"><h3>ReplayEvidence</h3><p>Call复用model.ToolCall，包含原ID/Name/Arguments；Basis是上述宿主依据。Result仅ResultKnown允许，为原CallID对应的tool消息指针；IdempotencyKey仅BackendDedup允许。</p><p>输入在调用期间只读。Basis不是模型输出的权威标志，手工构造也不产生后端保证。</p></article>
+<article class="card"><h3>ReplayEvidenceSet</h3><p>RunID与Version必须精确绑定RecoveryPlan.Record；Calls必须与Pending同长度、同顺序。每项证据不能借另一次运行或另一版本的参数套用。</p><p>这里只比较传入值，不重新Load最新版本，也不检查证据有效期或取得租约。两份旧输入互相匹配，仍可能已过时。</p></article>
+<article class="card"><h3>ReplayStep与ReplayAction</h3><p>Call是原调用的独立副本；Action为hold、invoke或reuse_result。Result只在Reuse时有值；IdempotencyKey只在BackendDedup产生的Invoke中有值。</p><p>Call和Result继续复用旧消息类型，不另建每日协议。Invoke是条件建议，不是已发送请求。</p></article>
+<article class="card"><h3>ReplayPlan</h3><p>Record完整保留Day18记录；Steps按Pending顺序排列；Blocked表示至少一项Hold，整批应暂停。即使Blocked，仍返回完整合法计划以便宿主查看原因。</p><p>Record、Steps.Call、Result与所有输入都独立，修改一份返回数据不会污染别处。输入/返回包含正文与参数，不是公开审计事件。</p></article>
+<article class="card"><h3>PlanReplay(ctx, recovery, evidence)</h3><p>返回ReplayPlan和error。只接受Day19的RecoveryReviewPending且记录确为ToolsPending，并复用Day19局部一致性检查；其他位置、非法记录返回ErrInvalidCheckpoint。</p><p>证据绑定或形状错误返回ErrReplayEvidence；全部错误返回零计划。ctx为nil沿旧契约返回ErrInvalidCheckpoint；已观察到取消/截止时间保留原context错误。</p><p>预先检查ctx，每项处理中和结束时继续检查；最后检查后仍可能取消。没有I/O、Store或工具依赖，因此不产生网络依赖错误，也不强制执行取消。</p></article></section>
+<section id="rules"><h2>行为契约：可直接对照测试实现</h2>
+<article class="rule"><h3>R1 · 输入记录与只读承诺</h3><p>只处理有效ReviewPending/ToolsPending记录，复用Day19校验。不Load、Save、Apply或执行；不清Pending、不改Version、Step或历史。测试：TestDay20InvalidRecovery、TestDay20DecisionsAndPurity。</p></article>
+<article class="rule"><h3>R2 · 证据绑定</h3><p>RunID、Version精确相同；Calls与Pending条数及顺序相同，逐项ID/Name/Arguments字节对应。参数用bytes.Equal，不做JSON规范化；零/未知Basis不默认为已知事实。</p><p>证据缺失、错序、错ID/名称/参数/版本均ErrReplayEvidence，零计划。测试：TestDay20EvidenceBinding、TestDay20EvidenceShapes。</p></article>
+<article class="rule"><h3>R3 · 依据与附加字段必须一致</h3><p>Unknown与NotStarted都要求Result=nil、IdempotencyKey为空；分别产生Hold/Invoke。Unknown附带一个键属于非法证据，不能自动升级。</p><p>ResultKnown要求Result非nil、Role=tool、ToolCallID匹配、无嵌套ToolCalls、键为空；产生Reuse，保留Content。BackendDedup要求Result=nil、键非全空白；产生带原键Invoke。</p><p>同批不同调用不得复用同一幂等键；非空白键按原字符串保留，不裁剪。任一矛盾字段或未知Basis返回ErrReplayEvidence。测试：TestDay20EvidenceShapes。</p></article>
+<article class="rule"><h3>R4 · 先整批判完，再交还宿主</h3><p>合法Unknown不是函数错误，而是完整计划中的Hold；任一Hold使Blocked=true。证据错误则连部分计划也不返回，避免宿主拿前半批先做动作。</p><p>未阻塞只说明传入依据可形成建议，不证明当前权限/工作归属/后端去重契约。测试：TestDay20DecisionsAndPurity。</p></article>
+<article class="rule"><h3>R5 · 取消、副本与并发</h3><p>nilctx拒绝，预取消/已过期ctx返回原错误。此函数是有限的纯决策，不适用存储或工具故障注入；取得证据的外部流程需要自己的取消与错误契约。</p><p>16个并发决策在输入不被并发修改时安全，各自修改输出不串数据；Record和Steps也不能互相别名。测试：TestDay20Cancellation、TestDay20OwnershipAndConcurrency。</p></article></section>
+<section id="read"><h2>带着问题读Eino：20分钟</h2>
+<article class="card"><h3>12分钟 · 已完成结果与需要再运行的项</h3><p>阅读<a href="https://github.com/cloudwego/eino/blob/main/compose/tool_node.go">compose/tool_node.go</a>：定位ToolsInterruptAndRerunExtra、toolsInterruptAndRerunState、ToolsNode.Invoke、genToolCallTasks。</p><p>问题：ExecutedTools/ExecutedEnhancedTools与RerunTools分别记录什么？Invoke怎样读取GetInterruptState并把已完成输出带到任务生成？原CallID在哪些地方保留？</p><p>产出一张“保留结果→选择待处理项”的图。映射：本课ResultKnown→Reuse与逐项Step；不能把Eino中断重运行机制直接解释为任意外部API拥有幂等保证。</p></article>
+<article class="card"><h3>8分钟 · 框架重运行位置不等于外部事务确认</h3><p>阅读<a href="https://github.com/cloudwego/eino/blob/main/compose/checkpoint.go">compose/checkpoint.go</a>：定位checkpoint.RerunNodes、applyToolStreamCheckpoint、convertCheckPoint。</p><p>问题：节点重运行信息与保存输入/流状态怎样关联？它们是否说明业务后端已经承诺去重？产出“框架恢复状态 / 后端操作身份 / 外部确认”的三列对照。</p><p>本日只借鉴粒度与分层，不照搬流式恢复，不引入Eino依赖。</p></article>
+<p class="muted">本次已读取官方main核对：tool_node.go blob 4e583338520b；checkpoint.go blob ebb79b24bf94。main会变化，阅读时记录版本。</p></section>
+<section><h2>承接前序设计与本日增量</h2><p><strong>复用：</strong>Day15 State/Event及model消息，Day16 Run，Day17 Checkpoint，Day18 StoredCheckpoint，Day19 RecoveryPlan与局部校验。旧工具接口和错误语义保持不变。</p>
+<p><strong>新增：</strong>练习internal/runstate/replay.go与day20_contract_test.go；参考examples/internal/runstate/replay.go与replay_test.go。所有文件共享根go.mod，不新建每日module。</p>
+<p><strong>修改：</strong>README/CONTRACTS、当日附件与manifest、prepare/verify日期支持、HTML与首页入口。前序五个实现文件、固定baseline和根internal/cmd不改。</p>
+<p><strong>迁移：</strong>PlanRecovery仍只判读位置；需要重放建议的宿主另行准备ReplayEvidenceSet，再调用PlanReplay。先处理error，再检查Blocked，之后才考虑外部确认/执行层；没有新增Restore或更换Agent.Run。</p>
+<p>步骤不会调用旧Tool.Execute/Invoke，不提供后端键传输；未经适配不能声称BackendDedup分支已端到端运行。基线只验证决策与所有权，不证明后端exactly-once。</p>
+<pre><code># 原仓库根：只创建仓库外练习副本
+python3 docs/learning/exercises/prepare.py 20
+# 进入打印的目录，编辑 internal/runstate/replay.go</code></pre>
+<p>Python3.9+、Go1.22.2+，无需API Key。副本提供固定baseline与Day15–19五个支持文件；测试指向副本internal，参考只映射examples/internal前缀，不混用model类型。</p><p>已有兼容实现先保留，仅应用测试；不挖空已完成方法制造红灯。页面内嵌当前共享视觉样式，下载单个HTML仍可离线阅读。</p></section>
+<section id="skeleton"><h2>完整骨架：方法体留给你</h2><p>类型、字段、常量、import与签名齐全；用本页规则独立实现，不需要先读答案。每个公开字段都在前面说明。</p><h3 class="file-label">新增 · internal/runstate/replay.go</h3><p class="download"><a href="exercises/day20/skeleton/internal/runstate/replay.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="skeleton" data-source="day20/skeleton/internal/runstate/replay.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day20-skeleton-internal-runstate-replay-go-txt"><code>package runstate
+
+import (
+	&quot;context&quot;
+	&quot;errors&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+)
+
+type ReplayBasis string
+
+const (
+	BasisUnknown      ReplayBasis = &quot;unknown&quot;
+	BasisNotStarted   ReplayBasis = &quot;not_started&quot;
+	BasisResultKnown  ReplayBasis = &quot;result_known&quot;
+	BasisBackendDedup ReplayBasis = &quot;backend_dedup&quot;
+)
+
+type ReplayAction string
+
+const (
+	ActionHold   ReplayAction = &quot;hold&quot;
+	ActionInvoke ReplayAction = &quot;invoke&quot;
+	ActionReuse  ReplayAction = &quot;reuse_result&quot;
+)
+
+var ErrReplayEvidence = errors.New(&quot;runstate: invalid replay evidence&quot;)
+
+type ReplayEvidence struct {
+	Call           model.ToolCall
+	Basis          ReplayBasis
+	Result         *model.Message
+	IdempotencyKey string
+}
+type ReplayEvidenceSet struct {
+	RunID   string
+	Version uint64
+	Calls   []ReplayEvidence
+}
+type ReplayStep struct {
+	Call           model.ToolCall
+	Action         ReplayAction
+	Result         *model.Message
+	IdempotencyKey string
+}
+type ReplayPlan struct {
+	Record  StoredCheckpoint
+	Steps   []ReplayStep
+	Blocked bool // any Hold blocks the entire batch before effects/history updates
+}
+
+func PlanReplay(ctx context.Context, recovery RecoveryPlan, evidence ReplayEvidenceSet) (ReplayPlan, error) {
+	panic(&quot;TODO: implement PlanReplay&quot;)
+}
+</code></pre><button type="button" data-copy="day20-skeleton-internal-runstate-replay-go-txt">复制本文件</button></details><details><summary>复用前置支持文件（完整离线内容）</summary><p>prepare已提供；手工应用时保留前序文件，不重复定义。</p><h3>internal/runstate/state.go</h3><pre><code>// Package runstate models in-memory transitions. It is not a checkpoint store.
+package runstate
+
+import (
+	&quot;errors&quot;
+	&quot;strings&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+)
+
+type Phase string
+
+const (
+	Ready        Phase = &quot;ready&quot;
+	ModelRunning Phase = &quot;model_running&quot;
+	ToolsPending Phase = &quot;tools_pending&quot;
+	ToolsRunning Phase = &quot;tools_running&quot;
+	Completed    Phase = &quot;completed&quot;
+	Failed       Phase = &quot;failed&quot;
+	Cancelled    Phase = &quot;cancelled&quot;
+)
+
+type EventKind string
+
+const (
+	StartModel    EventKind = &quot;start_model&quot;
+	ModelReturned EventKind = &quot;model_returned&quot;
+	StartTools    EventKind = &quot;start_tools&quot;
+	ToolsReturned EventKind = &quot;tools_returned&quot;
+	Abort         EventKind = &quot;abort&quot;
+	Cancel        EventKind = &quot;cancel&quot;
+)
+
+var (
+	ErrTransition = errors.New(&quot;runstate: invalid transition&quot;)
+	ErrMaxSteps   = errors.New(&quot;runstate: max model rounds exceeded&quot;)
+)
+
+type State struct {
+	RunID           string
+	Phase           Phase
+	Step, MaxSteps  int
+	Messages        []model.Message
+	Pending         []model.ToolCall
+	Result, Failure string
+}
+type Event struct {
+	Kind     EventKind
+	Response *model.Response
+	Results  []model.Message
+	Reason   string
+}
+
+func New(runID, input string, maxSteps int) (State, error) {
+	if strings.TrimSpace(runID) == &quot;&quot; || maxSteps &lt;= 0 {
+		return State{}, ErrTransition
+	}
+	return State{RunID: runID, Phase: Ready, MaxSteps: maxSteps, Messages: []model.Message{{Role: &quot;user&quot;, Content: input}}}, nil
+}
+func cloneCalls(calls []model.ToolCall) []model.ToolCall {
+	if calls == nil {
+		return nil
+	}
+	out := append([]model.ToolCall{}, calls...)
+	for i := range out {
+		out[i].Arguments = append([]byte(nil), out[i].Arguments...)
+	}
+	return out
+}
+func cloneMessages(ms []model.Message) []model.Message {
+	if ms == nil {
+		return nil
+	}
+	out := append([]model.Message{}, ms...)
+	for i := range out {
+		out[i].ToolCalls = cloneCalls(out[i].ToolCalls)
+	}
+	return out
+}
+func cloneState(s State) State {
+	s.Messages = cloneMessages(s.Messages)
+	s.Pending = cloneCalls(s.Pending)
+	return s
+}
+func terminal(p Phase) bool { return p == Completed || p == Failed || p == Cancelled }
+
+// Advance has no I/O. The host performs calls between start/returned events.
+// It accepts states from New/Advance and never mutates input state/event buffers.
+func Advance(current State, e Event) (State, error) {
+	if terminal(current.Phase) {
+		return State{}, ErrTransition
+	}
+	next := cloneState(current)
+	switch e.Kind {
+	case StartModel:
+		if current.Phase != Ready {
+			return State{}, ErrTransition
+		}
+		if current.Step &gt;= current.MaxSteps {
+			return State{}, ErrMaxSteps
+		}
+		next.Step++
+		next.Phase = ModelRunning
+	case ModelReturned:
+		if current.Phase != ModelRunning || e.Response == nil || e.Response.Message.Role != &quot;assistant&quot; {
+			return State{}, ErrTransition
+		}
+		msg := e.Response.Message
+		ids := map[string]bool{}
+		for _, call := range msg.ToolCalls {
+			if call.ID == &quot;&quot; || strings.TrimSpace(call.Name) == &quot;&quot; || ids[call.ID] {
+				return State{}, ErrTransition
+			}
+			ids[call.ID] = true
+		}
+		next.Messages = append(next.Messages, cloneMessages([]model.Message{msg})...)
+		if len(msg.ToolCalls) == 0 {
+			next.Phase = Completed
+			next.Result = msg.Content
+		} else {
+			next.Phase = ToolsPending
+			next.Pending = cloneCalls(msg.ToolCalls)
+		}
+	case StartTools:
+		if current.Phase != ToolsPending {
+			return State{}, ErrTransition
+		}
+		next.Phase = ToolsRunning
+	case ToolsReturned:
+		if current.Phase != ToolsRunning || len(e.Results) != len(current.Pending) {
+			return State{}, ErrTransition
+		}
+		for i, msg := range e.Results {
+			if msg.Role != &quot;tool&quot; || msg.ToolCallID != current.Pending[i].ID {
+				return State{}, ErrTransition
+			}
+		}
+		next.Messages = append(next.Messages, cloneMessages(e.Results)...)
+		next.Pending = nil
+		next.Phase = Ready
+	case Abort:
+		if strings.TrimSpace(e.Reason) == &quot;&quot; {
+			return State{}, ErrTransition
+		}
+		next.Phase = Failed
+		next.Failure = e.Reason
+	case Cancel:
+		next.Phase = Cancelled
+		next.Failure = &quot;cancelled&quot;
+	default:
+		return State{}, ErrTransition
+	}
+	return next, nil
+}
+</code></pre><h3>internal/runstate/run.go</h3><pre><code>package runstate
+
+import (
+	&quot;context&quot;
+	&quot;sync&quot;
+)
+
+// Run owns one in-memory State. Use its pointer; do not copy it after use.
+// The zero value is not usable; construct with NewRun.
+type Run struct {
+	ctx   context.Context
+	mu    sync.Mutex
+	state State
+}
+
+// NewRun retains ctx for cancellation/deadlines, not for storing State.
+// A cancelled context rejects construction; invalid identity/budget uses ErrTransition.
+func NewRun(ctx context.Context, runID, input string, maxSteps int) (*Run, error) {
+	if ctx == nil {
+		return nil, ErrTransition
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	s, err := New(runID, input, maxSteps)
+	if err != nil {
+		return nil, err
+	}
+	return &amp;Run{ctx: ctx, state: s}, nil
+}
+
+// Context returns the original context. The host owns any cancel function.
+// Model/tool I/O must use this context outside Apply, never while holding its lock.
+func (r *Run) Context() context.Context { return r.ctx }
+
+// Snapshot returns an independent copy without triggering transitions.
+func (r *Run) Snapshot() State {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return cloneState(r.state)
+}
+
+// Apply commits exactly one valid event, or returns the unchanged current copy.
+// For a nonterminal Run, observed context cancellation commits Cancel and rejects
+// the event with the original context error. A terminal State is never overwritten.
+// This serializes transitions, not a snapshot -&gt; external I/O -&gt; Apply transaction.
+func (r *Run) Apply(e Event) (State, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if terminal(r.state.Phase) {
+		return cloneState(r.state), ErrTransition
+	}
+	if err := r.ctx.Err(); err != nil {
+		next, transitionErr := Advance(r.state, Event{Kind: Cancel})
+		if transitionErr != nil {
+			return cloneState(r.state), transitionErr
+		}
+		r.state = next
+		return cloneState(r.state), err
+	}
+	next, err := Advance(r.state, e)
+	if err != nil {
+		return cloneState(r.state), err
+	}
+	r.state = next
+	return cloneState(r.state), nil
+}
+</code></pre><h3>internal/runstate/checkpoint.go</h3><pre><code>package runstate
+
+import &quot;errors&quot;
+
+type CheckpointBoundary string
+
+const (
+	CheckpointReady       CheckpointBoundary = &quot;ready&quot;
+	CheckpointBeforeTools CheckpointBoundary = &quot;before_tools&quot;
+	CheckpointTerminal    CheckpointBoundary = &quot;terminal&quot;
+)
+
+var ErrCheckpointBoundary = errors.New(&quot;runstate: checkpoint requires a stable boundary&quot;)
+
+// Checkpoint is an in-memory candidate, not a storage acknowledgement or resume token.
+// State uses the existing message/call contract. Boundary classifies State.Phase.
+type Checkpoint struct {
+	Boundary CheckpointBoundary
+	State    State
+}
+
+// Clone copies nested mutable state. It does not validate or authorize a checkpoint.
+func (c Checkpoint) Clone() Checkpoint {
+	c.State = cloneState(c.State)
+	return c
+}
+
+// Checkpoint samples boundary and state under the same lock.
+// It does not observe context cancellation, advance state, pause the driver,
+// perform I/O, or promise that an external tool has not already taken effect.
+func (r *Run) Checkpoint() (Checkpoint, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var boundary CheckpointBoundary
+	switch r.state.Phase {
+	case Ready:
+		boundary = CheckpointReady
+	case ToolsPending:
+		boundary = CheckpointBeforeTools
+	case Completed, Failed, Cancelled:
+		boundary = CheckpointTerminal
+	default:
+		return Checkpoint{}, ErrCheckpointBoundary
+	}
+	return Checkpoint{Boundary: boundary, State: cloneState(r.state)}, nil
+}
+</code></pre><h3>internal/runstate/store.go</h3><pre><code>package runstate
+
+import (
+	&quot;context&quot;
+	&quot;errors&quot;
+	&quot;strings&quot;
+	&quot;sync&quot;
+)
+
+var (
+	ErrCheckpointNotFound = errors.New(&quot;runstate: checkpoint not found&quot;)
+	ErrCheckpointConflict = errors.New(&quot;runstate: checkpoint version conflict&quot;)
+	ErrInvalidCheckpoint  = errors.New(&quot;runstate: invalid checkpoint request&quot;)
+)
+
+// StoredCheckpoint is the latest saved value. Version is a per-RunID CAS token,
+// not State.Step, a schema version, an execution lease or a resume permission.
+type StoredCheckpoint struct {
+	Version    uint64
+	Checkpoint Checkpoint
+}
+
+type CheckpointStore interface {
+	Load(context.Context, string) (StoredCheckpoint, error)
+	Save(context.Context, Checkpoint, uint64) (StoredCheckpoint, error)
+}
+
+// MemoryCheckpointStore is process-local and not durable. Its zero value works.
+// Do not copy after use. It retains only the latest record for each exact RunID.
+type MemoryCheckpointStore struct {
+	mu      sync.Mutex
+	records map[string]StoredCheckpoint
+}
+
+func NewMemoryCheckpointStore() *MemoryCheckpointStore { return &amp;MemoryCheckpointStore{} }
+
+func cloneStored(v StoredCheckpoint) StoredCheckpoint {
+	v.Checkpoint = v.Checkpoint.Clone()
+	return v
+}
+func storeContext(ctx context.Context) error {
+	if ctx == nil {
+		return ErrInvalidCheckpoint
+	}
+	return ctx.Err()
+}
+
+// validateCandidate checks only the trusted candidate envelope, not full message
+// history, authorization, authenticity or an untrusted serialized payload.
+func validateCandidate(cp Checkpoint) bool {
+	s := cp.State
+	if strings.TrimSpace(s.RunID) == &quot;&quot; || s.MaxSteps &lt;= 0 || s.Step &lt; 0 || s.Step &gt; s.MaxSteps {
+		return false
+	}
+	switch cp.Boundary {
+	case CheckpointReady:
+		return s.Phase == Ready
+	case CheckpointBeforeTools:
+		return s.Phase == ToolsPending
+	case CheckpointTerminal:
+		return terminal(s.Phase)
+	default:
+		return false
+	}
+}
+
+func (s *MemoryCheckpointStore) Load(ctx context.Context, runID string) (StoredCheckpoint, error) {
+	if err := storeContext(ctx); err != nil {
+		return StoredCheckpoint{}, err
+	}
+	if strings.TrimSpace(runID) == &quot;&quot; {
+		return StoredCheckpoint{}, ErrInvalidCheckpoint
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return StoredCheckpoint{}, err
+	}
+	v, ok := s.records[runID]
+	if !ok {
+		return StoredCheckpoint{}, ErrCheckpointNotFound
+	}
+	return cloneStored(v), nil
+}
+
+// Save: expected=0 creates only if absent; otherwise it must equal current Version.
+// A successful write increments Version even for identical content.
+// Errors in this in-memory implementation return zero and leave stored data intact.
+// Cancellation is sampled before and after locking; later cancellation can still
+// accompany a committed success. The lock wait itself is not context-interruptible.
+func (s *MemoryCheckpointStore) Save(ctx context.Context, cp Checkpoint, expected uint64) (StoredCheckpoint, error) {
+	if err := storeContext(ctx); err != nil {
+		return StoredCheckpoint{}, err
+	}
+	if expected == ^uint64(0) || !validateCandidate(cp) {
+		return StoredCheckpoint{}, ErrInvalidCheckpoint
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return StoredCheckpoint{}, err
+	}
+	current := s.records[cp.State.RunID]
+	if current.Version != expected {
+		return StoredCheckpoint{}, ErrCheckpointConflict
+	}
+	next := StoredCheckpoint{Version: expected + 1, Checkpoint: cp.Clone()}
+	if s.records == nil {
+		s.records = make(map[string]StoredCheckpoint)
+	}
+	s.records[cp.State.RunID] = next
+	return cloneStored(next), nil
+}
+</code></pre><h3>internal/runstate/recovery.go</h3><pre><code>package runstate
+
+import (
+	&quot;bytes&quot;
+	&quot;context&quot;
+	&quot;strings&quot;
+)
+
+type RecoveryPosition string
+
+const (
+	RecoveryReady         RecoveryPosition = &quot;recorded_ready&quot;
+	RecoveryReviewPending RecoveryPosition = &quot;review_pending&quot;
+	RecoveryTerminal      RecoveryPosition = &quot;terminal&quot;
+	RecoveryExhausted     RecoveryPosition = &quot;budget_exhausted&quot;
+)
+
+// RecoveryPlan is a read-only description of one loaded record, not permission
+// to execute or a restored Run. Record retains the store&#x27;s observed Version.
+type RecoveryPlan struct {
+	Position RecoveryPosition
+	Record   StoredCheckpoint
+}
+
+// recoveryRecordValid performs limited consistency checks, not complete replay,
+// provenance verification, schema migration or external-effect reconciliation.
+func recoveryRecordValid(v StoredCheckpoint, runID string) bool {
+	cp := v.Checkpoint
+	s := cp.State
+	if v.Version == 0 || s.RunID != runID || !validateCandidate(cp) || len(s.Messages) == 0 || s.Messages[0].Role != &quot;user&quot; {
+		return false
+	}
+	last := s.Messages[len(s.Messages)-1]
+	if s.Phase == Completed {
+		return len(s.Pending) == 0 &amp;&amp; last.Role == &quot;assistant&quot; &amp;&amp; len(last.ToolCalls) == 0 &amp;&amp; s.Result == last.Content
+	}
+	if s.Phase == Ready {
+		return len(s.Pending) == 0 &amp;&amp; len(last.ToolCalls) == 0
+	}
+	if s.Phase == ToolsPending &amp;&amp; len(s.Pending) == 0 {
+		return false
+	}
+	if len(s.Pending) &gt; 0 {
+		if last.Role != &quot;assistant&quot; || len(last.ToolCalls) != len(s.Pending) {
+			return false
+		}
+		ids := map[string]bool{}
+		for i, c := range s.Pending {
+			h := last.ToolCalls[i]
+			if c.ID == &quot;&quot; || strings.TrimSpace(c.Name) == &quot;&quot; || ids[c.ID] || c.ID != h.ID || c.Name != h.Name || !bytes.Equal(c.Arguments, h.Arguments) {
+				return false
+			}
+			ids[c.ID] = true
+		}
+	}
+	return true
+}
+
+// PlanRecovery loads exactly once; never Save, Apply, Generate or Invoke.
+// Pre-cancelled contexts cause no Load. Cancellation observed after Load wins over
+// any returned value/error. Later cancellation can still follow a successful read.
+// The injected store must support the caller&#x27;s concurrency and owned return data.
+func PlanRecovery(ctx context.Context, store CheckpointStore, runID string) (RecoveryPlan, error) {
+	if err := storeContext(ctx); err != nil {
+		return RecoveryPlan{}, err
+	}
+	if store == nil || strings.TrimSpace(runID) == &quot;&quot; {
+		return RecoveryPlan{}, ErrInvalidCheckpoint
+	}
+	v, err := store.Load(ctx, runID)
+	if cancelErr := ctx.Err(); cancelErr != nil {
+		return RecoveryPlan{}, cancelErr
+	}
+	if err != nil {
+		return RecoveryPlan{}, err
+	}
+	if !recoveryRecordValid(v, runID) {
+		return RecoveryPlan{}, ErrInvalidCheckpoint
+	}
+	position := RecoveryTerminal
+	switch v.Checkpoint.State.Phase {
+	case Ready:
+		position = RecoveryReady
+		if v.Checkpoint.State.Step &gt;= v.Checkpoint.State.MaxSteps {
+			position = RecoveryExhausted
+		}
+	case ToolsPending:
+		position = RecoveryReviewPending
+	}
+	return RecoveryPlan{Position: position, Record: cloneStored(v)}, nil
+}
+</code></pre></details></section><section><h2>完整测试：测试练习internal实现</h2><p>包含真实内存装配、四种依据、整批阻塞、输入/返回所有权和并发。没有外部后端；去重契约来自测试输入，不是已经完成的生产验证。</p><h3 class="file-label">新增 · internal/runstate/day20_contract_test.go</h3><p class="download"><a href="exercises/day20/tests/internal/runstate/day20_contract_test.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="tests" data-source="day20/tests/internal/runstate/day20_contract_test.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day20-tests-internal-runstate-day20_contract_test-go-txt"><code>package runstate_test
+
+import (
+	&quot;context&quot;
+	&quot;errors&quot;
+	&quot;fmt&quot;
+	&quot;reflect&quot;
+	&quot;sync&quot;
+	&quot;testing&quot;
+	&quot;time&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/runstate&quot;
+)
+
+func recovery20(t *testing.T, n int) (*runstate.Run, *runstate.MemoryCheckpointStore, runstate.RecoveryPlan) {
+	t.Helper()
+	ctx := context.Background()
+	r, e := runstate.NewRun(ctx, &quot;r20&quot;, &quot;读取文档&quot;, 3)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = r.Apply(runstate.Event{Kind: runstate.StartModel}); e != nil {
+		t.Fatal(e)
+	}
+	calls := make([]model.ToolCall, n)
+	for i := range calls {
+		calls[i] = model.ToolCall{ID: fmt.Sprintf(&quot;call-%d&quot;, i+1), Name: &quot;get_document&quot;, Arguments: []byte(fmt.Sprintf(`{&quot;id&quot;:&quot;doc-%d&quot;}`, i+1))}
+	}
+	if _, e = r.Apply(runstate.Event{Kind: runstate.ModelReturned, Response: &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, ToolCalls: calls}}}); e != nil {
+		t.Fatal(e)
+	}
+	cp, e := r.Checkpoint()
+	if e != nil {
+		t.Fatal(e)
+	}
+	s := runstate.NewMemoryCheckpointStore()
+	if _, e = s.Save(ctx, cp, 0); e != nil {
+		t.Fatal(e)
+	}
+	p, e := runstate.PlanRecovery(ctx, s, &quot;r20&quot;)
+	if e != nil {
+		t.Fatal(e)
+	}
+	return r, s, p
+}
+func evidence20(p runstate.RecoveryPlan, bases ...runstate.ReplayBasis) runstate.ReplayEvidenceSet {
+	e := runstate.ReplayEvidenceSet{RunID: &quot;r20&quot;, Version: p.Record.Version, Calls: make([]runstate.ReplayEvidence, len(bases))}
+	for i, b := range bases {
+		call := p.Record.Checkpoint.State.Pending[i]
+		e.Calls[i] = runstate.ReplayEvidence{Call: call, Basis: b}
+		if b == runstate.BasisResultKnown {
+			e.Calls[i].Result = &amp;model.Message{Role: &quot;tool&quot;, ToolCallID: call.ID, Content: &quot;已确认正文&quot;}
+		}
+		if b == runstate.BasisBackendDedup {
+			e.Calls[i].IdempotencyKey = fmt.Sprintf(&quot;host-key-%d&quot;, i+1)
+		}
+	}
+	return e
+}
+func replayZero20(t *testing.T, p runstate.ReplayPlan, e, want error) {
+	t.Helper()
+	if !errors.Is(e, want) || !reflect.DeepEqual(p, runstate.ReplayPlan{}) {
+		t.Fatal(p, e, want)
+	}
+}
+func TestDay20DecisionsAndPurity(t *testing.T) {
+	r, s, source := recovery20(t, 4)
+	before := r.Snapshot()
+	evidence := evidence20(source, runstate.BasisUnknown, runstate.BasisNotStarted, runstate.BasisResultKnown, runstate.BasisBackendDedup)
+	p, e := runstate.PlanReplay(context.Background(), source, evidence)
+	if e != nil || !p.Blocked || len(p.Steps) != 4 || !reflect.DeepEqual(p.Record, source.Record) {
+		t.Fatal(p, e)
+	}
+	wants := []runstate.ReplayAction{runstate.ActionHold, runstate.ActionInvoke, runstate.ActionReuse, runstate.ActionInvoke}
+	for i, want := range wants {
+		if p.Steps[i].Action != want || p.Steps[i].Call.ID != fmt.Sprintf(&quot;call-%d&quot;, i+1) {
+			t.Fatal(p)
+		}
+	}
+	if p.Steps[0].Result != nil || p.Steps[1].IdempotencyKey != &quot;&quot; || p.Steps[2].Result.Content != &quot;已确认正文&quot; || p.Steps[3].IdempotencyKey != &quot;host-key-4&quot; {
+		t.Fatal(p)
+	}
+	evidence.Calls[0].Basis = runstate.BasisNotStarted
+	p, e = runstate.PlanReplay(context.Background(), source, evidence)
+	if e != nil || p.Blocked {
+		t.Fatal(p, e)
+	}
+	after, e := s.Load(context.Background(), &quot;r20&quot;)
+	if e != nil || after.Version != 1 || !reflect.DeepEqual(after, source.Record) || !reflect.DeepEqual(before, r.Snapshot()) {
+		t.Fatal(after, e)
+	}
+	// A controlled tool-error message is also an accepted confirmed result.
+	evidence.Calls[2].Result.Content = &quot;execution_failed: controlled failure&quot;
+	p, e = runstate.PlanReplay(context.Background(), source, evidence)
+	if e != nil || p.Steps[2].Action != runstate.ActionReuse || p.Steps[2].Result.Content != evidence.Calls[2].Result.Content {
+		t.Fatal(p, e)
+	}
+}
+func TestDay20InvalidRecovery(t *testing.T) {
+	_, _, source := recovery20(t, 1)
+	evidence := evidence20(source, runstate.BasisUnknown)
+	for _, pos := range []runstate.RecoveryPosition{runstate.RecoveryReady, runstate.RecoveryTerminal, runstate.RecoveryExhausted, &quot;&quot;} {
+		bad := source
+		bad.Position = pos
+		p, e := runstate.PlanReplay(context.Background(), bad, evidence)
+		replayZero20(t, p, e, runstate.ErrInvalidCheckpoint)
+	}
+	for _, mutate := range []func(*runstate.RecoveryPlan){
+		func(p *runstate.RecoveryPlan) { p.Record.Version = 0 },
+		func(p *runstate.RecoveryPlan) {
+			p.Record.Checkpoint.State.Phase = runstate.Cancelled
+			p.Record.Checkpoint.Boundary = runstate.CheckpointTerminal
+		},
+		func(p *runstate.RecoveryPlan) { p.Record.Checkpoint.State.Messages = nil },
+		func(p *runstate.RecoveryPlan) { p.Record.Checkpoint.State.Pending[0].ID = &quot;wrong&quot; },
+	} {
+		bad := source
+		bad.Record.Checkpoint = source.Record.Checkpoint.Clone()
+		mutate(&amp;bad)
+		p, e := runstate.PlanReplay(context.Background(), bad, evidence)
+		replayZero20(t, p, e, runstate.ErrInvalidCheckpoint)
+	}
+}
+func TestDay20EvidenceBinding(t *testing.T) {
+	_, _, source := recovery20(t, 2)
+	mutations := []func(*runstate.ReplayEvidenceSet){
+		func(e *runstate.ReplayEvidenceSet) { e.RunID = &quot;other&quot; },
+		func(e *runstate.ReplayEvidenceSet) { e.Version++ },
+		func(e *runstate.ReplayEvidenceSet) { e.Calls = e.Calls[:1] },
+		func(e *runstate.ReplayEvidenceSet) { e.Calls = nil },
+		func(e *runstate.ReplayEvidenceSet) { e.Calls[0], e.Calls[1] = e.Calls[1], e.Calls[0] },
+		func(e *runstate.ReplayEvidenceSet) { e.Calls[0].Call.ID = &quot;other&quot; },
+		func(e *runstate.ReplayEvidenceSet) { e.Calls[0].Call.Name = &quot;other&quot; },
+		func(e *runstate.ReplayEvidenceSet) { e.Calls[0].Call.Arguments = []byte(&quot;changed&quot;) },
+	}
+	for i, mutate := range mutations {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			evidence := evidence20(source, runstate.BasisUnknown, runstate.BasisUnknown)
+			mutate(&amp;evidence)
+			p, e := runstate.PlanReplay(context.Background(), source, evidence)
+			replayZero20(t, p, e, runstate.ErrReplayEvidence)
+		})
+	}
+}
+func TestDay20EvidenceShapes(t *testing.T) {
+	_, _, source := recovery20(t, 2)
+	callID := source.Record.Checkpoint.State.Pending[0].ID
+	rows := []struct {
+		basis  runstate.ReplayBasis
+		result *model.Message
+		key    string
+	}{
+		{&quot;&quot;, nil, &quot;&quot;}, {&quot;invalid&quot;, nil, &quot;&quot;},
+		{runstate.BasisUnknown, nil, &quot;a-key-is-not-proof&quot;},
+		{runstate.BasisUnknown, &amp;model.Message{}, &quot;&quot;},
+		{runstate.BasisNotStarted, nil, &quot;unexpected-key&quot;},
+		{runstate.BasisNotStarted, &amp;model.Message{}, &quot;&quot;},
+		{runstate.BasisResultKnown, nil, &quot;&quot;},
+		{runstate.BasisResultKnown, &amp;model.Message{Role: &quot;assistant&quot;, ToolCallID: callID}, &quot;&quot;},
+		{runstate.BasisResultKnown, &amp;model.Message{Role: &quot;tool&quot;, ToolCallID: &quot;other&quot;}, &quot;&quot;},
+		{runstate.BasisResultKnown, &amp;model.Message{Role: &quot;tool&quot;, ToolCallID: callID, ToolCalls: []model.ToolCall{{ID: &quot;nested&quot;}}}, &quot;&quot;},
+		{runstate.BasisResultKnown, &amp;model.Message{Role: &quot;tool&quot;, ToolCallID: callID}, &quot;unexpected-key&quot;},
+		{runstate.BasisBackendDedup, nil, &quot;&quot;},
+		{runstate.BasisBackendDedup, nil, &quot; &quot;},
+		{runstate.BasisBackendDedup, &amp;model.Message{}, &quot;key&quot;},
+	}
+	for i, row := range rows {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			evidence := evidence20(source, row.basis, runstate.BasisUnknown)
+			evidence.Calls[0].Result = row.result
+			evidence.Calls[0].IdempotencyKey = row.key
+			p, e := runstate.PlanReplay(context.Background(), source, evidence)
+			replayZero20(t, p, e, runstate.ErrReplayEvidence)
+		})
+	}
+	evidence := evidence20(source, runstate.BasisBackendDedup, runstate.BasisBackendDedup)
+	evidence.Calls[1].IdempotencyKey = evidence.Calls[0].IdempotencyKey
+	p, e := runstate.PlanReplay(context.Background(), source, evidence)
+	replayZero20(t, p, e, runstate.ErrReplayEvidence)
+	// Opaque keys are preserved verbatim after rejecting all-whitespace keys.
+	evidence = evidence20(source, runstate.BasisBackendDedup, runstate.BasisNotStarted)
+	evidence.Calls[0].IdempotencyKey = &quot; scoped-key &quot;
+	p, e = runstate.PlanReplay(context.Background(), source, evidence)
+	if e != nil || p.Blocked || p.Steps[0].IdempotencyKey != &quot; scoped-key &quot; {
+		t.Fatal(p, e)
+	}
+}
+func TestDay20Cancellation(t *testing.T) {
+	_, _, source := recovery20(t, 1)
+	evidence := evidence20(source, runstate.BasisUnknown)
+	p, e := runstate.PlanReplay(nil, source, evidence)
+	replayZero20(t, p, e, runstate.ErrInvalidCheckpoint)
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	expired, finish := context.WithDeadline(context.Background(), time.Unix(1, 0))
+	defer finish()
+	for _, tc := range []struct {
+		ctx  context.Context
+		want error
+	}{{canceled, context.Canceled}, {expired, context.DeadlineExceeded}} {
+		p, e = runstate.PlanReplay(tc.ctx, source, evidence)
+		replayZero20(t, p, e, tc.want)
+	}
+}
+func TestDay20OwnershipAndConcurrency(t *testing.T) {
+	_, _, source := recovery20(t, 2)
+	original := source.Record.Checkpoint.Clone()
+	evidence := evidence20(source, runstate.BasisResultKnown, runstate.BasisBackendDedup)
+	p, e := runstate.PlanReplay(context.Background(), source, evidence)
+	if e != nil {
+		t.Fatal(e)
+	}
+	p.Steps[0].Call.Arguments[0] = &#x27;x&#x27;
+	if p.Record.Checkpoint.State.Pending[0].Arguments[0] != &#x27;{&#x27; {
+		t.Fatal(&quot;step aliases Record&quot;)
+	}
+	p.Steps[0].Result.Content = &quot;changed&quot;
+	p.Record.Checkpoint.State.Messages[1].ToolCalls[0].Arguments[0] = &#x27;y&#x27;
+	if evidence.Calls[0].Result.Content != &quot;已确认正文&quot; || !reflect.DeepEqual(original, source.Record.Checkpoint) {
+		t.Fatal(&quot;input modified&quot;)
+	}
+	var wg sync.WaitGroup
+	for i := 0; i &lt; 16; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			p, e := runstate.PlanReplay(context.Background(), source, evidence)
+			if e != nil {
+				t.Error(e)
+				return
+			}
+			if p.Blocked || p.Record.Version != 1 || p.Steps[1].IdempotencyKey != &quot;host-key-2&quot; {
+				t.Error(p)
+			}
+			p.Steps[0].Call.Arguments[0] = &#x27;z&#x27;
+			p.Steps[0].Result.Content = &quot;owned&quot;
+		}()
+	}
+	wg.Wait()
+	if evidence.Calls[0].Result.Content != &quot;已确认正文&quot; || !reflect.DeepEqual(original, source.Record.Checkpoint) {
+		t.Fatal(&quot;shared output&quot;)
+	}
+}
+</code></pre><button type="button" data-copy="day20-tests-internal-runstate-day20_contract_test-go-txt">复制本文件</button></details><pre><code># 练习副本根：先编译，再看TODO红灯
+go test ./internal/runstate -run '^$'
+go test ./internal/runstate -run '^TestDay20' -count=1 -v -timeout 20s</code></pre><p>骨架应能编译；目标应在TODO处失败。缺包、错误import或没有匹配测试不算有效红灯。参考与骨架必须使用同一套行为断言。</p></section>
+<section id="tasks"><h2>80分钟：四步实现同一决策增量</h2>
+<article class="step"><h3>1 · 15分钟：先绑定同一次记录与调用</h3><p><strong>为什么：</strong>不能拿其他运行或旧版本的证据处理当前Pending。<strong>位置：</strong>新增replay.go的PlanReplay入口和字段声明。</p><p><strong>动作：</strong>复用Day19校验，检查ReviewPending/ToolsPending，再按R2匹配记录身份、版本及原调用顺序。不Load、不构造Run。</p><pre><code>go test ./internal/runstate -run '^(TestDay20InvalidRecovery|TestDay20EvidenceBinding)$' -count=1 -v</code></pre><p><strong>完成证据：</strong>错误位置、非法记录和错调用证据均拒绝，返回零计划。</p><details><summary>卡住时提示</summary><p>保存Version用于本次输入绑定，不等于你已经取得最新记录或驱动租约。</p></details></article>
+<article class="step"><h3>2 · 25分钟：把四种依据写成明确分支</h3><p><strong>为什么：</strong>Unknown、已有结果和后端可去重不能合并成“重试”。<strong>位置：</strong>PlanReplay的证据形状与Step生成。</p><p><strong>动作：</strong>沿R3验证Result与键的允许组合；复用原model.ToolCall/Message，保留受控错误结果和原键。拒绝同批键冲突。</p><pre><code>go test ./internal/runstate -run '^TestDay20EvidenceShapes$' -count=1 -v</code></pre><p><strong>完成证据：</strong>键不是证据替代物，错Result/键组合失败；不静默裁剪键或改写模型参数。</p><details><summary>卡住时提示</summary><p>先列“每种Basis允许哪些附加字段”，再决定生成哪个Action。</p></details></article>
+<article class="step"><h3>3 · 20分钟：整批阻塞与只读边界</h3><p><strong>为什么：</strong>前项建议可处理，不意味着后项未知时能先执行半批。<strong>位置：</strong>PlanReplay的Blocked与最终返回。</p><p><strong>动作：</strong>用四个doc调用走一遍图；一项Unknown使整批Blocked，证据错误则零计划。检查原Run和Store记录保持不变。</p><pre><code>go test ./internal/runstate -run '^(TestDay20DecisionsAndPurity|TestDay20Cancellation)$' -count=1 -v</code></pre><p><strong>完成证据：</strong>正确保留逐项建议，未知阻塞，取消返回原错误；没有实际执行或部分回填。</p><details><summary>卡住时提示</summary><p>合法Unknown是可展示的决策；非法证据是函数错误，两种结果不要混用。</p></details></article>
+<article class="step"><h3>4 · 20分钟：副本与并发不串数据</h3><p><strong>为什么：</strong>返回步骤中的Call和Result不能污染保存记录或证据。<strong>位置：</strong>PlanReplay输出构造。</p><p><strong>动作：</strong>沿R5复用cloneCalls/cloneMessages/cloneStored；画Record、Steps和证据的引用关系。16个并发决策各改自己的返回值；全绿后重构并回归。</p><pre><code>go test ./internal/runstate -run '^TestDay20OwnershipAndConcurrency$' -count=1 -v
+go test -race ./internal/runstate -run '^TestDay20' -count=1</code></pre><p><strong>完成证据：</strong>Step.Call不与Record.Pending共享字节，Result指针不指回证据，并发无race。</p><details><summary>卡住时提示</summary><p>runstate已有cloneMessages（复数），不要引用另一个包的同名私有辅助函数；练习import始终指向根internal。</p></details></article></section>
+<section><h2>20分钟测试与复盘</h2><div class="time">12分钟 · 目标与累计回归</div><pre><code># 练习副本根
+go test ./internal/runstate -run '^TestDay20' -count=1 -v -timeout 20s
+go test -race ./internal/runstate -timeout 30s
+go test ./internal/... -timeout 60s
+# 参考仓库根
+go test ./examples/...
+go test -race ./examples/...</code></pre><p>这些是建议练习命令，不代表学习者已经执行。参考验证不能替代自己的实现验收。</p>
+<div class="time">8分钟 · 合上代码回答</div><ol><li>讲清RecoveryPlan、证据、ReplayPlan和执行适配的数据流，哪些位置没有I/O？</li><li>为什么CallID、Version或一个随机键都不能单独提供幂等性？</li><li>如果后端键过期，或不支持结果查询，应改变哪层证据？能否继续BackendDedup？</li><li>未阻塞计划距真正执行还缺哪些归属、授权、键传输和保存确认？</li></ol>
+<h3>完成定义</h3><p><strong>实作：</strong>依据/绑定/形状、阻塞、取消、只读与副本测试通过，记录累计真实结果。</p><p><strong>理解：</strong>不用代码解释Unknown为何不能自动升级，能指出后端契约与本地校验的区别；换后端时知道改证据来源/适配层而非模型参数算法。</p>
+<h3>本次发布验证</h3><p class="note">Go1.22.2 linux/amd64：最终原样骨架编译通过、目标在TODO处按预期失败；同一完整测试对隔离internal参考通过（含race），兼容副本累计回归通过。仓库根examples普通/race均退出码0。学习者原实现、真实证据来源/后端去重、键传输、持久性及自动恢复执行未验证。</p><p><a href="exercises/day20/verification.json">红绿与累计测试记录</a> · <a href="exercises/day20/browser-verification.json">离线浏览器记录</a></p>
+<h3>学习清单</h3><div class="meta"><span>本浏览器自评进度</span><span id="count">0 / 8</span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="fill" class="fill"></div></div><div id="checks"></div><noscript><p>关闭脚本仍可离线阅读图、骨架、测试和答案，清单不自动保存。</p></noscript></section>
+<section id="answer"><h2>最后再看：兼容参考答案</h2><p>练习import为根internal，累计参考为examples/internal；仅映射路径前缀，测试断言一致。先独立实现，再比较取舍。</p><h3 class="file-label">参考 · internal/runstate/replay.go</h3><p class="download"><a href="exercises/day20/reference/internal/runstate/replay.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="reference" data-source="day20/reference/internal/runstate/replay.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day20-reference-internal-runstate-replay-go-txt"><code>package runstate
+
+import (
+	&quot;bytes&quot;
+	&quot;context&quot;
+	&quot;errors&quot;
+	&quot;strings&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+)
+
+type ReplayBasis string
+
+const (
+	BasisUnknown      ReplayBasis = &quot;unknown&quot;
+	BasisNotStarted   ReplayBasis = &quot;not_started&quot;
+	BasisResultKnown  ReplayBasis = &quot;result_known&quot;
+	BasisBackendDedup ReplayBasis = &quot;backend_dedup&quot;
+)
+
+type ReplayAction string
+
+const (
+	ActionHold   ReplayAction = &quot;hold&quot;
+	ActionInvoke ReplayAction = &quot;invoke&quot;
+	ActionReuse  ReplayAction = &quot;reuse_result&quot;
+)
+
+var ErrReplayEvidence = errors.New(&quot;runstate: invalid replay evidence&quot;)
+
+// Evidence is a trusted host assertion, not model output or a verified backend
+// receipt. BackendDedup means the host has separately verified key scope,
+// payload binding, validity window and same-operation replay behavior.
+type ReplayEvidence struct {
+	Call           model.ToolCall
+	Basis          ReplayBasis
+	Result         *model.Message
+	IdempotencyKey string
+}
+type ReplayEvidenceSet struct {
+	RunID   string
+	Version uint64
+	Calls   []ReplayEvidence
+}
+type ReplayStep struct {
+	Call           model.ToolCall
+	Action         ReplayAction
+	Result         *model.Message
+	IdempotencyKey string
+}
+type ReplayPlan struct {
+	Record  StoredCheckpoint
+	Steps   []ReplayStep
+	Blocked bool // any Hold blocks the entire batch before effects/history updates
+}
+
+// PlanReplay is pure decision logic. It never loads/saves, invokes tools or
+// grants a lease. Even an unblocked plan needs fresh ownership/authorization.
+// Inputs must remain immutable while it runs; returned nested data is owned.
+func PlanReplay(ctx context.Context, recovery RecoveryPlan, evidence ReplayEvidenceSet) (ReplayPlan, error) {
+	if err := storeContext(ctx); err != nil {
+		return ReplayPlan{}, err
+	}
+	record := recovery.Record
+	if recovery.Position != RecoveryReviewPending || record.Checkpoint.State.Phase != ToolsPending || !recoveryRecordValid(record, record.Checkpoint.State.RunID) {
+		return ReplayPlan{}, ErrInvalidCheckpoint
+	}
+	calls := record.Checkpoint.State.Pending
+	if evidence.RunID != record.Checkpoint.State.RunID || evidence.Version != record.Version || len(evidence.Calls) != len(calls) {
+		return ReplayPlan{}, ErrReplayEvidence
+	}
+	out := ReplayPlan{Record: cloneStored(record), Steps: make([]ReplayStep, len(calls))}
+	keys := map[string]bool{}
+	for i, c := range calls {
+		if err := ctx.Err(); err != nil {
+			return ReplayPlan{}, err
+		}
+		e := evidence.Calls[i]
+		if e.Call.ID != c.ID || e.Call.Name != c.Name || !bytes.Equal(e.Call.Arguments, c.Arguments) {
+			return ReplayPlan{}, ErrReplayEvidence
+		}
+		step := ReplayStep{Call: cloneCalls([]model.ToolCall{c})[0]}
+		switch e.Basis {
+		case BasisUnknown:
+			if e.Result != nil || e.IdempotencyKey != &quot;&quot; {
+				return ReplayPlan{}, ErrReplayEvidence
+			}
+			step.Action = ActionHold
+			out.Blocked = true
+		case BasisNotStarted:
+			if e.Result != nil || e.IdempotencyKey != &quot;&quot; {
+				return ReplayPlan{}, ErrReplayEvidence
+			}
+			step.Action = ActionInvoke
+		case BasisResultKnown:
+			if e.Result == nil || e.Result.Role != &quot;tool&quot; || e.Result.ToolCallID != c.ID || len(e.Result.ToolCalls) != 0 || e.IdempotencyKey != &quot;&quot; {
+				return ReplayPlan{}, ErrReplayEvidence
+			}
+			msg := cloneMessages([]model.Message{*e.Result})[0]
+			step.Action = ActionReuse
+			step.Result = &amp;msg
+		case BasisBackendDedup:
+			if e.Result != nil || strings.TrimSpace(e.IdempotencyKey) == &quot;&quot; || keys[e.IdempotencyKey] {
+				return ReplayPlan{}, ErrReplayEvidence
+			}
+			keys[e.IdempotencyKey] = true
+			step.Action = ActionInvoke
+			step.IdempotencyKey = e.IdempotencyKey
+		default:
+			return ReplayPlan{}, ErrReplayEvidence
+		}
+		out.Steps[i] = step
+	}
+	if err := ctx.Err(); err != nil {
+		return ReplayPlan{}, err
+	}
+	return out, nil
+}
+</code></pre><button type="button" data-copy="day20-reference-internal-runstate-replay-go-txt">复制本文件</button></details><h3>Day21怎样做第三周复盘？</h3><p>今天把记录判读与重放证据衔接，仍然没有自动执行。明天以整周装配与故障场景检验状态、捕获、存储、判读和决策之间的接口，明确持久性、执行归属及后端确认尚未实现的边界。</p></section>
+<footer><nav class="page-navigation" aria-label="页面导航"><a class="page-nav-button" href="agent-runtime-day-19.html">上一项</a><a class="page-nav-button" href="../../index.html">返回主页</a><span class="page-nav-button is-disabled" aria-disabled="true">下一项</span></nav><p class="page-meta">Day20 / 56 · 第三周 · 正文、图示、骨架与完整测试离线可读</p></footer></main><script>
+const items=["用自己的话解释当天三个概念", "根据两张图讲清输入、职责和返回", "完成官方阅读并写下问题答案", "确认骨架可编译且目标出现预期红灯", "按任务卡逐步完成当天实现", "完整目标与 race 测试通过", "记录累计回归实际结果和未验证项", "合上代码完成需求变化与失败边界复盘"];const key="mini-agent-runtime-day-20-tdd-v1";
+let saved=[];try{const value=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(value))saved=value}catch(_){}
+const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const percent=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=percent+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(percent))}
+items.forEach((s,i)=>{const row=document.createElement("div");row.className="check";const input=document.createElement("input");input.type="checkbox";input.id="task-"+i;input.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=input.id;label.textContent=s;row.append(input,label);box.append(row);input.onchange=()=>{saved[i]=input.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+document.querySelectorAll("button[data-copy]").forEach(button=>button.addEventListener("click",async()=>{const target=document.getElementById(button.dataset.copy);try{await navigator.clipboard.writeText(target.textContent);button.textContent="已复制"}catch(_){const range=document.createRange();range.selectNodeContents(target);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);button.textContent="已选中，请手动复制"}}));
+</script></body></html>

@@ -315,3 +315,31 @@ Position只描述一次Load观察，不是执行归属、新鲜度、授权或�
 ### 交付与真实验证
 新增完整TODO、测试、Day15–18四个支持附件和参考；manifest/prepare/verify扩展至19，固定baseline不变，根internal/cmd不读不改。测试覆盖全部位置、非法记录、缺失/Store错误链、输入、取消/迟到返回、无写入、所有权与并发。
 Go1.22.2下原样骨架编译通过，目标因TODO失败；相同测试对隔离internal参考通过含race，兼容副本累计回归通过；当前examples普通/race通过。学习者原实现、真实存储/模型/网络、完整可信恢复与跨进程恢复执行未验证。
+
+## Day20 增量：重放依据与整批决策
+
+### 新增与兼容
+- 新增ReplayBasis：BasisUnknown="unknown"、BasisNotStarted="not_started"、BasisResultKnown="result_known"、BasisBackendDedup="backend_dedup"。
+- 新增ReplayAction：ActionHold="hold"、ActionInvoke="invoke"、ActionReuse="reuse_result"。
+- 新增ReplayEvidence{Call model.ToolCall; Basis ReplayBasis; Result *model.Message; IdempotencyKey string}，ReplayEvidenceSet{RunID string; Version uint64; Calls []ReplayEvidence}。
+- 新增ReplayStep{Call model.ToolCall; Action ReplayAction; Result *model.Message; IdempotencyKey string}，ReplayPlan{Record StoredCheckpoint; Steps []ReplayStep; Blocked bool}。
+- 新增PlanReplay(context.Context,RecoveryPlan,ReplayEvidenceSet)(ReplayPlan,error)及ErrReplayEvidence。复用Day15–19消息、记录、校验/克隆和原ErrInvalidCheckpoint，不修改旧Agent/Run/工具/存储接口，不新建module。
+
+### 输入、绑定与形状
+- 先检查nilctx/ctx.Err；只接受RecoveryReviewPending且记录Phase=ToolsPending并通过Day19有限校验，否则ErrInvalidCheckpoint。证据RunID/Version精确等于Record，Calls条数/顺序/ID/Name/Arguments字节与Pending对应，否则ErrReplayEvidence。
+- Unknown及NotStarted要求Result=nil、键为空，分别Hold/Invoke。零或未知Basis非法，不自动当作已确认事实。
+- ResultKnown要求Result非nil、Role=tool、ToolCallID匹配、无ToolCalls、键为空；Reuse保留已确认tool消息，包括已接纳的受控业务失败。
+- BackendDedup要求Result=nil、键非全空白且同批不重复；Invoke保留键原字符串。键不裁剪，不放入模型Arguments；bytes.Equal比较参数，不做JSON规范化。
+- 合法Unknown是完整计划中的阻塞而非函数错误；任一Hold使整批Blocked=true。非法证据/输入返回零ReplayPlan，不泄漏部分计划。
+
+### 纯决策、证据权威与所有权
+- 不Load/Save/Apply/Generate/Invoke，不清Pending、不改Version/Step/历史，也不取得租约或恢复Run。宿主先检查error和Blocked，在整批通过前不能执行或部分回填。
+- Basis来自可信宿主核验，不信任模型、工具注解或readOnly推导。NotStarted需要肯定未开始证据与另行处理的执行归属；空台账/暂未查到/缺少结果不够。
+- BackendDedup意味着宿主在外部核验键的主体/租户/接口作用域、同一载荷绑定、有效期及重复操作行为。枚举与键本身不能创造后端幂等性，本函数只校验声明形状，不验证真实性。
+- Record/证据的旧版本可能仍相互匹配，不能推出新鲜度；未阻塞计划也不是授权或归属证明。旧Tool.Execute/Invoke没有通用键参数，本日未实现后端键传输；丢弃键调用旧接口不满足建议前提。
+- 返回Record、Steps.Call、Result深拷贝，彼此与输入不共享可变引用。输入在处理期间不得并发修改；16个只读并发决策可各自修改输出。
+- context在入口、每项及结束时采样；观察到取消/截止时间保留原错误，所有错误零计划。最后检查后仍可取消。函数无外部依赖，不产生存储/工具故障；证据取得与实际执行需要各自的I/O契约。
+
+### 交付与真实验证
+新增练习internal/runstate/replay.go、完整测试，参考examples/internal/runstate/replay.go/replay_test.go；仅映射import前缀。提供Day15–19五个支持文件、manifest20及prepare/verify日期支持；固定baseline及根internal/cmd不修改。
+Go1.22.2下最终骨架可编译，目标在TODO处失败；同一行为测试对隔离internal兼容参考通过含race，兼容副本累计回归通过。当前examples普通/race均通过。未验证真实后端/键传输、可信证据来源、持久性、exactly-once、租约或自动恢复执行。

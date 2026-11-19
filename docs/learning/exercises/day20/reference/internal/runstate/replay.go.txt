@@ -1,0 +1,118 @@
+package runstate
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"strings"
+
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+)
+
+type ReplayBasis string
+
+const (
+	BasisUnknown      ReplayBasis = "unknown"
+	BasisNotStarted   ReplayBasis = "not_started"
+	BasisResultKnown  ReplayBasis = "result_known"
+	BasisBackendDedup ReplayBasis = "backend_dedup"
+)
+
+type ReplayAction string
+
+const (
+	ActionHold   ReplayAction = "hold"
+	ActionInvoke ReplayAction = "invoke"
+	ActionReuse  ReplayAction = "reuse_result"
+)
+
+var ErrReplayEvidence = errors.New("runstate: invalid replay evidence")
+
+// Evidence is a trusted host assertion, not model output or a verified backend
+// receipt. BackendDedup means the host has separately verified key scope,
+// payload binding, validity window and same-operation replay behavior.
+type ReplayEvidence struct {
+	Call           model.ToolCall
+	Basis          ReplayBasis
+	Result         *model.Message
+	IdempotencyKey string
+}
+type ReplayEvidenceSet struct {
+	RunID   string
+	Version uint64
+	Calls   []ReplayEvidence
+}
+type ReplayStep struct {
+	Call           model.ToolCall
+	Action         ReplayAction
+	Result         *model.Message
+	IdempotencyKey string
+}
+type ReplayPlan struct {
+	Record  StoredCheckpoint
+	Steps   []ReplayStep
+	Blocked bool // any Hold blocks the entire batch before effects/history updates
+}
+
+// PlanReplay is pure decision logic. It never loads/saves, invokes tools or
+// grants a lease. Even an unblocked plan needs fresh ownership/authorization.
+// Inputs must remain immutable while it runs; returned nested data is owned.
+func PlanReplay(ctx context.Context, recovery RecoveryPlan, evidence ReplayEvidenceSet) (ReplayPlan, error) {
+	if err := storeContext(ctx); err != nil {
+		return ReplayPlan{}, err
+	}
+	record := recovery.Record
+	if recovery.Position != RecoveryReviewPending || record.Checkpoint.State.Phase != ToolsPending || !recoveryRecordValid(record, record.Checkpoint.State.RunID) {
+		return ReplayPlan{}, ErrInvalidCheckpoint
+	}
+	calls := record.Checkpoint.State.Pending
+	if evidence.RunID != record.Checkpoint.State.RunID || evidence.Version != record.Version || len(evidence.Calls) != len(calls) {
+		return ReplayPlan{}, ErrReplayEvidence
+	}
+	out := ReplayPlan{Record: cloneStored(record), Steps: make([]ReplayStep, len(calls))}
+	keys := map[string]bool{}
+	for i, c := range calls {
+		if err := ctx.Err(); err != nil {
+			return ReplayPlan{}, err
+		}
+		e := evidence.Calls[i]
+		if e.Call.ID != c.ID || e.Call.Name != c.Name || !bytes.Equal(e.Call.Arguments, c.Arguments) {
+			return ReplayPlan{}, ErrReplayEvidence
+		}
+		step := ReplayStep{Call: cloneCalls([]model.ToolCall{c})[0]}
+		switch e.Basis {
+		case BasisUnknown:
+			if e.Result != nil || e.IdempotencyKey != "" {
+				return ReplayPlan{}, ErrReplayEvidence
+			}
+			step.Action = ActionHold
+			out.Blocked = true
+		case BasisNotStarted:
+			if e.Result != nil || e.IdempotencyKey != "" {
+				return ReplayPlan{}, ErrReplayEvidence
+			}
+			step.Action = ActionInvoke
+		case BasisResultKnown:
+			if e.Result == nil || e.Result.Role != "tool" || e.Result.ToolCallID != c.ID || len(e.Result.ToolCalls) != 0 || e.IdempotencyKey != "" {
+				return ReplayPlan{}, ErrReplayEvidence
+			}
+			msg := cloneMessages([]model.Message{*e.Result})[0]
+			step.Action = ActionReuse
+			step.Result = &msg
+		case BasisBackendDedup:
+			if e.Result != nil || strings.TrimSpace(e.IdempotencyKey) == "" || keys[e.IdempotencyKey] {
+				return ReplayPlan{}, ErrReplayEvidence
+			}
+			keys[e.IdempotencyKey] = true
+			step.Action = ActionInvoke
+			step.IdempotencyKey = e.IdempotencyKey
+		default:
+			return ReplayPlan{}, ErrReplayEvidence
+		}
+		out.Steps[i] = step
+	}
+	if err := ctx.Err(); err != nil {
+		return ReplayPlan{}, err
+	}
+	return out, nil
+}
