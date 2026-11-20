@@ -343,3 +343,30 @@ Go1.22.2下原样骨架编译通过，目标因TODO失败；相同测试对隔�
 ### 交付与真实验证
 新增练习internal/runstate/replay.go、完整测试，参考examples/internal/runstate/replay.go/replay_test.go；仅映射import前缀。提供Day15–19五个支持文件、manifest20及prepare/verify日期支持；固定baseline及根internal/cmd不修改。
 Go1.22.2下最终骨架可编译，目标在TODO处失败；同一行为测试对隔离internal兼容参考通过含race，兼容副本累计回归通过。当前examples普通/race均通过。未验证真实后端/键传输、可信证据来源、持久性、exactly-once、租约或自动恢复执行。
+
+## Day21 增量：第三周只读审查装配
+
+### 新增与兼容
+- 新增assembly.ReplayEvidenceSource接口：Evidence(context.Context,runstate.StoredCheckpoint)(runstate.ReplayEvidenceSet,error)。
+- 新增Week03Report{Recovery runstate.RecoveryPlan; Replay *runstate.ReplayPlan}、ErrEvidenceSourceRequired及ReviewWeek03(context.Context,runstate.CheckpointStore,ReplayEvidenceSource,string)(Week03Report,error)。
+- 复用Day15–20全部runstate类型/规则；旧assembly.Build/Config/Runtime、Agent、消息、工具与Store接口不变。新入口是宿主composition root，不是新Runtime协议。
+
+### 调用顺序、分支与错误
+- 委托PlanRecovery完成输入检查和一次Load，保留原错误，不重试。成功后检查ctx.Err。
+- 非RecoveryReviewPending直接返回完整Recovery和nil Replay，不调用Source；此时source可nil。Ready/Exhausted/Terminal不产生执行建议，终态Pending保留。
+- ReviewPending要求有效非nil Source接口，否则返回ErrEvidenceSourceRequired。将Recovery.Record的Checkpoint深拷贝后交给Source一次，传同一ctx。
+- Evidence返回后先检查ctx.Err，观察到取消/截止时间时优先拒收迟到值及来源错误；否则来源错误原样保留errors.Is/As，再委托PlanReplay校验并决策。所有失败返回零Week03Report，无半份报告。
+- 合法Unknown产生Blocked Replay而非依赖错误。旧Version/参数错配仍由PlanReplay返回ErrReplayEvidence；不补版本、不Save或重试。
+- 不Save、Apply、Generate、Invoke、不构造恢复Run、不改变Version/Step/历史。最后取消检查之后仍可能取消，依赖必须合作取消，不强杀goroutine。
+
+### 所有权与宿主边界
+Source收到独立记录副本；来源修改其输入不污染Recovery。Replay由PlanReplay提供独立记录与步骤，Report两字段、Store、Source及各返回值不共享可变缓冲区。可并发审查，前提是注入Store/Source支持并发，且来源在调用方处理返回证据时不并发改写缓冲区。
+
+EvidenceSource是可信宿主端口，应遵守只读核验约定；适配器自身I/O、身份与证据真实性不由ReviewWeek03证明。接口既不授予执行权，也不证明后端去重/持久性；MemoryStore仍无跨进程可靠性。旧Agent观测链未整合到纯状态链。
+
+### 交付、矩阵与真实验证
+新增练习internal/assembly/week03.go、完整集成测试；参考examples/internal/assembly/week03.go/week03_test.go，只映射import前缀，不混用model类型。提供Day15–20六个runstate支持文件、manifest21及prepare/verify日期支持，固定baseline与根internal/cmd不改，共享原go.mod。
+
+矩阵8个子场景：Ready、预算耗尽、Completed、Failed+Pending、Cancelled+Pending、Unknown阻塞、结果+后端去重、NotStarted。另覆盖Store/Source错误链、缺失Source、旧证据/非法记录、取消前后边界、副本隔离及16个并发审查。检查Load/Evidence次数、Save=0、Run/Store前后不变。
+
+官方Go1.22.2下最终原样骨架可编译，目标因TODO失败；同一测试对隔离internal兼容参考通过含race，兼容副本累计回归及仓库根go test ./examples/...、go test -race ./examples/...均通过。未读取/验证学习者原实现、真实网络/模型、持久存储、确认服务、后端去重/键传输、执行租约或自动恢复。

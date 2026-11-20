@@ -1,0 +1,55 @@
+package assembly
+
+import (
+	"context"
+	"errors"
+
+	"github.com/linko-zhao/mini-agent-runtime/internal/runstate"
+)
+
+// ReplayEvidenceSource is a trusted host adapter, not a model/tool assertion.
+// It must cooperate with context and support the intended concurrency.
+type ReplayEvidenceSource interface {
+	Evidence(context.Context, runstate.StoredCheckpoint) (runstate.ReplayEvidenceSet, error)
+}
+
+var ErrEvidenceSourceRequired = errors.New("assembly: pending review requires an evidence source")
+
+type Week03Report struct {
+	Recovery runstate.RecoveryPlan
+	Replay   *runstate.ReplayPlan // nil for Ready, Exhausted or Terminal
+}
+
+// ReviewWeek03 composes the Week03 read-only path; it does not restore or execute.
+// Exactly one Load is delegated to PlanRecovery. Only ReviewPending consults the
+// source once, using a separate record copy, then delegates to PlanReplay.
+// Every failure returns a zero report; dependency errors preserve their chains.
+func ReviewWeek03(ctx context.Context, store runstate.CheckpointStore, source ReplayEvidenceSource, runID string) (Week03Report, error) {
+	recovery, err := runstate.PlanRecovery(ctx, store, runID)
+	if err != nil {
+		return Week03Report{}, err
+	}
+	if err = ctx.Err(); err != nil {
+		return Week03Report{}, err
+	}
+	if recovery.Position != runstate.RecoveryReviewPending {
+		return Week03Report{Recovery: recovery}, nil
+	}
+	if source == nil {
+		return Week03Report{}, ErrEvidenceSourceRequired
+	}
+	input := recovery.Record
+	input.Checkpoint = input.Checkpoint.Clone()
+	evidence, err := source.Evidence(ctx, input)
+	if cancelErr := ctx.Err(); cancelErr != nil {
+		return Week03Report{}, cancelErr
+	}
+	if err != nil {
+		return Week03Report{}, err
+	}
+	replay, err := runstate.PlanReplay(ctx, recovery, evidence)
+	if err != nil {
+		return Week03Report{}, err
+	}
+	return Week03Report{Recovery: recovery, Replay: &replay}, nil
+}

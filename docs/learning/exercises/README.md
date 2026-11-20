@@ -130,3 +130,11 @@ main 在本批讲义准备期间新增了 agent.RunWithState、RunSnapshot 与�
 原仓库根运行 `python3 docs/learning/exercises/prepare.py 20`，进入打印的仓库外副本。编译 `go test ./internal/runstate -run '^$'`；红灯 `go test ./internal/runstate -run '^TestDay20' -count=1 -v`。参考仍位于examples/internal，骨架与附件测试使用根internal，不混用包类型，全部共享原go.mod。
 
 重跑 `python3 docs/learning/exercises/verify.py --go /你的Go/bin/go --days 20 --report /tmp/day20-verification.json`。见[最终红绿/累计验证](day20/verification.json)和[离线页面检查](day20/browser-verification.json)。学习者原实现不读不改，真实后端去重与自动恢复未验证。
+
+## Day21：第三周集成复盘
+
+[Day21页面](../agent-runtime-day-21.html) 提供宿主ReviewWeek03完整骨架、8场景矩阵及依赖/取消/所有权测试，六个支持文件复用Day15–20。全部共享根go.mod；参考位于examples/internal，练习测试指向根internal。
+
+原仓库根运行 `python3 docs/learning/exercises/prepare.py 21`，进入打印的仓库外副本。编译 `go test ./internal/assembly -run '^$'`；目标红灯 `go test ./internal/assembly -run '^TestDay21' -count=1 -v`。不覆盖学习者原internal/cmd。
+
+重跑 `python3 docs/learning/exercises/verify.py --go /你的Go/bin/go --days 21 --report /tmp/day21-verification.json`。见[原始红绿/累计记录](day21/verification.json)和[离线浏览器记录](day21/browser-verification.json)。这是状态审查装配，不代表持久恢复、真实证据服务或工具执行已经实现。

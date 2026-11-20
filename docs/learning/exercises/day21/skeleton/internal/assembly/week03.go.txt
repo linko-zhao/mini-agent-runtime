@@ -1,0 +1,23 @@
+package assembly
+
+import (
+	"context"
+	"errors"
+
+	"github.com/linko-zhao/mini-agent-runtime/internal/runstate"
+)
+
+type ReplayEvidenceSource interface {
+	Evidence(context.Context, runstate.StoredCheckpoint) (runstate.ReplayEvidenceSet, error)
+}
+
+var ErrEvidenceSourceRequired = errors.New("assembly: pending review requires an evidence source")
+
+type Week03Report struct {
+	Recovery runstate.RecoveryPlan
+	Replay   *runstate.ReplayPlan
+}
+
+func ReviewWeek03(ctx context.Context, store runstate.CheckpointStore, source ReplayEvidenceSource, runID string) (Week03Report, error) {
+	panic("TODO: implement ReviewWeek03")
+}

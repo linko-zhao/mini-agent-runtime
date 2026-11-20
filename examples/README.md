@@ -1,6 +1,6 @@
 # Agent Runtime 累计示例
 
-这是依据 Day 01–20 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
+这是依据 Day 01–21 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
 
 共享仓库根目录的 `go.mod`（Go 1.22.2），无需新建 Module，也不导入根目录 `internal` 中的练习实现。所有命令在仓库根目录运行：
 
@@ -186,3 +186,13 @@ Day17练习支持与页面全文包含可编译TODO、完整行为测试和折�
 证据绑定RunID、Version与原Pending的顺序/ID/名称/参数；附加Result/键须匹配依据，重复后端键拒绝。计划Record、Steps和输入深拷贝隔离；取消保留原context错误。所有旧接口、消息和根go.mod保留，不修改学习者internal/cmd。
 
 Go1.22.2最终原样骨架编译通过、TODO红灯符合预期；同一套测试对隔离internal参考通过含race，兼容副本累计回归通过；仓库根examples普通/race通过。[Day20页面](../docs/learning/agent-runtime-day-20.html)、[原始验证](../docs/learning/exercises/day20/verification.json)。未验证真实后端去重、幂等键传输、持久性、执行租约或自动恢复。
+
+## Day21：第三周集成复盘
+
+新增examples/internal/assembly/week03.go与week03_test.go。ReviewWeek03(ctx,store,source,runID)把Day19 PlanRecovery、按需Evidence与Day20 PlanReplay接成只读宿主链；原Build/Agent/Run/Store接口不变。
+
+Ready、预算耗尽与终态只返回Recovery，Replay=nil且不查询Source；ReviewPending要求ReplayEvidenceSource，传原ctx和记录副本，取得一次证据后再决策。依赖错误保留原因链，所有失败返回零Week03Report；取消拒收迟到证据。审查不Save、Apply或执行工具。
+
+8个矩阵子场景覆盖正常位置、终态Pending、未知阻塞、结果/去重与未开始建议；另测依赖故障、旧证据/非法记录、取消、端口输入副本及16个并发审查。Go1.22.2下原样骨架编译通过、TODO红灯符合预期；同一测试对隔离internal参考通过含race，兼容副本及当前examples普通/race累计回归通过。
+
+[Day21页面](../docs/learning/agent-runtime-day-21.html)、[原始验证](../docs/learning/exercises/day21/verification.json)。没有验证真实持久存储、证据服务、后端去重/键传输、执行租约或自动恢复；学习者原internal/cmd不读不改。Day22按第四周路线继续中断/审批。

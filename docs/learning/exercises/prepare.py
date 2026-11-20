@@ -58,7 +58,7 @@ def prepare(day, destination=None, reference=False):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("day", type=int, choices=[*range(1, 8), *range(9, 21)])
+    parser.add_argument("day", type=int, choices=[*range(1, 8), *range(9, 22)])
     parser.add_argument("--output", help="可选：尚不存在、位于原仓库外的新目录")
     args = parser.parse_args()
     directory, lesson = prepare(args.day, args.output)

@@ -512,5 +512,48 @@
         "file": "day20/support/internal/runstate/recovery.go.txt"
       }
     ]
+  },
+  "21": {
+    "package": "./internal/assembly",
+    "pattern": "^TestDay21",
+    "targets": [
+      {
+        "path": "internal/assembly/week03.go",
+        "reference": "day21/reference/internal/assembly/week03.go.txt",
+        "skeleton": "day21/skeleton/internal/assembly/week03.go.txt"
+      }
+    ],
+    "tests": [
+      {
+        "path": "internal/assembly/day21_contract_test.go",
+        "file": "day21/tests/internal/assembly/day21_contract_test.go.txt"
+      }
+    ],
+    "support": [
+      {
+        "path": "internal/runstate/state.go",
+        "file": "day21/support/internal/runstate/state.go.txt"
+      },
+      {
+        "path": "internal/runstate/run.go",
+        "file": "day21/support/internal/runstate/run.go.txt"
+      },
+      {
+        "path": "internal/runstate/checkpoint.go",
+        "file": "day21/support/internal/runstate/checkpoint.go.txt"
+      },
+      {
+        "path": "internal/runstate/store.go",
+        "file": "day21/support/internal/runstate/store.go.txt"
+      },
+      {
+        "path": "internal/runstate/recovery.go",
+        "file": "day21/support/internal/runstate/recovery.go.txt"
+      },
+      {
+        "path": "internal/runstate/replay.go",
+        "file": "day21/support/internal/runstate/replay.go.txt"
+      }
+    ]
   }
 }
