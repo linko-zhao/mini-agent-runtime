@@ -26,6 +26,17 @@ type MemoryCheckpointStore struct {
 	records map[string]StoredCheckpoint
 }
 
+func storeContext(ctx context.Context) error {
+	if ctx == nil {
+		return ErrInvalidCheckpoint
+	}
+	return ctx.Err()
+}
+
+func cloneStore(sc StoredCheckpoint) StoredCheckpoint {
+	return StoredCheckpoint{Version: sc.Version, Checkpoint: sc.Checkpoint.Clone()}
+}
+
 func validateCheckpoint(cp Checkpoint) bool {
 	if strings.TrimSpace(cp.State.RunID) == "" || cp.State.MaxSteps <= 0 || cp.State.Step < 0 || cp.State.Step > cp.State.MaxSteps {
 		return false
@@ -45,11 +56,8 @@ func NewMemoryCheckpointStore() *MemoryCheckpointStore {
 	return &MemoryCheckpointStore{records: make(map[string]StoredCheckpoint)}
 }
 func (s *MemoryCheckpointStore) Load(ctx context.Context, runID string) (StoredCheckpoint, error) {
-	if ctx == nil {
-		return StoredCheckpoint{}, ErrInvalidCheckpoint
-	}
-	if ctx.Err() != nil {
-		return StoredCheckpoint{}, ctx.Err()
+	if err := storeContext(ctx); err != nil {
+		return StoredCheckpoint{}, err
 	}
 	if strings.TrimSpace(runID) == "" {
 		return StoredCheckpoint{}, ErrInvalidCheckpoint
@@ -66,14 +74,11 @@ func (s *MemoryCheckpointStore) Load(ctx context.Context, runID string) (StoredC
 	if !ok {
 		return StoredCheckpoint{}, ErrCheckpointNotFound
 	}
-	return StoredCheckpoint{Version: sc.Version, Checkpoint: sc.Checkpoint.Clone()}, nil
+	return cloneStore(sc), nil
 }
 func (s *MemoryCheckpointStore) Save(ctx context.Context, cp Checkpoint, expected uint64) (StoredCheckpoint, error) {
-	if ctx == nil {
-		return StoredCheckpoint{}, ErrInvalidCheckpoint
-	}
-	if ctx.Err() != nil {
-		return StoredCheckpoint{}, ctx.Err()
+	if err := storeContext(ctx); err != nil {
+		return StoredCheckpoint{}, err
 	}
 	if !validateCheckpoint(cp) || expected == ^uint64(0) {
 		return StoredCheckpoint{}, ErrInvalidCheckpoint
@@ -101,5 +106,5 @@ func (s *MemoryCheckpointStore) Save(ctx context.Context, cp Checkpoint, expecte
 		return StoredCheckpoint{}, err
 	}
 	s.records[cp.State.RunID] = StoredCheckpoint{Version: sc.Version + 1, Checkpoint: cp.Clone()}
-	return StoredCheckpoint{Version: sc.Version + 1, Checkpoint: cp.Clone()}, nil
+	return cloneStore(sc), nil
 }

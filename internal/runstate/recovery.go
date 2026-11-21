@@ -1,7 +1,9 @@
 package runstate
 
 import (
+	"bytes"
 	"context"
+	"strings"
 )
 
 type RecoveryPosition string
@@ -21,44 +23,62 @@ type RecoveryPlan struct {
 func recoveryRecordValid(v StoredCheckpoint, runID string) bool {
 	cp := v.Checkpoint
 	s := cp.State
-	if v.Version <= 0 || s.RunID != runID || validateCheckpoint(cp) || len(s.Messages) == 0 || s.Messages[0].Role != "user" {
+	if v.Version <= 0 || s.RunID != runID || !validateCheckpoint(cp) || len(s.Messages) == 0 || s.Messages[0].Role != "user" {
 		return false
 	}
-	last := s.Messages[len(s.Messages) - 1]
-	switch s.Phase {
-	case Ready:
+	last := s.Messages[len(s.Messages)-1]
+	if s.Phase == Ready {
 		return len(s.Pending) == 0 && len(last.ToolCalls) == 0
-	case ToolsPending:
-		return len(s.Pending) != 0 && last.Role == "assistant" && len(last.ToolCalls) == len(s.Pending)
-	case Completed:
+	}
+	if s.Phase == Completed {
 		return len(s.Pending) == 0 && last.Role == "assistant" && len(last.ToolCalls) == 0 && last.Content == s.Result
 	}
-	if len(s.Pending) != 0 {
-		if last.Role != "assistant" && len(last.ToolCalls) != len(s.Pending) {
+
+	if s.Phase == ToolsPending && len(s.Pending) == 0 {
+		return false
+	}
+	if len(s.Pending) > 0 {
+		if last.Role != "assistant" || len(last.ToolCalls) != len(s.Pending) {
 			return false
 		}
+		ids := make(map[string]bool)
+		for i, p := range s.Pending {
+			t := last.ToolCalls[i]
+			if strings.TrimSpace(p.ID) == "" || strings.TrimSpace(p.Name) == "" || ids[p.ID] || p.ID != t.ID || p.Name != t.Name || !bytes.Equal(p.Arguments, t.Arguments) {
+				return false
+			}
+			ids[p.ID] = true
+		}
 	}
+	return true
 }
 
 func PlanRecovery(ctx context.Context, store CheckpointStore, runID string) (RecoveryPlan, error) {
-	sc, err := store.Load(ctx, runID)
-	if err != nil {
+	if err := storeContext(ctx); err != nil {
 		return RecoveryPlan{}, err
 	}
+	if store == nil || strings.TrimSpace(runID) == "" {
+		return RecoveryPlan{}, ErrInvalidCheckpoint
+	}
+	sc, err := store.Load(ctx, runID)
 	if ctx.Err() != nil {
 		return RecoveryPlan{}, ctx.Err()
 	}
+	if err != nil {
+		return RecoveryPlan{}, err
+	}
+	if !recoveryRecordValid(sc, runID) {
+		return RecoveryPlan{}, ErrInvalidCheckpoint
+	}
+	p := RecoveryTerminal
 	switch sc.Checkpoint.Boundary {
 	case CheckpointReady:
-		if sc.Checkpoint.State.Step < sc.Checkpoint.State.MaxSteps {
-			return RecoveryPlan{Position: RecoveryReady, Record: sc}, nil
-		} else {
-			return RecoveryPlan{Position: RecoveryExhausted, Record: sc}, nil
+		p = RecoveryReady
+		if sc.Checkpoint.State.Step == sc.Checkpoint.State.MaxSteps {
+			p = RecoveryExhausted
 		}
 	case CheckpointBeforeTools:
-		return RecoveryPlan{Position: RecoveryReviewPending, Record: sc}, nil
-	case CheckpointTerminal:
-		return RecoveryPlan{Position: RecoveryTerminal, Record: sc}, nil
+		p = RecoveryReviewPending
 	}
-	panic("unreachable")
+	return RecoveryPlan{Position: p, Record: cloneStore(sc)}, nil
 }
