@@ -34,7 +34,8 @@ func storeContext(ctx context.Context) error {
 }
 
 func cloneStore(sc StoredCheckpoint) StoredCheckpoint {
-	return StoredCheckpoint{Version: sc.Version, Checkpoint: sc.Checkpoint.Clone()}
+	sc.Checkpoint = sc.Checkpoint.Clone()
+	return sc
 }
 
 func validateCheckpoint(cp Checkpoint) bool {
@@ -83,28 +84,19 @@ func (s *MemoryCheckpointStore) Save(ctx context.Context, cp Checkpoint, expecte
 	if !validateCheckpoint(cp) || expected == ^uint64(0) {
 		return StoredCheckpoint{}, ErrInvalidCheckpoint
 	}
-	sc, err := s.Load(ctx, cp.State.RunID)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if ctx.Err() != nil {
 		return StoredCheckpoint{}, ctx.Err()
 	}
+	current := s.records[cp.State.RunID]
+	if current.Version != expected {
+		return StoredCheckpoint{}, ErrCheckpointConflict
+	}
+	next := StoredCheckpoint{Version: expected + 1, Checkpoint: cp.Clone()}
 	if s.records == nil {
 		s.records = make(map[string]StoredCheckpoint)
 	}
-	if expected == 0 {
-		if !errors.Is(err, ErrCheckpointNotFound) {
-			return StoredCheckpoint{}, ErrCheckpointConflict
-		}
-		s.records[cp.State.RunID] = StoredCheckpoint{Version: 1, Checkpoint: cp.Clone()}
-		return StoredCheckpoint{Version: 1, Checkpoint: cp.Clone()}, nil
-	}
-	if errors.Is(err, ErrCheckpointNotFound) || sc.Version != expected {
-		return StoredCheckpoint{}, ErrCheckpointConflict
-	}
-	if err != nil {
-		return StoredCheckpoint{}, err
-	}
-	s.records[cp.State.RunID] = StoredCheckpoint{Version: sc.Version + 1, Checkpoint: cp.Clone()}
-	return cloneStore(sc), nil
+	s.records[cp.State.RunID] = next
+	return cloneStore(next), nil
 }
