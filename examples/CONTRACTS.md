@@ -177,7 +177,7 @@ Run 保存 assistant 后先校验整批调用 ID/名称，再做整批授权；�
 ### 迁移与状态不变量
 
 - created只允许到running；running允许到completed/failed/cancelled；终态不可自循环或重启。unfinished调用不能被当作成功完成，内部非法迁移产生ErrInvalidTransition。
-- completed表示Run以文本正常返回，不表示业务目标已达成；工具受控错误可与RunCompleted并存。context取消/超时归为RunCancelled，FailureClass分别为cancelled/deadline_exceeded；步数耗尽保持errors.Is(ErrMaxSteps)，FailureClass=max_steps；其他Run错误只存受控run_error类别。
+- completed表示Run以文本正常返回，不表示业务目标已达成；工具受控错误可与RunCompleted并存。context取消/超时归为Cancelled，FailureClass分别为cancelled/deadline_exceeded；步数耗尽保持errors.Is(ErrMaxSteps)，FailureClass=max_steps；其他Run错误只存受控run_error类别。
 - Snapshot.Step为当前进入的Loop轮次，不是成功模型调用计数；例如预取消可能进入第1轮后停止。实际调用次数仍通过事件/测试探针验证。
 - CallRecord用Step+Index定位，Index在同批从0开始，保留原CallID/ToolName；不能用CallID作唯一map键，否则会丢失非法重复ID的诊断记录。
 - planned可到running，之后为returned/errored/unconfirmed；批次检查失败或终止后的未开始项为blocked。returned/errored只描述接口返回，均不证明外部事务状态；unconfirmed突出已开始调用在取消后无已接受结果，不授权自动重试。
@@ -370,3 +370,18 @@ EvidenceSource是可信宿主端口，应遵守只读核验约定；适配器自
 矩阵8个子场景：Ready、预算耗尽、Completed、Failed+Pending、Cancelled+Pending、Unknown阻塞、结果+后端去重、NotStarted。另覆盖Store/Source错误链、缺失Source、旧证据/非法记录、取消前后边界、副本隔离及16个并发审查。检查Load/Evidence次数、Save=0、Run/Store前后不变。
 
 官方Go1.22.2下最终原样骨架可编译，目标因TODO失败；同一测试对隔离internal兼容参考通过含race，兼容副本累计回归及仓库根go test ./examples/...、go test -race ./examples/...均通过。未读取/验证学习者原实现、真实网络/模型、持久存储、确认服务、后端去重/键传输、执行租约或自动恢复。
+
+## Day22：工具开始前的内存暂停门禁
+
+新增 examples/internal/runstate/pause.go 与 pause_test.go，复用既有 State/Event/Phase/Run/Checkpoint/Store，不增加 Paused、Resume 或新 module，不修改学习者 internal/cmd，也未自动接入旧 Agent.Run。
+
+- NewPauseGate(*Run) (*PauseGate,error)：要求 NewRun 的有效指针；nil 返回 nil/ErrInvalidPause；构造不推进。零值不可用，使用后不可复制。宿主必须将一条 Run 的独占写入权交给唯一门禁，所有推进经过 Gate.Apply；不能直接 Run.Apply 或创建第二门禁绕过。构造无法全局强制这个契约。
+- PauseRequest{ID,Reason string; Checkpoint Checkpoint} 是内存快照；非空白 ID/Reason 来自宿主并原样返回，不作全局唯一性或授权声明。它含内部消息，不能整份直接公开审计。
+- Pause(id,reason) (PauseRequest,error)：锁内优先观察原 ctx，然后校验空白、已有请求、Checkpoint 与 ToolsPending，再观察 ctx，记录一次请求。错误均零请求：原 ctx 错误、ErrInvalidPause、ErrPaused、ErrPauseBoundary。成功不改变 Run 的 Step/Messages/Pending/Phase，不执行工具、不写 Store、不产生保存版本。重复不会覆盖；没有恢复入口。
+- Snapshot() State：独立原运行快照，不观察取消。CurrentInterrupt() (PauseRequest,bool)：当前持有请求的独立副本；无请求零值/false。两次读取不构成联合原子快照；已取消但未 Apply 时仍可能持有请求。
+- Apply(Event) (State,error)：未暂停委托原 Run；持有请求且采样 ctx 有效时所有事件（包括显式 Cancel/Abort）均以当前独立 State/ErrPaused 拒绝。原 ctx 取消允许委托 Run.Apply，非终态进入 Cancelled/原 ctx 错误并保留 Pending；委托为终态后清请求。既有终态优先 ErrTransition。先前返回的请求不改变。若要终止暂停，宿主 cancel 原 ctx 后再 Apply，不依靠后台 watcher。
+- Pause/Apply/CurrentInterrupt 可并发，返回 Checkpoint、State 与内部数据隔离；调用方不得并发改正在读取的 Event 或同一返回副本。Pause 与 StartTools 竞争只有两种结果：暂停胜出且开始失败，或开始胜出且暂停边界错误。上下文边界采样，不保证物理时间优先；锁等待不可取消，无公平性承诺。
+- 宿主只在 Gate.Apply(StartTools) 成功后调用执行器，I/O 在锁外且传原 ctx。门禁不能硬停、撤销、回滚已开始 I/O。只保证门禁内协调，不提供跨进程/分布式 exactly-once。
+- PauseRequest.Checkpoint 不包含暂停 ID/Reason/门禁状态；即使单独存它，也没有持久化暂停。Eino StatefulInterrupt 的保存/恢复语义不是本日已经具备的能力。
+
+测试验证六组公开行为：开放/字段与位置/阻止副作用/上下文取消与终态/快照所有权与16个并发请求/Pause与StartTools竞争。受控DeadlineExceeded不依赖sleep。练习目录 docs/learning/exercises/day22，使用同一根 go.mod，reference import 映射 examples/internal → internal，四个支持文件为 state/run/checkpoint/store。原样骨架红灯、同一测试参考绿灯及race、累计结果见 day22/verification.json；真实后端、持久暂停、审批和继续未验证。

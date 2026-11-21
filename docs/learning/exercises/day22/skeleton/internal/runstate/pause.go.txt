@@ -1,0 +1,31 @@
+package runstate
+
+import (
+	"errors"
+	"sync"
+)
+
+var (
+	ErrInvalidPause  = errors.New("runstate: invalid pause request")
+	ErrPauseBoundary = errors.New("runstate: pause requires tools_pending")
+	ErrPaused        = errors.New("runstate: gate is paused")
+)
+
+type PauseRequest struct {
+	ID         string
+	Reason     string
+	Checkpoint Checkpoint
+}
+type PauseGate struct {
+	mu      sync.Mutex
+	run     *Run
+	request *PauseRequest
+}
+
+func NewPauseGate(run *Run) (*PauseGate, error) { panic("TODO: implement NewPauseGate") }
+func (g *PauseGate) Snapshot() State            { panic("TODO: implement Snapshot") }
+func (g *PauseGate) CurrentInterrupt() (PauseRequest, bool) {
+	panic("TODO: implement CurrentInterrupt")
+}
+func (g *PauseGate) Pause(id, reason string) (PauseRequest, error) { panic("TODO: implement Pause") }
+func (g *PauseGate) Apply(e Event) (State, error)                  { panic("TODO: implement Apply") }

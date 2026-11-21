@@ -1,6 +1,6 @@
 # Agent Runtime 累计示例
 
-这是依据 Day 01–21 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
+这是依据 Day 01–22 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
 
 共享仓库根目录的 `go.mod`（Go 1.22.2），无需新建 Module，也不导入根目录 `internal` 中的练习实现。所有命令在仓库根目录运行：
 
@@ -196,3 +196,7 @@ Ready、预算耗尽与终态只返回Recovery，Replay=nil且不查询Source；
 8个矩阵子场景覆盖正常位置、终态Pending、未知阻塞、结果/去重与未开始建议；另测依赖故障、旧证据/非法记录、取消、端口输入副本及16个并发审查。Go1.22.2下原样骨架编译通过、TODO红灯符合预期；同一测试对隔离internal参考通过含race，兼容副本及当前examples普通/race累计回归通过。
 
 [Day21页面](../docs/learning/agent-runtime-day-21.html)、[原始验证](../docs/learning/exercises/day21/verification.json)。没有验证真实持久存储、证据服务、后端去重/键传输、执行租约或自动恢复；学习者原internal/cmd不读不改。Day22按第四周路线继续中断/审批。
+
+## Day22：内存暂停门禁
+
+新增 internal/runstate/pause.go、pause_test.go。PauseGate 仅在 ToolsPending 建立暂停；所有推进必须经同一门禁，宿主只在 StartTools 成功后执行工具。原 ctx 取消经 Apply 观察并清除请求，不新增 Phase，也没有审批/继续/持久化。详见 CONTRACTS.md 和 [Day22](../docs/learning/agent-runtime-day-22.html)。运行仓库根 go test ./examples/... 与 go test -race ./examples/...；发布材料原始结果见 exercises/day22/verification.json。

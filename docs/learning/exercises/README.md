@@ -138,3 +138,11 @@ main 在本批讲义准备期间新增了 agent.RunWithState、RunSnapshot 与�
 原仓库根运行 `python3 docs/learning/exercises/prepare.py 21`，进入打印的仓库外副本。编译 `go test ./internal/assembly -run '^$'`；目标红灯 `go test ./internal/assembly -run '^TestDay21' -count=1 -v`。不覆盖学习者原internal/cmd。
 
 重跑 `python3 docs/learning/exercises/verify.py --go /你的Go/bin/go --days 21 --report /tmp/day21-verification.json`。见[原始红绿/累计记录](day21/verification.json)和[离线浏览器记录](day21/browser-verification.json)。这是状态审查装配，不代表持久恢复、真实证据服务或工具执行已经实现。
+
+## Day22：工具开始前的暂停门禁
+
+[Day22页面](../agent-runtime-day-22.html) 内嵌完整TODO、公开行为测试、四个复用支持文件与末尾折叠答案。新增 internal/runstate/pause.go；共享原 go.mod 与既有类型，参考位于 examples/internal。
+
+原仓库根执行 `python3 docs/learning/exercises/prepare.py 22`，进入打印的仓库外副本，再运行 `go test ./internal/runstate -run '^$'` 和 `go test ./internal/runstate -run '^TestDay22' -count=1 -v`。原样骨架应在TODO失败；同一测试在兼容参考含race通过。不会覆盖原 internal/cmd。
+
+重跑：`python3 docs/learning/exercises/verify.py --go /你的Go/bin/go --days 22 --report /tmp/day22-verification.json`。原始[红绿/累计记录](day22/verification.json)、[离线浏览器记录](day22/browser-verification.json)。门禁以宿主独占写入为前提，没有暂停持久化、批准、恢复或真实工具执行证明。
