@@ -146,3 +146,11 @@ main 在本批讲义准备期间新增了 agent.RunWithState、RunSnapshot 与�
 原仓库根执行 `python3 docs/learning/exercises/prepare.py 22`，进入打印的仓库外副本，再运行 `go test ./internal/runstate -run '^$'` 和 `go test ./internal/runstate -run '^TestDay22' -count=1 -v`。原样骨架应在TODO失败；同一测试在兼容参考含race通过。不会覆盖原 internal/cmd。
 
 重跑：`python3 docs/learning/exercises/verify.py --go /你的Go/bin/go --days 22 --report /tmp/day22-verification.json`。原始[红绿/累计记录](day22/verification.json)、[离线浏览器记录](day22/browser-verification.json)。门禁以宿主独占写入为前提，没有暂停持久化、批准、恢复或真实工具执行证明。
+
+## Day23：审批决定与请求关联
+
+[Day23页面](../agent-runtime-day-23.html)完整内嵌approval.go TODO、独立fixture测试、四个支持文件与末尾折叠答案。复用同一个根go.mod；参考位于examples/internal，练习副本位于internal。pause.go仅增加决定字段与终态清理，页面给出精确迁移步骤。
+
+在原仓库根执行 `python3 docs/learning/exercises/prepare.py 23`，进入打印的仓库外副本；先 `go test ./internal/runstate -run '^$'`，再 `go test ./internal/runstate -run '^TestDay23' -count=1 -v`。材料不覆盖原internal/cmd。
+
+重跑：`python3 docs/learning/exercises/verify.py --go /你的Go/bin/go --days 23 --report /tmp/day23-verification.json`。原始[红绿/累计记录](day23/verification.json)、[离线页面记录](day23/browser-verification.json)。决定只有内存记录语义，不自动恢复/执行，不验证身份权限。

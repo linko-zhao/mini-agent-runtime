@@ -385,3 +385,17 @@ EvidenceSource是可信宿主端口，应遵守只读核验约定；适配器自
 - PauseRequest.Checkpoint 不包含暂停 ID/Reason/门禁状态；即使单独存它，也没有持久化暂停。Eino StatefulInterrupt 的保存/恢复语义不是本日已经具备的能力。
 
 测试验证六组公开行为：开放/字段与位置/阻止副作用/上下文取消与终态/快照所有权与16个并发请求/Pause与StartTools竞争。受控DeadlineExceeded不依赖sleep。练习目录 docs/learning/exercises/day22，使用同一根 go.mod，reference import 映射 examples/internal → internal，四个支持文件为 state/run/checkpoint/store。原样骨架红灯、同一测试参考绿灯及race、累计结果见 day22/verification.json；真实后端、持久暂停、审批和继续未验证。
+
+## Day23：审批决定与请求关联
+
+新增 examples/internal/runstate/approval.go、approval_test.go；pause.go 私有新增 decision *ApprovalDecision，并在原 Apply 委托结果为终态时与 request 一同清理。其余旧公开签名、Phase/Event/消息/Checkpoint、Day22独占门禁前提不变，没有新 module，不改根 internal/cmd 或旧 Agent。
+
+- DecisionOutcome string：只允许 DecisionApprove="approve" / DecisionReject="reject"，精确枚举，不接受大小写或空格变体。
+- ApprovalDecision{RunID,RequestID,Actor string; Outcome DecisionOutcome; Reason string}：纯字符串值；四个字符串均要求非空白，合法值原样保存。RunID/RequestID精确匹配暂停快照的State.RunID与PauseRequest.ID。Actor/Reason为可信宿主输入，本包不证明身份/权限、全局唯一性、时间、新鲜度或真实性。没有存储版本/时间戳，不能当持久回执或执行令牌。
+- Decide(ApprovalDecision)(ApprovalDecision,error)：同一门禁锁内，原ctx错误 → 形状ErrInvalidDecision → 无当前暂停ErrNoPause → 目标错配ErrDecisionMismatch → 已记录ErrDecisionRecorded → 再次ctx检查 → 记录首份并原值返回。所有错误零决定；不返回半结果、不自动覆盖。同值重发也ErrDecisionRecorded，不幂等返回；错配先于重复。没有暂停（包括ctx有效的终态）返回ErrNoPause。
+- 成功只改变门禁decision，不修改request或Run的Phase/Step/Messages/Pending，不调用模型/工具/Store。approve与reject均保持原ErrPaused门禁；显式Cancel/Abort仍不能绕过。结束仍可由宿主取消原ctx后驱动Apply；本日没有消费决定/继续/恢复接口。
+- CurrentDecision()(ApprovalDecision,bool)：有则值副本/true，无则零值/false。不观察取消、不清理、不消费；分次读取不构成联合原子快照。取消后Apply观察终态才清两项；原返回值不变。原ctx错误原样保留Canceled/DeadlineExceeded。
+- Pause/Apply/Decide/CurrentDecision共用门禁协调；16个并发有效决定恰好一个成功，first writer wins。锁等待不可取消、无公平性；ctx边界采样，最后检查后仍可取消。Run原写入权仍必须交给唯一门禁，不能直接Run.Apply或另建Gate绕过。
+- 本日无外部审批依赖，因此无依赖失败路径；身份/权限服务、存储故障、网络超时由未来宿主适配承担。内存决定随进程退出丢失；仅保存旧Checkpoint不包含暂停ID或决定。没有真实审批服务、持久性、分布式去重、工具副作用或exactly-once保证。
+
+迁移：新增approval.go；在PauseGate增加decision字段，在Apply原terminal分支增加g.decision=nil；所有旧接口不改参。练习副本目标internal/runstate/approval.go，四个支持state/run/checkpoint/pause中仅pause含兼容增量；手工迁移仅追加字段/清理，不覆盖学习者整文件。新建docs/learning/exercises/day23骨架/完整测试/支持/参考，共享根go.mod，import映射examples/internal→internal且不改断言。材料验证见day23/verification.json，学习者原实现未验证。

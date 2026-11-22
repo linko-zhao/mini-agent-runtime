@@ -590,5 +590,40 @@
         "file": "day22/support/internal/runstate/store.go.txt"
       }
     ]
+  },
+  "23": {
+    "package": "./internal/runstate",
+    "pattern": "^TestDay23",
+    "targets": [
+      {
+        "path": "internal/runstate/approval.go",
+        "skeleton": "day23/skeleton/internal/runstate/approval.go.txt",
+        "reference": "day23/reference/internal/runstate/approval.go.txt"
+      }
+    ],
+    "tests": [
+      {
+        "path": "internal/runstate/day23_contract_test.go",
+        "file": "day23/tests/internal/runstate/day23_contract_test.go.txt"
+      }
+    ],
+    "support": [
+      {
+        "path": "internal/runstate/state.go",
+        "file": "day23/support/internal/runstate/state.go.txt"
+      },
+      {
+        "path": "internal/runstate/run.go",
+        "file": "day23/support/internal/runstate/run.go.txt"
+      },
+      {
+        "path": "internal/runstate/checkpoint.go",
+        "file": "day23/support/internal/runstate/checkpoint.go.txt"
+      },
+      {
+        "path": "internal/runstate/pause.go",
+        "file": "day23/support/internal/runstate/pause.go.txt"
+      }
+    ]
   }
 }

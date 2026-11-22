@@ -1,0 +1,22 @@
+{
+  "mode": "local HTML injected at intercepted HTTPS URL; offline context; deployed Pages not checked",
+  "viewports": [
+    {
+      "width": 1280,
+      "scroll": 1280
+    },
+    {
+      "width": 390,
+      "scroll": 390
+    }
+  ],
+  "embedded_files_match_attachments": 7,
+  "checkbox_persists": true,
+  "keyboard_details": true,
+  "copy_action": true,
+  "unique_ids": true,
+  "lesson_no_external_assets": true,
+  "index_week4_relative_route": true,
+  "script_errors": [],
+  "external_requests": 0
+}

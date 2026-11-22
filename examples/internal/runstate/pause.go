@@ -24,9 +24,10 @@ type PauseRequest struct {
 // transfer exclusive write ownership of the Run to ONE gate and never bypass it.
 // Zero value is not usable; do not copy after use.
 type PauseGate struct {
-	mu      sync.Mutex
-	run     *Run
-	request *PauseRequest
+	mu       sync.Mutex
+	run      *Run
+	request  *PauseRequest
+	decision *ApprovalDecision
 }
 
 func NewPauseGate(run *Run) (*PauseGate, error) {
@@ -90,6 +91,7 @@ func (g *PauseGate) Apply(e Event) (State, error) {
 	state, err := g.run.Apply(e)
 	if terminal(state.Phase) {
 		g.request = nil
+		g.decision = nil
 	}
 	return state, err
 }

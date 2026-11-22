@@ -1,0 +1,39 @@
+package runstate
+
+import (
+	"errors"
+)
+
+type DecisionOutcome string
+
+const (
+	DecisionApprove DecisionOutcome = "approve"
+	DecisionReject  DecisionOutcome = "reject"
+)
+
+var (
+	ErrInvalidDecision  = errors.New("runstate: invalid approval decision")
+	ErrNoPause          = errors.New("runstate: no held pause request")
+	ErrDecisionMismatch = errors.New("runstate: decision does not match held request")
+	ErrDecisionRecorded = errors.New("runstate: decision already recorded")
+)
+
+// ApprovalDecision is host-provided metadata, not proof of identity, authority,
+// persistence or permission to execute. All fields are immutable value strings.
+type ApprovalDecision struct {
+	RunID     string
+	RequestID string
+	Actor     string
+	Outcome   DecisionOutcome
+	Reason    string
+}
+
+// Decide records a decision without executing or releasing the pause.
+func (g *PauseGate) Decide(d ApprovalDecision) (ApprovalDecision, error) {
+	panic("TODO: implement Decide")
+}
+
+// CurrentDecision returns a value copy of held decision metadata.
+func (g *PauseGate) CurrentDecision() (ApprovalDecision, bool) {
+	panic("TODO: implement CurrentDecision")
+}
