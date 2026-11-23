@@ -1,8 +1,10 @@
 package runstate
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/linko-zhao/mini-agent-runtime/internal/model"
 )
@@ -53,31 +55,53 @@ func PlanReplay(ctx context.Context, recovery RecoveryPlan, evidence ReplayEvide
 	if err := storeContext(ctx); err != nil {
 		return ReplayPlan{}, err
 	}
-	if recovery.Position != RecoveryReviewPending || recovery.Record.Checkpoint.State.Phase != ToolsPending || !recoveryRecordValid(recovery.Record, evidence.RunID) {
+	record := recovery.Record
+	if recovery.Position != RecoveryReviewPending || record.Checkpoint.State.Phase != ToolsPending || !recoveryRecordValid(recovery.Record, record.Checkpoint.State.RunID) {
 		return ReplayPlan{}, ErrInvalidCheckpoint
 	}
-	if recovery.Record.Version != evidence.Version || recovery.Record.Checkpoint.State.RunID != evidence.RunID {
+	if record.Version != evidence.Version || record.Checkpoint.State.RunID != evidence.RunID || len(evidence.Calls) != len(record.Checkpoint.State.Pending) {
 		return ReplayPlan{}, ErrReplayEvidence
 	}
 	rp := ReplayPlan{
-		Record: cloneStore(recovery.Record),
+		Record: cloneStore(record),
 		Steps: make([]ReplayStep, 0),
 	}
-	for _, e := range evidence.Calls {
-		step := ReplayStep{}
-		step.Call = e.Call
+	idKeys := map[string]bool{}
+	for i, e := range evidence.Calls {
+		call := e.Call
+		p := record.Checkpoint.State.Pending[i]
+		if call.ID != p.ID || call.Name != p.Name || !bytes.Equal(call.Arguments, p.Arguments) {
+			return ReplayPlan{}, ErrReplayEvidence
+		}
+		step := ReplayStep{
+			Call: cloneCalls([]model.ToolCall{e.Call})[0],
+		}
 		switch e.Basis {
 		case BasisUnknown:
+			if e.Result != nil || e.IdempotencyKey != "" {
+				return ReplayPlan{}, ErrReplayEvidence
+			}
 			step.Action = ActionHold
 			rp.Blocked = true
 		case BasisNotStarted:
+			if e.Result != nil || e.IdempotencyKey != "" {
+				return ReplayPlan{}, ErrReplayEvidence
+			}
 			step.Action = ActionInvoke
 		case BasisResultKnown:
 			step.Action = ActionReuse
-			step.Result = &model.Message{Role: "tool", ToolCallID: e.Call.ID, Content: e.Result.Content}
+			if e.Result == nil || e.Result.Role != "tool" || e.Result.ToolCallID != call.ID || len(e.Result.ToolCalls) != 0 || e.IdempotencyKey != "" {
+				return ReplayPlan{}, ErrReplayEvidence
+			}
+			step.Result = &cloneMessages([]model.Message{*e.Result})[0]
 		case BasisBackendDedup:
+			key := e.IdempotencyKey
+			if strings.TrimSpace(key) == "" || e.Result != nil || idKeys[key] {
+				return ReplayPlan{}, ErrReplayEvidence
+			}
 			step.Action = ActionInvoke
-			step.IdempotencyKey = e.IdempotencyKey
+			step.IdempotencyKey = key
+			idKeys[key] = true
 		default:
 			return ReplayPlan{}, ErrReplayEvidence
 		}
