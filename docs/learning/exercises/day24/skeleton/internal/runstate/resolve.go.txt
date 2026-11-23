@@ -1,0 +1,10 @@
+package runstate
+
+import "errors"
+
+var ErrDecisionRequired = errors.New("runstate: a recorded decision is required")
+
+// ResolveDecision consumes the held decision without executing external I/O.
+func (g *PauseGate) ResolveDecision(runID, requestID string) (State, error) {
+	panic("TODO: implement ResolveDecision")
+}

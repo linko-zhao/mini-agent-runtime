@@ -1,0 +1,1075 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>Day 24 · 人工决定与继续路径</title><style>/* Shared visual system for every learning page. Keep presentation here. */
+:root {
+  color-scheme: light;
+  --page-bg: #f5f7fb;
+  --surface: #fff;
+  --ink: #182337;
+  --muted: #58667b;
+  --line: #dce4ef;
+  --accent: #2459bd;
+  --accent-dark: #183561;
+  --accent-pale: #edf3ff;
+  --focus: #dc7900;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--page-bg);
+  color: var(--ink);
+  font: 16px/1.72 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+main {
+  width: min(100% - 32px, 840px);
+  min-width: 0;
+  margin: 0 auto;
+  padding: 28px 0 48px;
+}
+h1, h2, h3 { color: var(--ink); line-height: 1.45; }
+h1 { font-size: clamp(1.6rem, 4vw, 1.9rem); }
+h2 { margin: 0 0 18px; font-size: 20px; }
+h3 { font-size: 17px; }
+p, li, .node, figcaption { overflow-wrap: anywhere; }
+p { margin: 10px 0; }
+li { margin: 8px 0; }
+a { color: var(--accent); text-underline-offset: 3px; }
+a:hover { color: var(--accent-dark); }
+a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+header, .hero {
+  border-radius: 18px;
+  background: var(--accent-dark);
+  color: #fff;
+  padding: clamp(22px, 5vw, 34px);
+}
+header h1, .hero h1, header h2, .hero h2, header h3, .hero h3 { color: inherit; }
+header p, .hero p { color: #e6eefa; }
+header a, .hero a { color: #cce4ff; }
+.hero h1 { margin: 12px 0; }
+.eyebrow, .time { font-size: 13px; font-weight: 700; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips span, .chip {
+  border: 1px solid #9cb5d9;
+  border-radius: 20px;
+  padding: 3px 12px;
+  font-size: 13px;
+}
+
+section, main > nav:not(.page-navigation) {
+  min-width: 0;
+  margin-top: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: clamp(18px, 4vw, 28px);
+}
+section:target { scroll-margin-top: 18px; }
+article, .card, .rule, .step {
+  min-width: 0;
+  margin: 18px 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+.card h3, .step h3 { margin-top: 0; }
+figure { margin: 20px 0; }
+.flow { display: flex; flex-direction: column; gap: 10px; margin: 20px 0; }
+.node {
+  min-width: 0;
+  border: 2px solid #9eb6db;
+  border-radius: 10px;
+  background: #f4f8ff;
+  padding: 15px;
+}
+.node strong { display: block; }
+.node small { display: block; }
+.arrow { text-align: center; color: #345276; font-size: 16px; }
+.branch { border: 2px dashed #9b6500; background: #fff7e8; }
+.muted, figcaption { color: var(--muted); font-size: 13px; }
+.note, .goal, .info {
+  border-left: 4px solid var(--accent);
+  border-radius: 4px;
+  background: var(--accent-pale);
+  padding: 14px 18px;
+}
+.warn { border-left-color: #9b6500; background: #fff6e3; }
+.phase { color: var(--accent-dark); font-weight: 700; }
+
+code {
+  overflow-wrap: anywhere;
+  border-radius: 4px;
+  background: #edf1f7;
+  padding: 2px 4px;
+  font-size: .88em;
+}
+pre {
+  max-width: 100%;
+  overflow: auto;
+  border-radius: 10px;
+  background: #142136;
+  color: #e7f3ff;
+  padding: 18px;
+  font-size: 13px;
+  line-height: 1.7;
+  tab-size: 4;
+}
+pre code { overflow-wrap: normal; background: none; padding: 0; font-size: inherit; }
+details { margin: 16px 0; border: 1px solid var(--line); border-radius: 9px; padding: 12px 16px; }
+details > pre { margin-bottom: 12px; }
+summary { cursor: pointer; font-weight: 650; }
+button {
+  cursor: pointer;
+  border: 1px solid #9eb6db;
+  border-radius: 7px;
+  background: var(--accent-pale);
+  color: var(--accent-dark);
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 13px;
+}
+.file-label { overflow-wrap: anywhere; }
+.download { font-size: 13px; }
+.code-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; }
+.copy-state, .copy-status { color: var(--muted); font-size: 13px; }
+.code-file { min-width: 0; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+}
+
+.check, .checks label { display: flex; gap: 12px; margin: 14px 0; }
+.check input, .checks input {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-top: 7px;
+  accent-color: var(--accent);
+}
+.check label, .checks label { cursor: pointer; }
+.done label, .check.done label { color: var(--muted); text-decoration: line-through; }
+.progress { height: 12px; overflow: hidden; border-radius: 8px; background: #e3e9f2; }
+.fill, #fill { width: 0; height: 100%; background: var(--accent); }
+.meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-bottom: 12px; font-size: 13px; }
+
+.toplinks { display: flex; flex-wrap: wrap; gap: 10px 22px; }
+footer { margin: 28px 0 0; color: var(--muted); text-align: center; font-size: 13px; }
+.page-navigation {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 28px 0 12px;
+}
+.page-nav-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #9ab0d0;
+  border-radius: 9px;
+  background: var(--accent-pale);
+  color: #153b70;
+  padding: 8px 12px;
+  font: inherit;
+  font-weight: 650;
+  line-height: 1.35;
+  text-align: center;
+  text-decoration: none;
+}
+.page-nav-button:hover { border-color: var(--accent); background: #dceaff; color: #153b70; }
+.page-nav-button.is-disabled { cursor: not-allowed; border-color: var(--line); background: #f0f2f5; color: #798496; }
+.page-meta { margin: 8px 0 0; }
+
+/* Supplemental styles used by the snapshot reference page. */
+.matrix-scroll { overflow-x: auto; }
+.matrix-scroll table { min-width: 660px; }
+table { max-width: 100%; border-collapse: collapse; }
+th, td { border-bottom: 1px solid var(--line); padding: 9px; text-align: left; vertical-align: top; }
+th { background: #f4f7fc; }
+.tag { display: inline-block; margin-right: 6px; border-radius: 5px; background: #eaf0fc; color: var(--accent); padding: 2px 7px; font-size: 12px; }
+.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.grid > div { border-radius: 9px; background: #f6f8fc; padding: 12px; }
+.grid strong { display: block; font-size: 19px; }
+.grid span { color: var(--muted); font-size: 12px; }
+.hero small { opacity: .8; letter-spacing: 1px; }
+td code { overflow-wrap: anywhere; }
+
+img, video, iframe { max-width: 100%; }
+@media (max-width: 600px) {
+  main { width: min(100% - 20px, 840px); padding-top: 12px; }
+  section, main > nav:not(.page-navigation) { padding: 20px 16px; }
+  header, .hero { padding: 23px 20px; }
+  body { font-size: 15px; }
+  .hero h1 { font-size: 23px; }
+  h2 { font-size: 19px; }
+  pre { padding: 14px; font-size: 12px; }
+  article, .card, .rule, .step { padding: 14px; }
+  .grid { grid-template-columns: 1fr; }
+  .page-navigation { gap: 6px; }
+  .page-nav-button { min-height: 42px; padding: 7px 4px; font-size: .88rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+.diagram-flow{display:grid;gap:10px;margin:14px 0}.diagram-flow .node{padding:12px;border:1px solid #bccde6;border-radius:10px;background:#edf3ff;overflow-wrap:anywhere}.diagram-flow .arrow{text-align:center;font-size:.9rem;color:#183561}.diagram-flow strong{display:block}.contract{margin:18px 0;padding:14px;border:1px solid #dce4ef;border-radius:10px}table{width:100%;table-layout:fixed}td,th{overflow-wrap:anywhere}code{overflow-wrap:anywhere}</style></head><body><main><header class="hero"><p class="eyebrow">AGENT RUNTIME · DAY 24 / 56 · WEEK 04</p><h1>人工决定与继续路径</h1><p>今天实现 ResolveDecision，让已记录的批准或拒绝沿同一 Run 状态机推进一次。</p><p>20分钟 Eino 阅读 · 80分钟 Go 连续练习 · 20分钟测试复盘</p></header>
+<section id="goal"><h2>记录了“同意”，下一步谁来推进？</h2><p>延续 doc-1：运行 r24 的 call-1 / get_document 已停在 ToolsPending，pause-1 保存暂停位置，reviewer-1 已提交 approve。Day23 只记录决定，所以直接 Apply(StartTools) 仍返回 ErrPaused。</p><p>宿主现在需要一个明确入口：核对目标，消费当前决定，批准时进入 ToolsRunning，拒绝时进入 Failed。两个动作在同一门禁内协调，避免多个请求把一次批准反复兑换成执行机会。</p><p class="note">本日推进的是内存状态，不在门禁内执行 I/O。宿主仅在本次 ResolveDecision 返回 nil 错误且 Phase 为 ToolsRunning 时调用工具；拒绝是正常处理结果，返回 Failed、nil。没有进程重启恢复、审批持久化或外部副作用去重。</p><h3>三个概念先讲清</h3><ul><li><strong>消费决定：</strong>把一份已记录决定用于一次状态推进，并清除门禁持有的请求和决定。ResolveDecision 承担这个动作，不改变 Decide 的记录职责。</li><li><strong>执行机会：</strong>本次批准处理成功后进入 ToolsRunning，宿主才可调用执行层。它不是已执行成功的结果，更不是跨进程的永久许可。</li><li><strong>拒绝结束：</strong>把人工拒绝映射为既有 Abort 事件，得到 Failed，Failure 沿用决定理由。它不是工具错误消息，也不自动送给模型继续推理。</li></ul></section>
+<section id="design"><h2>两张图：先推进，再在锁外执行</h2><h3>图一 · 职责关系</h3><div class="diagram-flow" role="img" aria-label="宿主在Pause和Decide后调用ResolveDecision，门禁核对目标并委托Run.Apply，批准进入ToolsRunning，拒绝进入Failed，工具I/O在锁外。"><div class="node"><strong>可信宿主</strong>验证操作者和审批范围；已通过 Pause / Decide 留下当前请求与决定</div><div class="arrow">↓ ResolveDecision("r24", "pause-1")</div><div class="node"><strong>同一个 PauseGate</strong>核对目标与已记录决定；互斥消费；批准映射 StartTools，拒绝映射 Abort(reason)</div><div class="arrow">↓ Run.Apply(Event)；↑ 独立 State + error</div><div class="node"><strong>复用 Run / State</strong>批准：ToolsRunning；拒绝：Failed；观察到 ctx 取消：Cancelled；不重新实现 Advance</div><div class="arrow">↓ 只有本次 nil error 且 ToolsRunning，宿主才进入下一框</div><div class="node"><strong>宿主执行器（门禁锁外）</strong>使用原始 ctx 和返回 Pending；完成后通过 Gate.Apply(ToolsReturned) 回填原 call ID</div></div><p>等价文字：宿主请求处理已记录决定，门禁将它转换为既有事件，Run 负责状态更新。成功后门禁清理一次性内存记录；真正工具调用仍由宿主完成，不把锁跨越网络请求。</p>
+<h3>图二 · doc-1 的编号运行与结果回流</h3><div class="diagram-flow" role="img" aria-label="ToolsPending上已记录批准，ResolveDecision核对并推进ToolsRunning，清理元数据，宿主执行并按call-1回填，下一轮模型读取工具消息后完成。"><div class="node"><strong>① 输入：暂停 + 首份批准</strong>r24 / pause-1，Pending=[call-1]，DecisionApprove；此时旧 Apply(StartTools) 仍被拦住</div><div class="arrow">↓ ResolveDecision 校验形状、当前请求、目标、决定存在</div><div class="node"><strong>② 提交批准事件并消费</strong>Run.Apply(StartTools) → ToolsRunning、nil；Step / Messages / Pending 不变，清 request / decision</div><div class="arrow">↓ 宿主检查本次 error 和 Phase，传原 ctx / Pending 给工具</div><div class="node"><strong>③ 锁外执行 get_document</strong>取得 doc-1 body，Gate.Apply(ToolsReturned) 回填 Role=tool、ToolCallID=call-1 → Ready</div><div class="arrow">↓ Apply(StartModel)，模型读取累计 Messages，再 Apply(ModelReturned)</div><div class="node"><strong>④ 下一轮完成</strong>assistant 给出摘要 → Completed；若在步骤②消费 reject，则直接 Failed，步骤③④均不执行</div></div><p>反例：第一次批准已进入 ToolsRunning，第二次 ResolveDecision 返回该当前状态和 ErrNoPause。只看 Phase 会重复执行；必须先检查本次错误。拒绝返回 nil 错误但 Phase 是 Failed，也不能执行工具。</p><details><summary>宿主分支示意（教学伪代码，非独立可运行程序）</summary><pre><code>state, err := gate.ResolveDecision("r24", "pause-1")
+if err != nil { return err } // 即便 state.Phase 是 ToolsRunning，也不能执行
+switch state.Phase {
+case ToolsRunning:
+    // 已离开门禁锁；执行器仍须遵守原 ctx、授权、调用 ID 与结果顺序契约。
+    results, callErr := executor.Execute(ctx, state.Pending)
+    // 宿主将成功/失败转换为相应事件；不是门禁自动执行。
+case Failed:
+    // 人工拒绝已成为终态，记录 state.Failure，不调用工具。
+}
+</code></pre></details></section>
+<section id="continuity"><h2>承接前序设计</h2><p>所有示例共享根 go.mod：github.com/linko-zhao/mini-agent-runtime，Go ≥ 1.22.2。累计参考路径是 examples/internal/runstate，练习副本使用 internal/runstate；不混用两套 model 类型，不建立每日 module。</p><p>继续复用 Day15 的 State / Event / Advance、Day16 的 Run.Apply、Day17 的 Checkpoint、Day22 的唯一门禁和 Day23 的 ApprovalDecision / Decide。DecisionApprove 与 DecisionReject 仍是原常量，RunID、RequestID、Actor、Reason 的含义不变。</p><h3>本日增量</h3><ul><li><strong>新增参考：</strong>examples/internal/runstate/resolve.go、resolve_test.go；新增 ResolveDecision 与 ErrDecisionRequired。</li><li><strong>复用源码：</strong>state.go、run.go、checkpoint.go、pause.go、approval.go 原样使用。没有新 Phase、Event、消息字段、构造函数或存储协议。</li><li><strong>新增练习：</strong>隔离副本 internal/runstate/resolve.go 与 day24_contract_test.go；五份前序支持文件完整提供。</li><li><strong>修改材料：</strong>examples/README.md、CONTRACTS.md、练习 manifest/脚本范围/README、本页、首页 Day24 相对入口；不修改根 internal/cmd。</li></ul><h3>旧接口 → 新接口与调用方调整</h3><p>旧 NewPauseGate、Pause、Decide、Apply、Snapshot、CurrentInterrupt、CurrentDecision 全部保持签名及职责。新增 <code>ResolveDecision(runID, requestID string) (State, error)</code>，宿主在记录决定后显式调用它；不要先手动清理请求，再直接 Run.Apply。</p><ol><li>在同一 runstate 包新增 resolve.go，复用私有 g.mu、g.run、g.request、g.decision，不重定义任何前序类型。</li><li>保持一条 Run 的写入权交给唯一 Gate。所有推进经过门禁，不直接调用 Run.Apply，也不创建第二个 Gate 绕过协调。</li><li>把宿主审批后的分支改为 ResolveDecision；只有本次无错误且返回 ToolsRunning 时，才在锁外调用工具。这里已经开始工具阶段，不要再 Apply(StartTools)。</li><li>工具结果仍通过原 ToolsReturned 事件，保持原 Pending 顺序和 ToolCallID，再进入下一轮模型。</li></ol><p>Day23 的“Decide 只记录、Apply 仍拦截”不变；本日增加的是独立消费入口。新增方法成功后 CurrentInterrupt / CurrentDecision 变为空是明确的新动作，不是读取接口自动变化。</p><p class="note">宿主应给同一 Run 生命周期的每次暂停分配不复用的 RequestID，并在新会话隔离 RunID。旧 Pause 不强制去重，本日也没有历史台账；若复用同一对 ID，旧请求可能命中新暂停。关联检查只保护不同目标，不是防重放证明或身份授权。</p></section>
+<section id="reading"><h2>20分钟：Eino 如何区分目标、数据与执行？</h2><p>带着三个问题读：谁设置恢复目标？组件不是本次目标时为何再次中断？有恢复数据为什么仍需应用解释其含义？</p><article class="step"><h3>前10分钟 · 定向恢复上下文</h3><p>官方 <a href="https://github.com/cloudwego/eino/blob/main/compose/resume.go">compose/resume.go</a>，本次读取文件 SHA <code>a4513fcfc734ffe220acb815afed2dee4d7beb6b</code>。定位 ResumeWithData、BatchResumeWithData、GetResumeContext。</p><p>阅读目标：从 interruptID → data 的映射走到组件读数据入口；区分“设置路由上下文”和“组件实际消费数据”。该公开文件转发到底层 core，不能只因调用了 ResumeWithData 就断言工具已经执行。</p><p>自研映射：Day23 Decide 对应记录应用决定，本日 ResolveDecision 才消费并推进。课程使用显式 RunID/RequestID，未实现 Eino 的地址树、嵌套目标传播或恢复引擎。</p></article><article class="step"><h3>后10分钟 · 工具侧的恢复分支</h3><p>官方 <a href="https://github.com/cloudwego/eino/blob/main/components/tool/interrupt.go">components/tool/interrupt.go</a>，本次读取文件 SHA <code>16400979b0cc548284ae438d0e462e00fb07cb2a</code>。定位 Interrupt、StatefulInterrupt、GetInterruptState、GetResumeContext 及其注释示例。</p><p>阅读目标：标出“首次执行先中断”“不是本次目标再次中断”“目标分支接收数据”的位置。示例中的 string/default result 只演示分支，不是审批策略；类型匹配没有证明身份、权限或批准。</p><p>产出：写下“路由 → 业务决定 → 状态推进 → 工具 I/O”四步对应表，指出本日锁在哪一步结束。再说明持久恢复需要哪些额外保存与恢复能力。</p></article><p>官方链接需联网；本页全部图解、代码和测试离线可读。Eino 仅作源码对照，不加入根 go.mod 依赖。</p></section>
+<section id="api"><h2>接口卡片：只新增一个推进入口</h2><article class="contract"><h3>ResolveDecision(runID, requestID string) (State, error)</h3><p><strong>职责：</strong>处理当前已记录决定，提交一个既有状态事件并消费元数据。接收来自可信宿主的目标 ID，均要求非空白；合法字符串原样精确匹配，不 Trim 后比较。</p><p><strong>依赖：</strong>有效的同一 PauseGate 与原始 Run context；零值不可用、使用后不可复制。复用 g.mu 覆盖校验、Run.Apply 和消费，不在锁内执行外部代码；宿主绕过入口时不保证协调。</p><p><strong>返回：</strong>始终是独立 State，正常成功与失败均返回当前状态副本。它与 Decide 错误返回零 ApprovalDecision 的契约不同；State 用于展示现状，不能仅据 Phase 判断本次动作成功。</p><p><strong>正常成功：</strong>approve → 委托 StartTools，ToolsRunning、nil；reject → 委托 Abort，Failed、nil，Failure 原样等于决定 Reason。两者只改既有事件负责的字段，不增加模型 Step，不改 Messages 或 Pending；成功后 request 和 decision 一同清除，旧返回副本不变。</p></article>
+<article class="contract"><h3>前置规则与错误顺序</h3><ol><li>先观察原 ctx；若已取消，委托 Run.Apply(Cancel) 观察取消并按终态结果清理。非终态进入 Cancelled，返回原 Canceled / DeadlineExceeded，即使 ID 为空或没有暂停；既有终态仍由 Run.Apply 优先返回 ErrTransition，保留结果。</li><li>ctx 当前有效时取得独立当前 State，空/空白目标返回既有 ErrInvalidDecision。</li><li>没有当前暂停返回 ErrNoPause；因此消费后的重试不会重新发放执行机会，ctx 有效的既有终态也是这个出口。</li><li>目标与当前暂停 RunID / ID 精确不符返回 ErrDecisionMismatch，先于“是否有决定”检查。</li><li>有目标但没有已记录决定返回新增 ErrDecisionRequired。</li><li>根据已记录 Outcome 委托一个事件；Run.Apply 自身再次观察 ctx，因此也可能在这个边界提交 Cancelled 并返回原 ctx 错误。</li></ol><p>ctx 有效时的上述前置失败不改变状态、请求或决定。委托成功或委托返回终态时清两项；若委托返回非终态错误则保持元数据，原因原样返回，不在此重写旧转换规则。遵守唯一门禁与有效前序契约时，合法决定对应的事件满足转换前置条件。</p></article>
+<article class="contract"><h3>ErrDecisionRequired 与已有错误的复用</h3><p>ErrDecisionRequired 是新增可识别 sentinel：暂停尚无决定，宿主应等待 Decide，而非执行工具。空目标沿用 ErrInvalidDecision，错目标沿用 ErrDecisionMismatch，无请求沿用 ErrNoPause；用 errors.Is 判断，不绑定错误文本。</p><p>本日没有新公开数据类型、字段或构造函数，也没有可替换外部依赖。因此网络、存储、身份服务错误不在本方法内产生；这些服务的故障、超时与取消应在宿主适配层各自验证。</p></article>
+<article class="contract"><h3>取消、并发与执行的边界</h3><p>与 Pause / Decide / Apply 共用门禁协调；16个并发消费只允许一个成功，其余读到已消费状态和 ErrNoPause。每份返回 State 的切片/参数字节互不共享，调用方自行同步其共享变量。</p><p>ctx 在边界采样，取消与批准竞争可能是 Cancelled/原错误，或 ToolsRunning/nil；后者随后仍可取消。锁等待不支持取消，无公平性、硬中断或物理时间优先保证。执行器必须使用原 ctx 并合作停止；门禁无法回滚已发生的 I/O。</p><p>“进入 ToolsRunning → 宿主 I/O”之间仍可崩溃。没有保存确认、执行日志、幂等键传递或分布式执行归属；本日单门禁最多发放一次机会，不等于真实工具 exactly-once。元数据清除也不是持久审计归档。</p></article></section>
+<section id="rules"><h2>行为契约与完整测试</h2><table><thead><tr><th>规则 / 输入</th><th>可观察结果</th><th>准确测试名称</th></tr></thead><tbody>
+<tr><td>R1 已批准</td><td>ToolsRunning、nil，原载荷/Step保留，清两项；重试有错误、effect仍1；按原call ID回填并进入模型下一轮</td><td>TestDay24ApproveContinues</td></tr>
+<tr><td>R2 已拒绝</td><td>Failed、nil，理由原样，Pending/消息保留，effect0；清两项，终态不再推进</td><td>TestDay24RejectTerminates</td></tr>
+<tr><td>R3 前置不满足</td><td>空目标 / 无请求 / 错配 / 无决定分别返回明确错误；独立当前State、元数据不变</td><td>TestDay24Preconditions</td></tr>
+<tr><td>R4 观察取消</td><td>取消优先于字段/请求检查，提交Cancelled并保留Pending；清两项；既有终态优先ErrTransition</td><td>TestDay24Cancellation</td></tr>
+<tr><td>R5 并发消费</td><td>16个消费恰一成功、effect1；所有返回副本可各自修改，Run不串改</td><td>TestDay24ConcurrentConsumption</td></tr>
+<tr><td>R6 新暂停的旧请求</td><td>pause-1 已消费，新 pause-2 已批准；旧请求错配不消费新决定，新请求仍能成功</td><td>TestDay24StaleRequest</td></tr>
+<tr><td>R7 取消竞争</td><td>批准成功或取消提交二选一；批准先成功时，下次Apply仍可观察取消，不产生假执行结果</td><td>TestDay24ResolveVersusCancellation</td></tr></tbody></table><p>测试的 effect24 是宿主计数夹具，严格同时检查本次 error 和 Phase；不是业务工具实现。DeadlineExceeded 由可控 context 产生；并发用信号同步，不依赖固定 sleep。Mock 证明控制与消息关联，真实模型选工具、网络后端和外部副作用仍需独立证据。</p></section>
+<section id="prepare"><h2>准备可编译的红灯练习</h2><p>在原仓库根运行以下建议命令；prepare 在仓库外创建新副本，复用原 go.mod 和教学支持文件，不判断或覆盖学习者原 internal/cmd。进入打印路径后，练习目标是 internal/runstate/resolve.go，测试是 day24_contract_test.go。</p><pre><code>python3 docs/learning/exercises/prepare.py 24
+# cd 到打印的练习副本目录后：
+go test ./internal/runstate -run '^$'
+go test ./internal/runstate -run '^TestDay24' -count=1 -v -timeout 20s</code></pre><p>先确认完整骨架可编译，再看真实目标用例因 TODO 失败；缺依赖或没匹配到用例不算红灯。已有兼容累计实现可直接运行测试，不需要挖空重写。</p><h3 class="file-label">新增 · internal/runstate/resolve.go（完整 TODO）</h3><p><a href="exercises/day24/skeleton/internal/runstate/resolve.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="skeleton" data-source="day24/skeleton/internal/runstate/resolve.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day24-skeleton-internal-runstate-resolve-go-txt"><code>package runstate
+
+import &quot;errors&quot;
+
+var ErrDecisionRequired = errors.New(&quot;runstate: a recorded decision is required&quot;)
+
+// ResolveDecision consumes the held decision without executing external I/O.
+func (g *PauseGate) ResolveDecision(runID, requestID string) (State, error) {
+	panic(&quot;TODO: implement ResolveDecision&quot;)
+}
+</code></pre><button type="button" data-copy="day24-skeleton-internal-runstate-resolve-go-txt">复制本文件</button></details><details><summary>五份复用支持文件：完整离线内容</summary><p>前序公开类型和方法原样保留；只新增本日 resolve.go。练习 import 使用根 internal，参考使用 examples/internal，不能交叉混用类型。</p><h3 class="file-label">复用 · internal/runstate/state.go</h3><p><a href="exercises/day24/support/internal/runstate/state.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="support" data-source="day24/support/internal/runstate/state.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day24-support-internal-runstate-state-go-txt"><code>// Package runstate models in-memory transitions. It is not a checkpoint store.
+package runstate
+
+import (
+	&quot;errors&quot;
+	&quot;strings&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+)
+
+type Phase string
+
+const (
+	Ready        Phase = &quot;ready&quot;
+	ModelRunning Phase = &quot;model_running&quot;
+	ToolsPending Phase = &quot;tools_pending&quot;
+	ToolsRunning Phase = &quot;tools_running&quot;
+	Completed    Phase = &quot;completed&quot;
+	Failed       Phase = &quot;failed&quot;
+	Cancelled    Phase = &quot;cancelled&quot;
+)
+
+type EventKind string
+
+const (
+	StartModel    EventKind = &quot;start_model&quot;
+	ModelReturned EventKind = &quot;model_returned&quot;
+	StartTools    EventKind = &quot;start_tools&quot;
+	ToolsReturned EventKind = &quot;tools_returned&quot;
+	Abort         EventKind = &quot;abort&quot;
+	Cancel        EventKind = &quot;cancel&quot;
+)
+
+var (
+	ErrTransition = errors.New(&quot;runstate: invalid transition&quot;)
+	ErrMaxSteps   = errors.New(&quot;runstate: max model rounds exceeded&quot;)
+)
+
+type State struct {
+	RunID           string
+	Phase           Phase
+	Step, MaxSteps  int
+	Messages        []model.Message
+	Pending         []model.ToolCall
+	Result, Failure string
+}
+type Event struct {
+	Kind     EventKind
+	Response *model.Response
+	Results  []model.Message
+	Reason   string
+}
+
+func New(runID, input string, maxSteps int) (State, error) {
+	if strings.TrimSpace(runID) == &quot;&quot; || maxSteps &lt;= 0 {
+		return State{}, ErrTransition
+	}
+	return State{RunID: runID, Phase: Ready, MaxSteps: maxSteps, Messages: []model.Message{{Role: &quot;user&quot;, Content: input}}}, nil
+}
+func cloneCalls(calls []model.ToolCall) []model.ToolCall {
+	if calls == nil {
+		return nil
+	}
+	out := append([]model.ToolCall{}, calls...)
+	for i := range out {
+		out[i].Arguments = append([]byte(nil), out[i].Arguments...)
+	}
+	return out
+}
+func cloneMessages(ms []model.Message) []model.Message {
+	if ms == nil {
+		return nil
+	}
+	out := append([]model.Message{}, ms...)
+	for i := range out {
+		out[i].ToolCalls = cloneCalls(out[i].ToolCalls)
+	}
+	return out
+}
+func cloneState(s State) State {
+	s.Messages = cloneMessages(s.Messages)
+	s.Pending = cloneCalls(s.Pending)
+	return s
+}
+func terminal(p Phase) bool { return p == Completed || p == Failed || p == Cancelled }
+
+// Advance has no I/O. The host performs calls between start/returned events.
+// It accepts states from New/Advance and never mutates input state/event buffers.
+func Advance(current State, e Event) (State, error) {
+	if terminal(current.Phase) {
+		return State{}, ErrTransition
+	}
+	next := cloneState(current)
+	switch e.Kind {
+	case StartModel:
+		if current.Phase != Ready {
+			return State{}, ErrTransition
+		}
+		if current.Step &gt;= current.MaxSteps {
+			return State{}, ErrMaxSteps
+		}
+		next.Step++
+		next.Phase = ModelRunning
+	case ModelReturned:
+		if current.Phase != ModelRunning || e.Response == nil || e.Response.Message.Role != &quot;assistant&quot; {
+			return State{}, ErrTransition
+		}
+		msg := e.Response.Message
+		ids := map[string]bool{}
+		for _, call := range msg.ToolCalls {
+			if call.ID == &quot;&quot; || strings.TrimSpace(call.Name) == &quot;&quot; || ids[call.ID] {
+				return State{}, ErrTransition
+			}
+			ids[call.ID] = true
+		}
+		next.Messages = append(next.Messages, cloneMessages([]model.Message{msg})...)
+		if len(msg.ToolCalls) == 0 {
+			next.Phase = Completed
+			next.Result = msg.Content
+		} else {
+			next.Phase = ToolsPending
+			next.Pending = cloneCalls(msg.ToolCalls)
+		}
+	case StartTools:
+		if current.Phase != ToolsPending {
+			return State{}, ErrTransition
+		}
+		next.Phase = ToolsRunning
+	case ToolsReturned:
+		if current.Phase != ToolsRunning || len(e.Results) != len(current.Pending) {
+			return State{}, ErrTransition
+		}
+		for i, msg := range e.Results {
+			if msg.Role != &quot;tool&quot; || msg.ToolCallID != current.Pending[i].ID {
+				return State{}, ErrTransition
+			}
+		}
+		next.Messages = append(next.Messages, cloneMessages(e.Results)...)
+		next.Pending = nil
+		next.Phase = Ready
+	case Abort:
+		if strings.TrimSpace(e.Reason) == &quot;&quot; {
+			return State{}, ErrTransition
+		}
+		next.Phase = Failed
+		next.Failure = e.Reason
+	case Cancel:
+		next.Phase = Cancelled
+		next.Failure = &quot;cancelled&quot;
+	default:
+		return State{}, ErrTransition
+	}
+	return next, nil
+}
+</code></pre><button type="button" data-copy="day24-support-internal-runstate-state-go-txt">复制本文件</button></details><h3 class="file-label">复用 · internal/runstate/run.go</h3><p><a href="exercises/day24/support/internal/runstate/run.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="support" data-source="day24/support/internal/runstate/run.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day24-support-internal-runstate-run-go-txt"><code>package runstate
+
+import (
+	&quot;context&quot;
+	&quot;sync&quot;
+)
+
+// Run owns one in-memory State. Use its pointer; do not copy it after use.
+// The zero value is not usable; construct with NewRun.
+type Run struct {
+	ctx   context.Context
+	mu    sync.Mutex
+	state State
+}
+
+// NewRun retains ctx for cancellation/deadlines, not for storing State.
+// A cancelled context rejects construction; invalid identity/budget uses ErrTransition.
+func NewRun(ctx context.Context, runID, input string, maxSteps int) (*Run, error) {
+	if ctx == nil {
+		return nil, ErrTransition
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	s, err := New(runID, input, maxSteps)
+	if err != nil {
+		return nil, err
+	}
+	return &amp;Run{ctx: ctx, state: s}, nil
+}
+
+// Context returns the original context. The host owns any cancel function.
+// Model/tool I/O must use this context outside Apply, never while holding its lock.
+func (r *Run) Context() context.Context { return r.ctx }
+
+// Snapshot returns an independent copy without triggering transitions.
+func (r *Run) Snapshot() State {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return cloneState(r.state)
+}
+
+// Apply commits exactly one valid event, or returns the unchanged current copy.
+// For a nonterminal Run, observed context cancellation commits Cancel and rejects
+// the event with the original context error. A terminal State is never overwritten.
+// This serializes transitions, not a snapshot -&gt; external I/O -&gt; Apply transaction.
+func (r *Run) Apply(e Event) (State, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if terminal(r.state.Phase) {
+		return cloneState(r.state), ErrTransition
+	}
+	if err := r.ctx.Err(); err != nil {
+		next, transitionErr := Advance(r.state, Event{Kind: Cancel})
+		if transitionErr != nil {
+			return cloneState(r.state), transitionErr
+		}
+		r.state = next
+		return cloneState(r.state), err
+	}
+	next, err := Advance(r.state, e)
+	if err != nil {
+		return cloneState(r.state), err
+	}
+	r.state = next
+	return cloneState(r.state), nil
+}
+</code></pre><button type="button" data-copy="day24-support-internal-runstate-run-go-txt">复制本文件</button></details><h3 class="file-label">复用 · internal/runstate/checkpoint.go</h3><p><a href="exercises/day24/support/internal/runstate/checkpoint.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="support" data-source="day24/support/internal/runstate/checkpoint.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day24-support-internal-runstate-checkpoint-go-txt"><code>package runstate
+
+import &quot;errors&quot;
+
+type CheckpointBoundary string
+
+const (
+	CheckpointReady       CheckpointBoundary = &quot;ready&quot;
+	CheckpointBeforeTools CheckpointBoundary = &quot;before_tools&quot;
+	CheckpointTerminal    CheckpointBoundary = &quot;terminal&quot;
+)
+
+var ErrCheckpointBoundary = errors.New(&quot;runstate: checkpoint requires a stable boundary&quot;)
+
+// Checkpoint is an in-memory candidate, not a storage acknowledgement or resume token.
+// State uses the existing message/call contract. Boundary classifies State.Phase.
+type Checkpoint struct {
+	Boundary CheckpointBoundary
+	State    State
+}
+
+// Clone copies nested mutable state. It does not validate or authorize a checkpoint.
+func (c Checkpoint) Clone() Checkpoint {
+	c.State = cloneState(c.State)
+	return c
+}
+
+// Checkpoint samples boundary and state under the same lock.
+// It does not observe context cancellation, advance state, pause the driver,
+// perform I/O, or promise that an external tool has not already taken effect.
+func (r *Run) Checkpoint() (Checkpoint, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var boundary CheckpointBoundary
+	switch r.state.Phase {
+	case Ready:
+		boundary = CheckpointReady
+	case ToolsPending:
+		boundary = CheckpointBeforeTools
+	case Completed, Failed, Cancelled:
+		boundary = CheckpointTerminal
+	default:
+		return Checkpoint{}, ErrCheckpointBoundary
+	}
+	return Checkpoint{Boundary: boundary, State: cloneState(r.state)}, nil
+}
+</code></pre><button type="button" data-copy="day24-support-internal-runstate-checkpoint-go-txt">复制本文件</button></details><h3 class="file-label">复用 · internal/runstate/pause.go</h3><p><a href="exercises/day24/support/internal/runstate/pause.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="support" data-source="day24/support/internal/runstate/pause.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day24-support-internal-runstate-pause-go-txt"><code>package runstate
+
+import (
+	&quot;errors&quot;
+	&quot;strings&quot;
+	&quot;sync&quot;
+)
+
+var (
+	ErrInvalidPause  = errors.New(&quot;runstate: invalid pause request&quot;)
+	ErrPauseBoundary = errors.New(&quot;runstate: pause requires tools_pending&quot;)
+	ErrPaused        = errors.New(&quot;runstate: gate is paused&quot;)
+)
+
+// PauseRequest is an owned in-memory interruption snapshot, not a saved receipt,
+// an approval, a resume token or a declaration about external side effects.
+type PauseRequest struct {
+	ID         string
+	Reason     string
+	Checkpoint Checkpoint
+}
+
+// PauseGate coordinates transitions only through this gate. The host must
+// transfer exclusive write ownership of the Run to ONE gate and never bypass it.
+// Zero value is not usable; do not copy after use.
+type PauseGate struct {
+	mu       sync.Mutex
+	run      *Run
+	request  *PauseRequest
+	decision *ApprovalDecision
+}
+
+func NewPauseGate(run *Run) (*PauseGate, error) {
+	if run == nil {
+		return nil, ErrInvalidPause
+	}
+	return &amp;PauseGate{run: run}, nil
+}
+
+func (g *PauseGate) Snapshot() State { return g.run.Snapshot() }
+
+func (g *PauseGate) CurrentInterrupt() (PauseRequest, bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.request == nil {
+		return PauseRequest{}, false
+	}
+	out := *g.request
+	out.Checkpoint = out.Checkpoint.Clone()
+	return out, true
+}
+
+// Pause captures only ToolsPending, before StartTools through this gate.
+// It samples the original Run context and performs no I/O or state transition.
+func (g *PauseGate) Pause(id, reason string) (PauseRequest, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if err := g.run.Context().Err(); err != nil {
+		return PauseRequest{}, err
+	}
+	if strings.TrimSpace(id) == &quot;&quot; || strings.TrimSpace(reason) == &quot;&quot; {
+		return PauseRequest{}, ErrInvalidPause
+	}
+	if g.request != nil {
+		return PauseRequest{}, ErrPaused
+	}
+	cp, err := g.run.Checkpoint()
+	if err != nil || cp.State.Phase != ToolsPending {
+		return PauseRequest{}, ErrPauseBoundary
+	}
+	if err := g.run.Context().Err(); err != nil {
+		return PauseRequest{}, err
+	}
+	request := PauseRequest{ID: id, Reason: reason, Checkpoint: cp}
+	g.request = &amp;request
+	out := request
+	out.Checkpoint = out.Checkpoint.Clone()
+	return out, nil
+}
+
+// Apply preserves Run.Apply semantics while open. During a live pause every
+// event is rejected with a current owned State and ErrPaused. Observed context
+// cancellation is allowed through to Run.Apply; terminal state clears the pause.
+// The host may perform I/O only AFTER a successful transition; no I/O runs here.
+func (g *PauseGate) Apply(e Event) (State, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.request != nil &amp;&amp; g.run.Context().Err() == nil {
+		return g.run.Snapshot(), ErrPaused
+	}
+	state, err := g.run.Apply(e)
+	if terminal(state.Phase) {
+		g.request = nil
+		g.decision = nil
+	}
+	return state, err
+}
+</code></pre><button type="button" data-copy="day24-support-internal-runstate-pause-go-txt">复制本文件</button></details><h3 class="file-label">复用 · internal/runstate/approval.go</h3><p><a href="exercises/day24/support/internal/runstate/approval.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="support" data-source="day24/support/internal/runstate/approval.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day24-support-internal-runstate-approval-go-txt"><code>package runstate
+
+import (
+	&quot;errors&quot;
+	&quot;strings&quot;
+)
+
+type DecisionOutcome string
+
+const (
+	DecisionApprove DecisionOutcome = &quot;approve&quot;
+	DecisionReject  DecisionOutcome = &quot;reject&quot;
+)
+
+var (
+	ErrInvalidDecision  = errors.New(&quot;runstate: invalid approval decision&quot;)
+	ErrNoPause          = errors.New(&quot;runstate: no held pause request&quot;)
+	ErrDecisionMismatch = errors.New(&quot;runstate: decision does not match held request&quot;)
+	ErrDecisionRecorded = errors.New(&quot;runstate: decision already recorded&quot;)
+)
+
+// ApprovalDecision is host-provided metadata, not proof of identity, authority,
+// persistence or permission to execute. All fields are immutable value strings.
+type ApprovalDecision struct {
+	RunID     string
+	RequestID string
+	Actor     string
+	Outcome   DecisionOutcome
+	Reason    string
+}
+
+// Decide records the first valid decision for this gate&#x27;s held pause.
+// It does not unpause, execute, terminate or write a checkpoint.
+func (g *PauseGate) Decide(d ApprovalDecision) (ApprovalDecision, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if err := g.run.Context().Err(); err != nil {
+		return ApprovalDecision{}, err
+	}
+	if strings.TrimSpace(d.RunID) == &quot;&quot; || strings.TrimSpace(d.RequestID) == &quot;&quot; ||
+		strings.TrimSpace(d.Actor) == &quot;&quot; || strings.TrimSpace(d.Reason) == &quot;&quot; ||
+		(d.Outcome != DecisionApprove &amp;&amp; d.Outcome != DecisionReject) {
+		return ApprovalDecision{}, ErrInvalidDecision
+	}
+	if g.request == nil {
+		return ApprovalDecision{}, ErrNoPause
+	}
+	if d.RunID != g.request.Checkpoint.State.RunID || d.RequestID != g.request.ID {
+		return ApprovalDecision{}, ErrDecisionMismatch
+	}
+	if g.decision != nil {
+		return ApprovalDecision{}, ErrDecisionRecorded
+	}
+	if err := g.run.Context().Err(); err != nil {
+		return ApprovalDecision{}, err
+	}
+	g.decision = &amp;d
+	return d, nil
+}
+
+// CurrentDecision reads held metadata without observing cancellation.
+// A terminal Apply clears it together with the held pause request.
+func (g *PauseGate) CurrentDecision() (ApprovalDecision, bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.decision == nil {
+		return ApprovalDecision{}, false
+	}
+	return *g.decision, true
+}
+</code></pre><button type="button" data-copy="day24-support-internal-runstate-approval-go-txt">复制本文件</button></details></details></section><section id="tests"><h2>完整测试：预测每个返回值</h2><p>fixture 与断言完整内嵌，不依赖另一章的测试辅助函数、网络、API Key 或已完成的 examples。先对 TODO 运行，再由你补方法。</p><h3 class="file-label">新增 · internal/runstate/day24_contract_test.go</h3><p><a href="exercises/day24/tests/internal/runstate/day24_contract_test.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="tests" data-source="day24/tests/internal/runstate/day24_contract_test.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day24-tests-internal-runstate-day24_contract_test-go-txt"><code>package runstate_test
+
+import (
+	&quot;context&quot;
+	&quot;errors&quot;
+	&quot;fmt&quot;
+	&quot;reflect&quot;
+	&quot;sync&quot;
+	&quot;sync/atomic&quot;
+	&quot;testing&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/runstate&quot;
+)
+
+func gate24(t *testing.T, ctx context.Context, pause bool) *runstate.PauseGate {
+	t.Helper()
+	r, e := runstate.NewRun(ctx, &quot;r24&quot;, &quot;读取 doc-1&quot;, 3)
+	if e != nil {
+		t.Fatal(e)
+	}
+	g, e := runstate.NewPauseGate(r)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if pause {
+		pending24(t, g, &quot;call-1&quot;, &quot;pause-1&quot;)
+	}
+	return g
+}
+func apply24(t *testing.T, g *runstate.PauseGate, e runstate.Event) runstate.State {
+	t.Helper()
+	s, err := g.Apply(e)
+	if err != nil {
+		t.Fatal(s, err)
+	}
+	return s
+}
+func pending24(t *testing.T, g *runstate.PauseGate, callID, pauseID string) {
+	t.Helper()
+	apply24(t, g, runstate.Event{Kind: runstate.StartModel})
+	response := model.Response{Message: model.Message{Role: &quot;assistant&quot;, ToolCalls: []model.ToolCall{{ID: callID, Name: &quot;get_document&quot;, Arguments: []byte(`{&quot;id&quot;:&quot;doc-1&quot;}`)}}}}
+	apply24(t, g, runstate.Event{Kind: runstate.ModelReturned, Response: &amp;response})
+	if _, e := g.Pause(pauseID, &quot;waiting-for-host&quot;); e != nil {
+		t.Fatal(e)
+	}
+}
+func decide24(t *testing.T, g *runstate.PauseGate, id string, outcome runstate.DecisionOutcome) runstate.ApprovalDecision {
+	t.Helper()
+	d, e := g.Decide(runstate.ApprovalDecision{RunID: &quot;r24&quot;, RequestID: id, Actor: &quot;reviewer-1&quot;, Outcome: outcome, Reason: &quot; reviewed doc-1 &quot;})
+	if e != nil {
+		t.Fatal(e)
+	}
+	return d
+}
+func cleared24(t *testing.T, g *runstate.PauseGate) {
+	t.Helper()
+	if p, ok := g.CurrentInterrupt(); ok || !reflect.DeepEqual(p, runstate.PauseRequest{}) {
+		t.Fatal(p, ok)
+	}
+	if d, ok := g.CurrentDecision(); ok || d != (runstate.ApprovalDecision{}) {
+		t.Fatal(d, ok)
+	}
+}
+
+// A host effect is permitted only by this successful resolution&#x27;s phase.
+func effect24(g *runstate.PauseGate, calls *atomic.Int32) (runstate.State, error) {
+	s, e := g.ResolveDecision(&quot;r24&quot;, &quot;pause-1&quot;)
+	if e == nil &amp;&amp; s.Phase == runstate.ToolsRunning {
+		calls.Add(1)
+	}
+	return s, e
+}
+func TestDay24ApproveContinues(t *testing.T) {
+	g := gate24(t, context.Background(), true)
+	before := g.Snapshot()
+	old, _ := g.CurrentInterrupt()
+	decision := decide24(t, g, &quot;pause-1&quot;, runstate.DecisionApprove)
+	var effects atomic.Int32
+	s, e := effect24(g, &amp;effects)
+	if e != nil || s.Phase != runstate.ToolsRunning || effects.Load() != 1 {
+		t.Fatal(s, e, effects.Load())
+	}
+	want := before
+	want.Phase = runstate.ToolsRunning
+	if !reflect.DeepEqual(s, want) {
+		t.Fatal(&quot;resolution changed payload/step/history&quot;, s, want)
+	}
+	cleared24(t, g)
+	if old.Checkpoint.State.Phase != runstate.ToolsPending || decision.Outcome != runstate.DecisionApprove {
+		t.Fatal(&quot;old values changed&quot;)
+	}
+	s, e = effect24(g, &amp;effects)
+	if !errors.Is(e, runstate.ErrNoPause) || s.Phase != runstate.ToolsRunning || effects.Load() != 1 {
+		t.Fatal(s, e, effects.Load())
+	}
+	if _, e = g.Apply(runstate.Event{Kind: runstate.StartTools}); !errors.Is(e, runstate.ErrTransition) {
+		t.Fatal(e)
+	}
+	// Preserve call association and return the tool message to the next model round.
+	if _, e = g.Apply(runstate.Event{Kind: runstate.ToolsReturned, Results: []model.Message{{Role: &quot;tool&quot;, ToolCallID: &quot;wrong&quot;, Content: &quot;doc&quot;}}}); !errors.Is(e, runstate.ErrTransition) {
+		t.Fatal(e)
+	}
+	s = apply24(t, g, runstate.Event{Kind: runstate.ToolsReturned, Results: []model.Message{{Role: &quot;tool&quot;, ToolCallID: &quot;call-1&quot;, Content: &quot;doc-1 body&quot;}}})
+	if s.Phase != runstate.Ready || s.Pending != nil || s.Messages[len(s.Messages)-1].Content != &quot;doc-1 body&quot; {
+		t.Fatal(s)
+	}
+	apply24(t, g, runstate.Event{Kind: runstate.StartModel})
+	s = apply24(t, g, runstate.Event{Kind: runstate.ModelReturned, Response: &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, Content: &quot;摘要&quot;}}})
+	if s.Phase != runstate.Completed || s.Result != &quot;摘要&quot; || s.Step != 2 {
+		t.Fatal(s)
+	}
+}
+func TestDay24RejectTerminates(t *testing.T) {
+	g := gate24(t, context.Background(), true)
+	before := g.Snapshot()
+	d := decide24(t, g, &quot;pause-1&quot;, runstate.DecisionReject)
+	var effects atomic.Int32
+	s, e := effect24(g, &amp;effects)
+	if e != nil || s.Phase != runstate.Failed || s.Failure != d.Reason || effects.Load() != 0 {
+		t.Fatal(s, e, effects.Load())
+	}
+	want := before
+	want.Phase = runstate.Failed
+	want.Failure = d.Reason
+	if !reflect.DeepEqual(s, want) {
+		t.Fatal(s, want)
+	}
+	cleared24(t, g)
+	if _, e = g.Apply(runstate.Event{Kind: runstate.StartTools}); !errors.Is(e, runstate.ErrTransition) {
+		t.Fatal(e)
+	}
+	if s, e = g.ResolveDecision(&quot;r24&quot;, &quot;pause-1&quot;); !errors.Is(e, runstate.ErrNoPause) || s.Phase != runstate.Failed {
+		t.Fatal(s, e)
+	}
+}
+func TestDay24Preconditions(t *testing.T) {
+	g := gate24(t, context.Background(), true)
+	before := g.Snapshot()
+	p, _ := g.CurrentInterrupt()
+	rows := []struct {
+		run, id string
+		want    error
+	}{{&quot;&quot;, &quot;pause-1&quot;, runstate.ErrInvalidDecision}, {&quot;r24&quot;, &quot; \t&quot;, runstate.ErrInvalidDecision}, {&quot;other&quot;, &quot;pause-1&quot;, runstate.ErrDecisionMismatch}, {&quot;r24&quot;, &quot;old&quot;, runstate.ErrDecisionMismatch}, {&quot; r24 &quot;, &quot;pause-1&quot;, runstate.ErrDecisionMismatch}, {&quot;r24&quot;, &quot;pause-1&quot;, runstate.ErrDecisionRequired}}
+	for _, row := range rows {
+		s, e := g.ResolveDecision(row.run, row.id)
+		if !errors.Is(e, row.want) || !reflect.DeepEqual(s, before) {
+			t.Fatal(s, e, row.want)
+		}
+		s.Pending[0].Arguments[0] = &#x27;x&#x27;
+		s.Messages[1].ToolCalls[0].Arguments[0] = &#x27;y&#x27;
+		if !reflect.DeepEqual(g.Snapshot(), before) {
+			t.Fatal(&quot;error state aliases run&quot;)
+		}
+	}
+	after, _ := g.CurrentInterrupt()
+	if !reflect.DeepEqual(p, after) {
+		t.Fatal(&quot;invalid input consumed request&quot;)
+	}
+	if _, ok := g.CurrentDecision(); ok {
+		t.Fatal(&quot;created decision&quot;)
+	}
+	decide24(t, g, &quot;pause-1&quot;, runstate.DecisionApprove)
+	if _, e := g.Apply(runstate.Event{Kind: runstate.StartTools}); !errors.Is(e, runstate.ErrPaused) {
+		t.Fatal(e)
+	}
+	open := gate24(t, context.Background(), false)
+	if _, e := open.ResolveDecision(&quot;&quot;, &quot; &quot;); !errors.Is(e, runstate.ErrInvalidDecision) {
+		t.Fatal(e)
+	}
+	if s, e := open.ResolveDecision(&quot;other&quot;, &quot;old&quot;); !errors.Is(e, runstate.ErrNoPause) || s.Phase != runstate.Ready {
+		t.Fatal(s, e)
+	}
+}
+
+type deadline24 struct{ context.Context }
+
+func (d deadline24) Err() error {
+	if d.Context.Err() != nil {
+		return context.DeadlineExceeded
+	}
+	return nil
+}
+func TestDay24Cancellation(t *testing.T) {
+	for _, deadline := range []bool{false, true} {
+		for _, recorded := range []bool{false, true} {
+			t.Run(fmt.Sprintf(&quot;deadline=%v/recorded=%v&quot;, deadline, recorded), func(t *testing.T) {
+				base, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				var ctx context.Context = base
+				want := error(context.Canceled)
+				if deadline {
+					ctx = deadline24{base}
+					want = context.DeadlineExceeded
+				}
+				g := gate24(t, ctx, true)
+				old, _ := g.CurrentInterrupt()
+				if recorded {
+					decide24(t, g, &quot;pause-1&quot;, runstate.DecisionApprove)
+				}
+				cancel()
+				s, e := g.ResolveDecision(&quot;&quot;, &quot;&quot;) // observed cancellation precedes input checks
+				if !errors.Is(e, want) || s.Phase != runstate.Cancelled || s.Failure != &quot;cancelled&quot; || len(s.Pending) != 1 {
+					t.Fatal(s, e)
+				}
+				cleared24(t, g)
+				if old.Checkpoint.State.Phase != runstate.ToolsPending {
+					t.Fatal(&quot;old request mutated&quot;)
+				}
+				if s, e = g.ResolveDecision(&quot;r24&quot;, &quot;pause-1&quot;); !errors.Is(e, runstate.ErrTransition) || s.Phase != runstate.Cancelled {
+					t.Fatal(s, e)
+				}
+			})
+		}
+	}
+	// Even without a pause, observed cancellation is delegated to Run.Apply.
+	ctx, cancel := context.WithCancel(context.Background())
+	g := gate24(t, ctx, false)
+	cancel()
+	if s, e := g.ResolveDecision(&quot;&quot;, &quot;&quot;); !errors.Is(e, context.Canceled) || s.Phase != runstate.Cancelled {
+		t.Fatal(s, e)
+	}
+	// Terminal-first behavior preserves a preexisting Completed result.
+	ctx, cancel = context.WithCancel(context.Background())
+	g = gate24(t, ctx, false)
+	apply24(t, g, runstate.Event{Kind: runstate.StartModel})
+	apply24(t, g, runstate.Event{Kind: runstate.ModelReturned, Response: &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, Content: &quot;done&quot;}}})
+	cancel()
+	if s, e := g.ResolveDecision(&quot;r24&quot;, &quot;pause-1&quot;); !errors.Is(e, runstate.ErrTransition) || s.Phase != runstate.Completed || s.Result != &quot;done&quot; {
+		t.Fatal(s, e)
+	}
+}
+func TestDay24ConcurrentConsumption(t *testing.T) {
+	g := gate24(t, context.Background(), true)
+	decide24(t, g, &quot;pause-1&quot;, runstate.DecisionApprove)
+	before := g.Snapshot()
+	var wg sync.WaitGroup
+	var wins, effects atomic.Int32
+	start := make(chan struct{})
+	for i := 0; i &lt; 16; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			&lt;-start
+			s, e := effect24(g, &amp;effects)
+			if e == nil {
+				wins.Add(1)
+			} else if !errors.Is(e, runstate.ErrNoPause) {
+				t.Error(e)
+			}
+			if s.Phase != runstate.ToolsRunning {
+				t.Error(s)
+			}
+			s.Pending[0].Arguments[0] = &#x27;x&#x27;
+			s.Messages[1].ToolCalls[0].Arguments[0] = &#x27;y&#x27;
+		}()
+	}
+	close(start)
+	wg.Wait()
+	if wins.Load() != 1 || effects.Load() != 1 {
+		t.Fatal(wins.Load(), effects.Load())
+	}
+	want := before
+	want.Phase = runstate.ToolsRunning
+	if !reflect.DeepEqual(want, g.Snapshot()) {
+		t.Fatal(&quot;returned state aliases run&quot;)
+	}
+	cleared24(t, g)
+}
+func TestDay24StaleRequest(t *testing.T) {
+	g := gate24(t, context.Background(), true)
+	decide24(t, g, &quot;pause-1&quot;, runstate.DecisionApprove)
+	if _, e := g.ResolveDecision(&quot;r24&quot;, &quot;pause-1&quot;); e != nil {
+		t.Fatal(e)
+	}
+	apply24(t, g, runstate.Event{Kind: runstate.ToolsReturned, Results: []model.Message{{Role: &quot;tool&quot;, ToolCallID: &quot;call-1&quot;, Content: &quot;doc-1 body&quot;}}})
+	pending24(t, g, &quot;call-2&quot;, &quot;pause-2&quot;)
+	decide24(t, g, &quot;pause-2&quot;, runstate.DecisionApprove)
+	before := g.Snapshot()
+	if s, e := g.ResolveDecision(&quot;r24&quot;, &quot;pause-1&quot;); !errors.Is(e, runstate.ErrDecisionMismatch) || !reflect.DeepEqual(s, before) {
+		t.Fatal(s, e)
+	}
+	if d, ok := g.CurrentDecision(); !ok || d.RequestID != &quot;pause-2&quot; {
+		t.Fatal(d, ok)
+	}
+	if s, e := g.ResolveDecision(&quot;r24&quot;, &quot;pause-2&quot;); e != nil || s.Phase != runstate.ToolsRunning || s.Pending[0].ID != &quot;call-2&quot; {
+		t.Fatal(s, e)
+	}
+}
+func TestDay24ResolveVersusCancellation(t *testing.T) {
+	for i := 0; i &lt; 32; i++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		g := gate24(t, ctx, true)
+		decide24(t, g, &quot;pause-1&quot;, runstate.DecisionApprove)
+		start := make(chan struct{})
+		done := make(chan struct{})
+		go func() { &lt;-start; cancel(); close(done) }()
+		close(start)
+		s, e := g.ResolveDecision(&quot;r24&quot;, &quot;pause-1&quot;)
+		&lt;-done
+		if e == nil {
+			if s.Phase != runstate.ToolsRunning {
+				t.Fatal(s)
+			}
+		} else if !errors.Is(e, context.Canceled) || s.Phase != runstate.Cancelled {
+			t.Fatal(s, e)
+		}
+		cleared24(t, g)
+		if s.Phase == runstate.ToolsRunning {
+			s, e = g.Apply(runstate.Event{Kind: runstate.StartTools})
+			if !errors.Is(e, context.Canceled) || s.Phase != runstate.Cancelled {
+				t.Fatal(s, e)
+			}
+		}
+	}
+}
+</code></pre><button type="button" data-copy="day24-tests-internal-runstate-day24_contract_test-go-txt">复制本文件</button></details></section><section id="tasks"><h2>80分钟：四步完成决定消费</h2><article class="step"><h3>1 · 15分钟：先守住目标与决定前提</h3><p><strong>为什么：</strong>先守住目标与决定前提，让一组规则成为可验证的控制边界。</p><p><strong>位置：</strong>新增 resolve.go 的前置检查和 ErrDecisionRequired。</p><p><strong>输入 → 输出 / 动作：</strong>r24/pause-1 但无决定 → 当前 State/ErrDecisionRequired；错目标先返回错配。按既定顺序实现，保持所有前置失败不消费。</p><pre><code>go test ./internal/runstate -run '^TestDay24Preconditions$' -count=1 -v</code></pre><p><strong>完成证据：</strong>空值、错配、无请求和无决定出口可识别，错误State副本可修改而不污染Run。</p><details><summary>卡住时提示</summary><p>复用当前request中的RunID和ID；别把两个分次读取结果当同一时刻的状态。</p></details></article><article class="step"><h3>2 · 25分钟：批准与拒绝映射到旧事件</h3><p><strong>为什么：</strong>批准与拒绝映射到旧事件，让一组规则成为可验证的控制边界。</p><p><strong>位置：</strong>新增 ResolveDecision 的事件委托与成功清理。</p><p><strong>输入 → 输出 / 动作：</strong>批准 → StartTools → ToolsRunning；拒绝 → Abort(reason) → Failed。一次委托后消费两份元数据，不写工具代码。</p><pre><code>go test ./internal/runstate -run '^(TestDay24ApproveContinues|TestDay24RejectTerminates)$' -count=1 -v</code></pre><p><strong>完成证据：</strong>Step/消息/Pending契约保持；批准的宿主夹具effect1，拒绝effect0；工具结果仍按call-1回填到模型下一轮。</p><details><summary>卡住时提示</summary><p>只通过g.run.Apply提交既有事件，不直接写Run字段；拒绝nil错误仍需检查Phase。</p></details></article><article class="step"><h3>3 · 20分钟：接通取消与终态优先</h3><p><strong>为什么：</strong>接通取消与终态优先，让一组规则成为可验证的控制边界。</p><p><strong>位置：</strong>新增 ResolveDecision 入口取消分支及委托后的清理。</p><p><strong>输入 → 输出 / 动作：</strong>已取消ctx即使目标为空也委托Run观察；既有终态保留；竞争中的批准先提交也仍能在后续Apply观察取消。</p><pre><code>go test ./internal/runstate -run '^(TestDay24Cancellation|TestDay24ResolveVersusCancellation)$' -count=1 -v</code></pre><p><strong>完成证据：</strong>原Canceled/可控DeadlineExceeded保留，Cancelled保留Pending并清两项；没有后台监听或强杀。</p><details><summary>卡住时提示</summary><p>不要递归调用g.Apply获取同一门禁锁；在门禁内委托的是原Run.Apply。</p></details></article><article class="step"><h3>4 · 20分钟：证明一次消费与新请求隔离</h3><p><strong>为什么：</strong>证明一次消费与新请求隔离，让一组规则成为可验证的控制边界。</p><p><strong>位置：</strong>ResolveDecision 的同一锁覆盖范围和返回副本。</p><p><strong>输入 → 输出 / 动作：</strong>16个消费 → 恰一成功；新pause-2与旧pause-1精确区分。全绿后重构重复清理，再跑同一测试与累计回归。</p><pre><code>go test ./internal/runstate -run '^(TestDay24ConcurrentConsumption|TestDay24StaleRequest)$' -count=1 -v</code></pre><p><strong>完成证据：</strong>输家即使拿到ToolsRunning也不触发effect；旧请求不清新决定，race通过。</p><details><summary>卡住时提示</summary><p>不要先清request再放锁去Apply，也不要把“读到ToolsRunning”当作本次授权。</p></details></article></section><section id="review"><h2>20分钟测试与复盘</h2><h3>12分钟 · 目标、race 与累计回归</h3><pre><code># 练习副本根：建议命令
+go test ./internal/runstate -run '^TestDay24' -count=1 -v -timeout 20s
+go test -race ./internal/runstate -run '^TestDay24' -count=1 -timeout 30s
+go test ./internal/... -timeout 60s
+# 参考仓库根：建议命令
+go test ./examples/...
+go test -race ./examples/...</code></pre><p>这些是学习者的建议验收命令，不代表你的实现已执行或完成。参考材料验证与学习者实现状态分开记录。</p><h3>8分钟 · 合上代码回答</h3><ol><li>从doc-1的模型调用讲到暂停、记录决定、消费、执行、结果消息和下一轮模型，指出每一步的控制者。</li><li>为什么重复消费返回ToolsRunning仍不能执行？为什么拒绝nil错误也不能执行？</li><li>取消在批准提交前后分别会怎样？状态推进与工具副作用之间还有什么空隙？</li><li>如果新暂停复用旧RequestID，关联匹配还能区分旧重试吗？哪些宿主约定尚未由代码强制？</li><li>若明天要保存并恢复暂停及决定，旧Checkpoint缺了什么？哪些地方需要保存确认和冲突处理？</li></ol><h3>DoD / 完成定义</h3><p><strong>实作：</strong>R1–R7的七组测试及子场景、目标/race和受影响累计回归真实通过；旧Day22/23记录与拦截职责保留；准确记录失败、通过和未验证范围。</p><p><strong>理解：</strong>能不看代码画两张图，解释记录与消费为何分开、工具I/O为何在锁外、返回状态为何不能替代本次成功信号；能将“持久化暂停”定位到独立保存与恢复层。</p><h3>本次材料验证</h3><p class="note" id="verification-status">Go1.22.2 linux/amd64：原样骨架编译通过，目标确实执行并因TODO失败；相同完整测试在隔离internal参考通过含race，兼容副本累计回归通过。仓库根 go test ./examples/... 与 go test -race ./examples/... 均退出码0，包含Day22/23行为回归。学习者原实现、真实模型/工具后端、身份权限、持久审批与重启恢复未验证。</p><p><a href="exercises/day24/verification.json">原始红绿与累计记录</a> · <a href="exercises/day24/browser-verification.json">离线浏览器记录</a></p><h3>学习清单</h3><div class="meta"><span>本浏览器自评进度</span><span id="count">0 / 8</span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="fill" class="fill"></div></div><div id="checks"></div><noscript><p>关闭脚本仍可离线阅读，清单不会自动保存。</p></noscript></section><section id="answer"><h2>最后再看：兼容参考答案</h2><p>实际累计参考位于 examples/internal/runstate/resolve.go；以下映射到练习 internal 路径。相同行为测试仅映射 import 前缀，不改断言。</p><h3 class="file-label">参考 · internal/runstate/resolve.go</h3><p><a href="exercises/day24/reference/internal/runstate/resolve.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="reference" data-source="day24/reference/internal/runstate/resolve.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day24-reference-internal-runstate-resolve-go-txt"><code>package runstate
+
+import (
+	&quot;errors&quot;
+	&quot;strings&quot;
+)
+
+var ErrDecisionRequired = errors.New(&quot;runstate: a recorded decision is required&quot;)
+
+// ResolveDecision consumes the held decision and commits one transition.
+// Approve starts ToolsRunning; reject commits Failed using the recorded reason.
+// No external I/O runs here. The host may execute tools only after nil error AND
+// ToolsRunning from this call, never by inspecting a retry&#x27;s returned State alone.
+func (g *PauseGate) ResolveDecision(runID, requestID string) (State, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	// Preserve Run.Apply&#x27;s cancellation observation and terminal-first behavior.
+	if g.run.Context().Err() != nil {
+		state, err := g.run.Apply(Event{Kind: Cancel})
+		if terminal(state.Phase) {
+			g.request, g.decision = nil, nil
+		}
+		return state, err
+	}
+	current := g.run.Snapshot()
+	if strings.TrimSpace(runID) == &quot;&quot; || strings.TrimSpace(requestID) == &quot;&quot; {
+		return current, ErrInvalidDecision
+	}
+	if g.request == nil {
+		return current, ErrNoPause
+	}
+	if runID != g.request.Checkpoint.State.RunID || requestID != g.request.ID {
+		return current, ErrDecisionMismatch
+	}
+	if g.decision == nil {
+		return current, ErrDecisionRequired
+	}
+	event := Event{Kind: StartTools}
+	if g.decision.Outcome == DecisionReject {
+		event = Event{Kind: Abort, Reason: g.decision.Reason}
+	}
+	state, err := g.run.Apply(event)
+	if err == nil || terminal(state.Phase) {
+		g.request, g.decision = nil, nil
+	}
+	return state, err
+}
+</code></pre><button type="button" data-copy="day24-reference-internal-runstate-resolve-go-txt">复制本文件</button></details><h3>次日衔接 · Day25</h3><p>今天已能在同一内存运行里消费人工决定，并将工具结果接回模型链路。明天讨论中断状态与保存边界：仅存旧Checkpoint无法保留暂停请求和决定，更不能消除提交与I/O之间的崩溃空隙。</p></section><footer><nav class="page-navigation" aria-label="页面导航"><a class="page-nav-button" href="agent-runtime-day-23.html">上一项</a><a class="page-nav-button" href="../../index.html">返回主页</a><span class="page-nav-button is-disabled" aria-disabled="true">下一项</span></nav><p class="page-meta">Day24 / 56 · 第四周：中断、审批、人机协作与故障恢复 · 离线图解与完整练习</p></footer></main><script>
+const items=["用自己的话解释当天三个概念", "根据两张图讲清输入、职责和返回", "完成官方阅读并写下问题答案", "确认骨架可编译且目标出现预期红灯", "按任务卡逐步完成当天实现", "完整目标与 race 测试通过", "记录累计回归实际结果和未验证项", "合上代码完成需求变化与失败边界复盘"];const key="mini-agent-runtime-day-24-tdd-v1";
+let saved=[];try{const value=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(value))saved=value}catch(_){}
+const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const percent=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=percent+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(percent))}
+items.forEach((s,i)=>{const row=document.createElement("div");row.className="check";const input=document.createElement("input");input.type="checkbox";input.id="task-"+i;input.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=input.id;label.textContent=s;row.append(input,label);box.append(row);input.onchange=()=>{saved[i]=input.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+document.querySelectorAll("button[data-copy]").forEach(button=>button.addEventListener("click",async()=>{const target=document.getElementById(button.dataset.copy);try{await navigator.clipboard.writeText(target.textContent);button.textContent="已复制"}catch(_){const range=document.createRange();range.selectNodeContents(target);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);button.textContent="已选中，请手动复制"}}));
+</script></body></html>

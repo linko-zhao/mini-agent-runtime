@@ -399,3 +399,18 @@ EvidenceSource是可信宿主端口，应遵守只读核验约定；适配器自
 - 本日无外部审批依赖，因此无依赖失败路径；身份/权限服务、存储故障、网络超时由未来宿主适配承担。内存决定随进程退出丢失；仅保存旧Checkpoint不包含暂停ID或决定。没有真实审批服务、持久性、分布式去重、工具副作用或exactly-once保证。
 
 迁移：新增approval.go；在PauseGate增加decision字段，在Apply原terminal分支增加g.decision=nil；所有旧接口不改参。练习副本目标internal/runstate/approval.go，四个支持state/run/checkpoint/pause中仅pause含兼容增量；手工迁移仅追加字段/清理，不覆盖学习者整文件。新建docs/learning/exercises/day23骨架/完整测试/支持/参考，共享根go.mod，import映射examples/internal→internal且不改断言。材料验证见day23/verification.json，学习者原实现未验证。
+
+## Day24：人工决定与继续路径
+
+新增 examples/internal/runstate/resolve.go、resolve_test.go，新增 ResolveDecision(runID,requestID string)(State,error) 与 ErrDecisionRequired。原 state/run/checkpoint/pause/approval 全部复用，不改旧公开签名、消息、Phase/Event或根internal/cmd。Decide仍只记录，Apply仍在持有暂停且ctx有效时拦事件；本日显式消费入口是独立动作。
+
+- 同一门禁锁覆盖目标检查、Run.Apply与消费；宿主仍必须将同一Run的写入权交给唯一Gate，禁止绕过或另建Gate。零值不可用、使用后不可复制，锁等待不可取消，无公平性承诺。
+- ResolveDecision先观察原ctx；若已取消，委托Run.Apply(Cancel)，非终态提交Cancelled/原Canceled或DeadlineExceeded，保留Pending并按终态清两项，即使ID非法或无暂停。已有终态仍由Run.Apply优先ErrTransition，不覆盖结果。
+- ctx有效时取得独立当前State，再依次检查：ID非空白否则ErrInvalidDecision；无request则ErrNoPause；RunID/RequestID与当前暂停精确不符则ErrDecisionMismatch；无decision则ErrDecisionRequired。合法ID原样比较，不做Trim规范化。前置失败返回当前独立State，不改变元数据/Run，不返回零State。
+- 当前DecisionApprove映射StartTools，成功返回ToolsRunning/nil；DecisionReject映射Abort(Reason)，成功返回Failed/nil，Failure原样为决定Reason。Step/Messages/Pending沿旧事件契约保留，不伪造工具消息、不增加模型轮次。只通过原Run.Apply更新，不重写转换。
+- 委托成功或委托结果为终态时清request/decision；委托非终态错误保持两项并原样返回。Run.Apply再次观察ctx，可在合法审批分支提交Cancelled/原错误；最后采样后仍可能取消。没有背景监听、硬中断、物理时间优先或副作用回滚。
+- 成功消费后CurrentInterrupt/CurrentDecision零值false，旧调用方副本不变。ctx有效的重试ErrNoPause，可能同时返回ToolsRunning；宿主只能在本次ResolveDecision无错误且Phase=ToolsRunning时执行工具。reject虽nil错误但Phase=Failed，不能执行。已开始工具阶段，不再Apply(StartTools)；后续ToolsReturned仍按原Pending顺序/ToolCallID回填并进入下一轮模型。
+- 16个并发有效消费恰一成功，其余ErrNoPause；每份State深拷贝，调用方可各自修改。不同新RequestID可挡住旧请求，宿主应在Run生命周期内不复用RequestID并隔离RunID；旧Pause未强制历史去重，本日无台账，相同目标复用时不能区分旧重试。精确匹配不是授权、防重放或全局唯一性证明。
+- 方法无外部I/O/Store/审批服务；没有这些依赖的失败路径。工具执行在锁外并传原ctx，真实执行策略与后端幂等另行负责。推进到ToolsRunning与实际I/O之间可崩溃；内存一次消费不等于持久恢复、审计归档、执行归属或exactly-once。
+
+迁移只需新增resolve.go；宿主将审批后的继续分支改为ResolveDecision并同时检查本次error/Phase。原类型、构造和读取/记录方法无需改参。练习副本internal/runstate/resolve.go，五个原样support为state/run/checkpoint/pause/approval，所有文件共享根go.mod；reference import仅examples/internal→internal映射，不改行为断言。原始红绿/race/累计材料记录见docs/learning/exercises/day24/verification.json，学习者原实现、真实身份权限/后端和持久性未验证。

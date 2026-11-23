@@ -14,7 +14,7 @@
 </head>
 <body><main>
 <header class="hero"><div class="eyebrow">MINI AGENT RUNTIME · LEARNING PATH</div><h1>Agent Runtime 学习文档</h1><p>八周、56 天，从 Runtime 与 Agent Loop 出发，逐步完成工具编排、状态恢复、记忆、调度、评估与部署。每天 20 分钟阅读、80 分钟编码、20 分钟测试与复盘。</p><div class="chips"><span class="chip">8 周 · 56 天</span><span class="chip">Go 实战</span><span class="chip">独立离线 HTML</span><span class="chip">周日集成复盘</span></div></header>
-<section class="intro"><p><strong>怎么使用：</strong>新版课程按“具体例子 → 图解设计 → 代码骨架 → 完整测试 → 自己实现”学习。先运行测试看到预期失败，每次补一个方法，最后回归并讲清数据流。编写要求见 <a href="docs/learning/daily-lesson-standard.md">每日教学交付规范</a>；Day 01–23 已采用新规范；Day 01–07 补齐了图解、骨架、完整测试与隔离验证。清单进度保存在浏览器 localStorage 中；前序练习未完成时，可借助 examples 累计参考基线继续学习。</p></section>
+<section class="intro"><p><strong>怎么使用：</strong>新版课程按“具体例子 → 图解设计 → 代码骨架 → 完整测试 → 自己实现”学习。先运行测试看到预期失败，每次补一个方法，最后回归并讲清数据流。编写要求见 <a href="docs/learning/daily-lesson-standard.md">每日教学交付规范</a>；Day 01–24 已采用新规范；Day 01–07 补齐了图解、骨架、完整测试与隔离验证。清单进度保存在浏览器 localStorage 中；前序练习未完成时，可借助 examples 累计参考基线继续学习。</p></section>
 <section class="week"><div class="week-head"><h2>第 1 周 · Runtime 与 Agent Loop</h2><span>Day 01–07 · 基础、模型接口、执行闭环</span></div><div class="cards">
 <a class="card" href="docs/learning/agent-runtime-day-01.html"><div class="card-top"><span class="day">DAY 01</span><span class="status">图解 · TDD</span></div><h3>Runtime 核心抽象与最小 Agent Loop</h3><p>今天实现最小 Agent Loop，让“读取 doc-1”的请求能够经历模型 → 工具 → 模型并返回回答。</p></a>
 <a class="card" href="docs/learning/agent-runtime-day-02.html"><div class="card-top"><span class="day">DAY 02</span><span class="status">图解 · TDD</span></div><h3>模型适配层与响应规范化</h3><p>今天实现 HTTP 模型适配层，让 Runtime 能消费 Provider 的非流式 Chat Completions 响应。</p></a>
@@ -45,7 +45,7 @@
 <section class="week"><div class="week-head"><h2>第 4 周 · 中断审批与故障恢复</h2><span>Day 22–28 · 人工介入、安全边界与恢复路径</span></div><div class="cards">
 <a class="card" href="docs/learning/agent-runtime-day-22.html"><div class="card-top"><span class="day">DAY 22</span><span class="status">图解 · TDD</span></div><h3>工具开始前的暂停门禁</h3><p>ToolsPending 边界、执行拦截与原上下文取消</p></a>
 <a class="card" href="docs/learning/agent-runtime-day-23.html"><div class="card-top"><span class="day">DAY 23</span><span class="status">图解 · TDD</span></div><h3>审批决定与请求关联</h3><p>目标匹配、首次决定、信任边界与取消清理</p></a>
-<div class="card future"><div class="card-top"><span class="day">DAY 24</span><span class="status">待生成</span></div><h3>人工决定与继续路径</h3><p>按课程进度发布独立学习文档</p></div>
+<a class="card" href="docs/learning/agent-runtime-day-24.html"><div class="card-top"><span class="day">DAY 24</span><span class="status">图解 · TDD</span></div><h3>人工决定与继续路径</h3><p>一次消费、批准推进、拒绝终止与锁外执行</p></a>
 <div class="card future"><div class="card-top"><span class="day">DAY 25</span><span class="status">待生成</span></div><h3>中断状态与保存边界</h3><p>按课程进度发布独立学习文档</p></div>
 <div class="card future"><div class="card-top"><span class="day">DAY 26</span><span class="status">待生成</span></div><h3>故障与外部执行确认</h3><p>按课程进度发布独立学习文档</p></div>
 <div class="card future"><div class="card-top"><span class="day">DAY 27</span><span class="status">待生成</span></div><h3>恢复编排与竞争边界</h3><p>按课程进度发布独立学习文档</p></div>
