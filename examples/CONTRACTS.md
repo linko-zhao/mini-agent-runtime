@@ -414,3 +414,20 @@ EvidenceSource是可信宿主端口，应遵守只读核验约定；适配器自
 - 方法无外部I/O/Store/审批服务；没有这些依赖的失败路径。工具执行在锁外并传原ctx，真实执行策略与后端幂等另行负责。推进到ToolsRunning与实际I/O之间可崩溃；内存一次消费不等于持久恢复、审计归档、执行归属或exactly-once。
 
 迁移只需新增resolve.go；宿主将审批后的继续分支改为ResolveDecision并同时检查本次error/Phase。原类型、构造和读取/记录方法无需改参。练习副本internal/runstate/resolve.go，五个原样support为state/run/checkpoint/pause/approval，所有文件共享根go.mod；reference import仅examples/internal→internal映射，不改行为断言。原始红绿/race/累计材料记录见docs/learning/exercises/day24/verification.json，学习者原实现、真实身份权限/后端和持久性未验证。
+
+## Day25：中断状态与保存边界
+
+新增examples/internal/runstate/pause_snapshot.go、pause_snapshot_test.go，不修改旧类型、Phase/Event、消息、门禁、决定或消费方法，也不改根internal/cmd。所有示例共享根go.mod；旧接口与构造参数保持。
+
+- PauseSnapshot{SchemaVersion int; Request PauseRequest; Decision *ApprovalDecision}：本日只接受PauseSnapshotSchema=1。Request沿用ID/Reason/Checkpoint，Checkpoint只存一份；Decision可nil，非nil为原approve/reject结构。格式版本不是StoredCheckpoint.Version、Step、新鲜度或执行权。
+- Clone() PauseSnapshot：Checkpoint深拷贝、Decision值复制，不校验/保存/授权，零值可用。输出与输入及门禁不共享可变缓冲区。
+- Gate.PauseSnapshot()(PauseSnapshot,error)：同一g.mu内先观察原ctx→无request则ErrNoPause→复制请求与决定→有限校验→再观察ctx。错误零候选，原Canceled/DeadlineExceeded保留，内部非法候选ErrInvalidPauseSnapshot。只读，不Apply/消费/清理；取消仍由其它推进入口提交终态。捕获与Decide/Resolve共享协调，可能见nil/完整决定，或消费前旧候选/消费后无请求；返回不是实时/新鲜视图。
+- 有限校验：SchemaVersion=1，ID/Reason非空白；复用validateCandidate的RunID/预算/边界规则；限定BeforeTools/ToolsPending，Result/Failure空，Messages首条user、Pending非空、末条assistant；末条ToolCalls与Pending逐项ID/Name/Arguments字节内容一致，ID非空且唯一、Name非空白。Decision若有，精确匹配RunID/RequestID，Actor/Reason非空白且Outcome合法。不是完整历史重放、参数JSON业务验证、来源或权限认证。
+- EncodePauseSnapshot(PauseSnapshot)([]byte,error)：先校验、全新Gob流编码，再检查MaxPauseSnapshotBytes=1<<20（1,048,576字节）上限。失败nil/ErrInvalidPauseSnapshot，不保留Gob内部错误链；成功字节归调用方。参数是json.RawMessage，Gob保持字节内容，避免JSON重新编码破坏既有字节身份；不要求参数在本层为合法JSON。空切片可能归一为nil，不保证内存表示或编码字节稳定/规范。
+- DecodePauseSnapshot([]byte)(PauseSnapshot,error)：输入非空且不超上限；独立bytes.Reader解一条Gob值、无剩余字节、同样校验。截断/垃圾/尾随/第二条流/旧或未知格式/关联错配统一零候选和ErrInvalidPauseSnapshot。成功不引用输入，每次解码独立；不创建Run/Gate、不执行、不保存、不迁移。Gob未知字段等兼容行为仍按标准库，不声明严格规范格式。
+- 捕获/Clone无此大小限制，编码后才检查长度；大小上限不构成解码内存CPU硬隔离。编解码无ctx或中途取消，输入在处理期间不得并发修改，多个读者可各改自己的输出；锁等待不可取消、无公平性、末次ctx检查后仍可取消。
+- 编解码面向可信宿主记录，不是任意网络输入的安全解析器；含内部消息/参数/决定，不能直接公开审计。没有真实性/新鲜度、持久确认、CAS、租约、幂等键、外部副作用或exactly-once保证。旧CheckpointStore.Save只接收Checkpoint，不得丢弃请求/决定后宣称完整保存；MemoryStore也不持久。旧记录不能自动合成批准或恢复凭证。
+
+迁移只新增文件；宿主需要候选时用Gate.PauseSnapshot一次捕获，替代分次拼接CurrentInterrupt/CurrentDecision。旧构造、类型与方法不改参；旧Checkpoint映射Request.Checkpoint、PauseRequest/ApprovalDecision原定义复用，新增格式版本；旧字节没有完整字段时拒绝，不自动迁移。未来修改导出结构需显式版本/迁移设计。
+
+练习internal/runstate/pause_snapshot.go，七份support为state/run/checkpoint/store/pause/approval/resolve，store仅复用基础校验，不调用Save。完整骨架/测试/支持/参考及红绿/race/累计证据见docs/learning/exercises/day25；import只映射examples/internal→internal，不改断言。学习者原实现、真实存储/工具/模型、身份权限、持久恢复均未验证。

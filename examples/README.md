@@ -1,6 +1,6 @@
 # Agent Runtime 累计示例
 
-这是依据 Day 01–24 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
+这是依据 Day 01–25 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
 
 共享仓库根目录的 `go.mod`（Go 1.22.2），无需新建 Module，也不导入根目录 `internal` 中的练习实现。所有命令在仓库根目录运行：
 
@@ -212,3 +212,9 @@ Ready、预算耗尽与终态只返回Recovery，Replay=nil且不查询Source；
 新增 internal/runstate/resolve.go、resolve_test.go，复用Day22/23门禁和决定。ResolveDecision消费目标匹配的已记录决定，批准推进ToolsRunning、拒绝推进Failed；I/O仍在宿主锁外执行，必须检查本次nil错误且Phase=ToolsRunning。没有新Phase/Event或旧签名迁移，不写Store。完整契约与调用方调整见CONTRACTS.md及[Day24页面](../docs/learning/agent-runtime-day-24.html)。
 
 从仓库根运行 go test ./examples/... 与 go test -race ./examples/...；实际材料验证见 docs/learning/exercises/day24/verification.json。内存一次消费不保证持久恢复或真实工具exactly-once；学习者原实现未验证。
+
+## Day25：中断状态与保存边界
+
+新增internal/runstate/pause_snapshot.go、pause_snapshot_test.go。PauseSnapshot在同一门禁锁内捕获请求与可选决定；SchemaVersion=1，Clone与Gob编解码保持消息/参数所有权和参数字节内容。只交付候选数据，不调用Store或恢复执行；格式版本不等于CAS版本。完整规则与旧数据映射见CONTRACTS.md和[Day25页面](../docs/learning/agent-runtime-day-25.html)。
+
+从仓库根运行go test ./examples/...与go test -race ./examples/...；材料真实记录见docs/learning/exercises/day25/verification.json。编解码仅用于受信宿主数据，不保证来源、新鲜度、保存确认或持久恢复；学习者原实现未验证。

@@ -1,0 +1,1362 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>Day 25 · 中断状态与保存边界</title><style>/* Shared visual system for every learning page. Keep presentation here. */
+:root {
+  color-scheme: light;
+  --page-bg: #f5f7fb;
+  --surface: #fff;
+  --ink: #182337;
+  --muted: #58667b;
+  --line: #dce4ef;
+  --accent: #2459bd;
+  --accent-dark: #183561;
+  --accent-pale: #edf3ff;
+  --focus: #dc7900;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--page-bg);
+  color: var(--ink);
+  font: 16px/1.72 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+main {
+  width: min(100% - 32px, 840px);
+  min-width: 0;
+  margin: 0 auto;
+  padding: 28px 0 48px;
+}
+h1, h2, h3 { color: var(--ink); line-height: 1.45; }
+h1 { font-size: clamp(1.6rem, 4vw, 1.9rem); }
+h2 { margin: 0 0 18px; font-size: 20px; }
+h3 { font-size: 17px; }
+p, li, .node, figcaption { overflow-wrap: anywhere; }
+p { margin: 10px 0; }
+li { margin: 8px 0; }
+a { color: var(--accent); text-underline-offset: 3px; }
+a:hover { color: var(--accent-dark); }
+a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+header, .hero {
+  border-radius: 18px;
+  background: var(--accent-dark);
+  color: #fff;
+  padding: clamp(22px, 5vw, 34px);
+}
+header h1, .hero h1, header h2, .hero h2, header h3, .hero h3 { color: inherit; }
+header p, .hero p { color: #e6eefa; }
+header a, .hero a { color: #cce4ff; }
+.hero h1 { margin: 12px 0; }
+.eyebrow, .time { font-size: 13px; font-weight: 700; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips span, .chip {
+  border: 1px solid #9cb5d9;
+  border-radius: 20px;
+  padding: 3px 12px;
+  font-size: 13px;
+}
+
+section, main > nav:not(.page-navigation) {
+  min-width: 0;
+  margin-top: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: clamp(18px, 4vw, 28px);
+}
+section:target { scroll-margin-top: 18px; }
+article, .card, .rule, .step {
+  min-width: 0;
+  margin: 18px 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+.card h3, .step h3 { margin-top: 0; }
+figure { margin: 20px 0; }
+.flow { display: flex; flex-direction: column; gap: 10px; margin: 20px 0; }
+.node {
+  min-width: 0;
+  border: 2px solid #9eb6db;
+  border-radius: 10px;
+  background: #f4f8ff;
+  padding: 15px;
+}
+.node strong { display: block; }
+.node small { display: block; }
+.arrow { text-align: center; color: #345276; font-size: 16px; }
+.branch { border: 2px dashed #9b6500; background: #fff7e8; }
+.muted, figcaption { color: var(--muted); font-size: 13px; }
+.note, .goal, .info {
+  border-left: 4px solid var(--accent);
+  border-radius: 4px;
+  background: var(--accent-pale);
+  padding: 14px 18px;
+}
+.warn { border-left-color: #9b6500; background: #fff6e3; }
+.phase { color: var(--accent-dark); font-weight: 700; }
+
+code {
+  overflow-wrap: anywhere;
+  border-radius: 4px;
+  background: #edf1f7;
+  padding: 2px 4px;
+  font-size: .88em;
+}
+pre {
+  max-width: 100%;
+  overflow: auto;
+  border-radius: 10px;
+  background: #142136;
+  color: #e7f3ff;
+  padding: 18px;
+  font-size: 13px;
+  line-height: 1.7;
+  tab-size: 4;
+}
+pre code { overflow-wrap: normal; background: none; padding: 0; font-size: inherit; }
+details { margin: 16px 0; border: 1px solid var(--line); border-radius: 9px; padding: 12px 16px; }
+details > pre { margin-bottom: 12px; }
+summary { cursor: pointer; font-weight: 650; }
+button {
+  cursor: pointer;
+  border: 1px solid #9eb6db;
+  border-radius: 7px;
+  background: var(--accent-pale);
+  color: var(--accent-dark);
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 13px;
+}
+.file-label { overflow-wrap: anywhere; }
+.download { font-size: 13px; }
+.code-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; }
+.copy-state, .copy-status { color: var(--muted); font-size: 13px; }
+.code-file { min-width: 0; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+}
+
+.check, .checks label { display: flex; gap: 12px; margin: 14px 0; }
+.check input, .checks input {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-top: 7px;
+  accent-color: var(--accent);
+}
+.check label, .checks label { cursor: pointer; }
+.done label, .check.done label { color: var(--muted); text-decoration: line-through; }
+.progress { height: 12px; overflow: hidden; border-radius: 8px; background: #e3e9f2; }
+.fill, #fill { width: 0; height: 100%; background: var(--accent); }
+.meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-bottom: 12px; font-size: 13px; }
+
+.toplinks { display: flex; flex-wrap: wrap; gap: 10px 22px; }
+footer { margin: 28px 0 0; color: var(--muted); text-align: center; font-size: 13px; }
+.page-navigation {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 28px 0 12px;
+}
+.page-nav-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #9ab0d0;
+  border-radius: 9px;
+  background: var(--accent-pale);
+  color: #153b70;
+  padding: 8px 12px;
+  font: inherit;
+  font-weight: 650;
+  line-height: 1.35;
+  text-align: center;
+  text-decoration: none;
+}
+.page-nav-button:hover { border-color: var(--accent); background: #dceaff; color: #153b70; }
+.page-nav-button.is-disabled { cursor: not-allowed; border-color: var(--line); background: #f0f2f5; color: #798496; }
+.page-meta { margin: 8px 0 0; }
+
+/* Supplemental styles used by the snapshot reference page. */
+.matrix-scroll { overflow-x: auto; }
+.matrix-scroll table { min-width: 660px; }
+table { max-width: 100%; border-collapse: collapse; }
+th, td { border-bottom: 1px solid var(--line); padding: 9px; text-align: left; vertical-align: top; }
+th { background: #f4f7fc; }
+.tag { display: inline-block; margin-right: 6px; border-radius: 5px; background: #eaf0fc; color: var(--accent); padding: 2px 7px; font-size: 12px; }
+.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.grid > div { border-radius: 9px; background: #f6f8fc; padding: 12px; }
+.grid strong { display: block; font-size: 19px; }
+.grid span { color: var(--muted); font-size: 12px; }
+.hero small { opacity: .8; letter-spacing: 1px; }
+td code { overflow-wrap: anywhere; }
+
+img, video, iframe { max-width: 100%; }
+@media (max-width: 600px) {
+  main { width: min(100% - 20px, 840px); padding-top: 12px; }
+  section, main > nav:not(.page-navigation) { padding: 20px 16px; }
+  header, .hero { padding: 23px 20px; }
+  body { font-size: 15px; }
+  .hero h1 { font-size: 23px; }
+  h2 { font-size: 19px; }
+  pre { padding: 14px; font-size: 12px; }
+  article, .card, .rule, .step { padding: 14px; }
+  .grid { grid-template-columns: 1fr; }
+  .page-navigation { gap: 6px; }
+  .page-nav-button { min-height: 42px; padding: 7px 4px; font-size: .88rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+.diagram-flow{display:grid;gap:10px;margin:14px 0}.diagram-flow .node{padding:12px;border:1px solid #bccde6;border-radius:10px;background:#edf3ff;overflow-wrap:anywhere}.diagram-flow .arrow{text-align:center;font-size:.9rem;color:#183561}.diagram-flow strong{display:block}.contract{margin:18px 0;padding:14px;border:1px solid #dce4ef;border-radius:10px}table{width:100%;table-layout:fixed}td,th{overflow-wrap:anywhere}code{overflow-wrap:anywhere}</style></head><body><main><header class="hero"><p class="eyebrow">AGENT RUNTIME · DAY 25 / 56 · WEEK 04</p><h1>中断状态与保存边界</h1><p>今天实现带格式版本的 PauseSnapshot，让暂停请求、运行快照和可选决定能作为同一份候选数据编解码。</p><p>20分钟 Eino 阅读 · 80分钟 Go 连续练习 · 20分钟测试复盘</p></header>
+<section id="goal"><h2>只保存 Checkpoint，会丢掉什么？</h2><p>延续 doc-1：r25 已收到 call-1 / get_document，停在 ToolsPending；宿主保留暂停 ID、理由，可能已经记录 reviewer-1 的批准。Day17 的 Checkpoint 只含运行位置，没有暂停 ID 和审批决定。</p><p>如果只保存旧 Checkpoint，读回后不知道等待的是哪一次请求，也不知道是否已有决定。如果分次读 CurrentInterrupt 和 CurrentDecision，另一协程可能恰好消费决定，两个值还可能来自不同观察时刻。</p><p>本日用同一门禁锁捕获一份 PauseSnapshot，再编码为有界二进制数据；读回时检查格式版本和关联一致性。这样把“要保存什么”讲清，再把字节交给独立存储层。</p><p class="note">本日没有调用持久存储、取得写入确认或重建 Run / Gate。编码成功只产生候选字节，解码成功只产生数据；两者都不证明记录新鲜、审批可信或工具尚未执行。内存消费与外部 I/O 之间的崩溃空隙仍然存在。</p><h3>三个概念</h3><ul><li><strong>格式版本：</strong>描述这份数据采用哪种结构。SchemaVersion 本日只接受 1；它不是 Day18 的存储 CAS Version，也不是 State.Step。</li><li><strong>一致捕获：</strong>在同一门禁锁内读取请求与决定。PauseSnapshot 方法返回一个观察点的数据副本，避免自己拼接两次读取。</li><li><strong>保存确认：</strong>存储适配器确认一次写入的结果。今天的 Encode 还没有走到这一步，不能把字节当作保存回执。</li></ul></section>
+<section id="design"><h2>两张图：数据捕获与保存责任分开</h2><h3>图一 · 模块职责</h3><div class="diagram-flow" role="img" aria-label="同一门禁锁捕获PauseRequest和可选ApprovalDecision，Clone建立所有权，编码器校验并产生Gob字节，存储适配和保存确认属于独立后续层。"><div class="node"><strong>PauseGate：同一门禁</strong>持有 PauseRequest / 可选 ApprovalDecision；Run 仍为 ToolsPending，推进和消费仍走原入口</div><div class="arrow">↓ PauseSnapshot()：一个锁内观察点 → 独立候选</div><div class="node"><strong>PauseSnapshot</strong>SchemaVersion=1；Request 包含唯一一份 Checkpoint；Decision 可为 nil</div><div class="arrow">↓ EncodePauseSnapshot(candidate) → 字节或错误</div><div class="node"><strong>Gob 编解码边界</strong>有限一致性校验；保留原参数字节；载荷不超过 1 MiB；无网络或文件 I/O</div><div class="arrow">↓ 字节交给后续存储适配；本日未实现这条写入</div><div class="node"><strong>独立保存与恢复层（后续责任）</strong>存储确认、CAS、真实性与新鲜度、恢复归属、外部调用核验；不是编码器的成功返回</div></div><p>等价文字：门禁负责一致读取，候选负责数据所有权，编码器负责格式和有限校验。真正存储的写入结果、版本冲突和恢复执行权由其它层负责，不塞进 PauseSnapshot 的返回值。</p>
+<h3>图二 · doc-1 候选的编号往返</h3><div class="diagram-flow" role="img" aria-label="ToolsPending暂停，可能已有决定，同锁捕获为版本1候选，编码到Gob，解码为独立候选，当前运行保持不变，解码不恢复执行。"><div class="node"><strong>① 暂停 doc-1 调用</strong>r25 / 暂停ID；Pending=[call-1]；可能尚无决定，也可能已有 approve / reject</div><div class="arrow">↓ g.PauseSnapshot()，原 ctx 有效且仍持有请求</div><div class="node"><strong>② 捕获候选</strong>SchemaVersion=1，Request.Checkpoint=ToolsPending，Decision 与同一 RunID / RequestID 精确关联</div><div class="arrow">↓ EncodePauseSnapshot → 有界 Gob 数据；不 Apply、不消费、不 Save</div><div class="node"><strong>③ 编码边界</strong>Gob 保留 json.RawMessage 参数字节；格式版本不是存储版本，没有提交回执</div><div class="arrow">↓ DecodePauseSnapshot(bytes) → 版本/形状/关联检查</div><div class="node"><strong>④ 独立候选返回宿主</strong>得到数据，不是新 Run / Gate；原运行仍暂停。若原门禁已消费，旧候选仍可能可编码，不能据此执行工具</div></div><p>反例：候选的 Request 指向 pause-1，Decision 却指向 pause-2。即使 Gob 解码成功，也必须返回 ErrInvalidPauseSnapshot 和零候选；不能用另一个请求的批准去拼接恢复状态。</p><details><summary>保存边界示意（教学伪代码，非独立可运行程序）</summary><pre><code>candidate, err := gate.PauseSnapshot()
+if err != nil { return err }
+data, err := EncodePauseSnapshot(candidate)
+if err != nil { return err }
+// 此时只有候选字节，尚未保存。
+// 后续可信存储适配器应另行写入并确认 CAS/持久性/失败结果。
+// DecodePauseSnapshot(data) 也不会创建 Gate 或触发 ResolveDecision。
+</code></pre></details></section>
+<section id="continuity"><h2>承接前序设计</h2><p>沿用根 go.mod：github.com/linko-zhao/mini-agent-runtime，Go ≥ 1.22.2。参考目录 examples/internal/runstate，练习副本 internal/runstate；模型消息仍是原 Message / ToolCall，Arguments 仍为 json.RawMessage，不新建每日 module。</p><p>复用 Day15–18 State、Run、Checkpoint、validateCandidate 和存储版本概念；复用 Day22–24 PauseRequest、ApprovalDecision、唯一门禁与消费接口。没有新 Phase / Event、消息字段、构造参数或自动恢复入口。</p><h3>本日增量</h3><ul><li><strong>新增参考：</strong>examples/internal/runstate/pause_snapshot.go、pause_snapshot_test.go；新增候选结构、Clone、同锁捕获与 Gob 编解码。</li><li><strong>复用源码：</strong>state.go、run.go、checkpoint.go、store.go、pause.go、approval.go、resolve.go 均不改。store.go 仅提供既有基础候选校验；本日不调用其 Save / Load。</li><li><strong>新增练习：</strong>隔离副本 internal/runstate/pause_snapshot.go、day25_contract_test.go，七份前序支持文件完整提供。</li><li><strong>修改材料：</strong>examples/README.md、CONTRACTS.md、练习 manifest/脚本范围/README、本页和首页 Day25 相对入口。根 internal/cmd 不修改。</li></ul><h3>旧数据 → 新数据的映射与迁移</h3><p>旧 Checkpoint → 新 PauseSnapshot.Request.Checkpoint；旧 PauseRequest 的 ID / Reason 原样复用；旧 ApprovalDecision 变为可选 Decision 指针。只有这一份 Checkpoint，不再复制另一份容易漂移的运行状态。</p><ol><li>在同一 runstate 包新增 pause_snapshot.go，复用现有私有门禁字段；无需修改旧类型或调用方参数。</li><li>需要保存候选的宿主改用 Gate.PauseSnapshot 一次捕获，不再分次拼接请求和决定；既有读取接口继续可用于展示。</li><li>编解码使用新入口；旧 CheckpointStore.Save 仍只接收 Checkpoint，不能丢掉 Request / Decision 后声称保存了完整暂停。</li><li>旧记录没有请求 ID 或审批数据时，不自动合成批准、格式版本或恢复令牌。本日直接拒绝把旧 Checkpoint 字节当作新格式；未来迁移必须有明确来源与规则。</li></ol><p>这是新增的数据表示，不破坏旧保存接口，也不暗中扩展旧 CAS 含义。后续若改变导出结构或格式，应显式升级 SchemaVersion 并定义迁移；不能把存储 Version 填成格式版本来绕过校验。</p></section>
+<section id="reading"><h2>20分钟：Eino 的状态、序列化与写入确认</h2><p>带着三个问题读：用户看到的中断信息会不会保存？哪一步只是序列化？哪一步才返回存储写入结果？</p><article class="step"><h3>前8分钟 · 展示信息与恢复状态</h3><p>官方 <a href="https://github.com/cloudwego/eino/blob/main/compose/interrupt.go">compose/interrupt.go</a>，本次读取文件 SHA <code>98a5eeeccf1c39f7e34109b29642efdf1f73c539</code>。定位 Interrupt、StatefulInterrupt，以及 info / state 参数的注释。</p><p>阅读目标：解释 info 是面向用户的中断信息，而 StatefulInterrupt 的 state 用于后续恢复。两者职责不同，不能因为界面显示了理由就断言它已写入可恢复状态。</p><p>自研映射：本课程明确将 Request.ID / Reason 与可选 Decision 纳入候选；它们仍只是待保存数据。Eino 由执行引擎配合完成更完整的中断保存，本日未接入这个引擎。</p></article><article class="step"><h3>后12分钟 · 从 Serializer 到 Store.Set</h3><p>官方 <a href="https://github.com/cloudwego/eino/blob/main/compose/checkpoint.go">compose/checkpoint.go</a>，本次读取文件 SHA <code>ebb79b24bf94f4ace614db40a29d514318e9a297</code>。定位 Serializer、WithSerializer、checkPointer.set、checkPointer.get，并查看 checkpoint 的 InterruptID2Addr / InterruptID2State 字段。</p><p>阅读目标：顺着 set 中 Marshal → store.Set 的顺序，分别标出两处失败出口；再对照 get 的 Get → Unmarshal，说明解码不会自动推进工具。可扩展阅读 MigrateCheckpointState，关注 changed=false 与迁移错误的含义，不把迁移当授权。</p><p>产出：写四行对照表——一致捕获、序列化、存储确认、恢复执行；标出本日实现到哪一层、Eino 对应哪条调用路径。Store.Set 的返回也只能按具体后端契约解释持久性，不能凭接口名推断 exactly-once。</p></article><p>源码链接需联网；本页图解、完整代码与测试离线可读。Eino 只作设计对照，不成为课程运行依赖。</p></section>
+<section id="api"><h2>接口卡片与保存边界</h2><article class="contract"><h3>PauseSnapshot 与两个常量</h3><p><strong>SchemaVersion int：</strong>本日只允许 PauseSnapshotSchema = 1，表示数据结构版本；零值或其它版本拒绝，不自动升级。它不是 CAS 版本、模型轮次、时间或新鲜度证明。</p><p><strong>Request PauseRequest：</strong>原请求值，含 ID、Reason 和唯一 Checkpoint。必须是 BeforeTools / ToolsPending，暂停 ID 和理由非空白；沿用原 RunID、预算与消息/调用契约。</p><p><strong>Decision *ApprovalDecision：</strong>nil 表示尚无决定，非 nil 可为 approve 或 reject，字段与请求精确匹配。nil 与拒绝不能混为一谈；结构里不含 context、锁、Store、工具对象或执行归属。</p><p><strong>MaxPauseSnapshotBytes：</strong>1 &lt;&lt; 20，即 1,048,576 字节。编码结果和解码输入上限，恰等于上限不因大小拒绝；捕获与 Clone 不应用此大小限制。它不是 Gob 解码的内存/CPU硬隔离，也不是敏感数据脱敏。</p></article>
+<article class="contract"><h3>(s PauseSnapshot) Clone() PauseSnapshot</h3><p>复制 Request.Checkpoint 的消息、调用和参数字节，并复制可选 Decision 指针指向的值，返回与输入独立的数据。复用 Checkpoint.Clone，不改输入，不作有效性校验、保存或授权；零候选可安全 Clone。</p><p>这是值对象的所有权边界。调用方不得在 Clone / Encode 读取期间并发修改同一个输入；多个调用方可各自修改自己的输出。</p></article>
+<article class="contract"><h3>(g *PauseGate) PauseSnapshot() (PauseSnapshot, error)</h3><p>依赖已构造且由唯一门禁独占写入的 Run。锁内依次观察原 ctx、检查持有请求、复制请求与可选决定、校验候选、再观察 ctx；成功返回独立候选。没有请求返回零值 / ErrNoPause；原 ctx 已取消或截止时优先返回原 Canceled / DeadlineExceeded；内部候选不符下列规则则零值 / ErrInvalidPauseSnapshot。</p><p>只读，不 Apply、不消费、不清理，也不提交 Cancelled。原 ctx 取消后已有请求/决定仍保留，直至其它推进入口观察取消。等待锁不可取消、无公平性；最后检查之后仍可能取消。</p><p>捕获与 Decide / ResolveDecision 共用同一门禁协调：决定竞争时看到完整的“尚无决定”或“已记录决定”；消费竞争时得到旧的一致候选或 ErrNoPause。返回之后原运行仍可能继续，候选不是实时视图或执行许可。</p></article>
+<article class="contract"><h3>候选的有限一致性规则</h3><ol><li>SchemaVersion=1；Request.ID / Reason 非空白，原样保留。复用 validateCandidate：RunID 非空白、MaxSteps&gt;0、0≤Step≤MaxSteps，边界与 Phase 对应。</li><li>必须为 CheckpointBeforeTools / ToolsPending；Result / Failure 为空；Messages 非空且第一条 Role=user，Pending 非空。</li><li>最后一条消息 Role=assistant，ToolCalls 与 Pending 长度相同；逐项 ID、Name、Arguments 内容相同。调用 ID 非空且唯一，名称非空白；参数字节不解析业务 JSON。</li><li>若有决定，其 RunID / RequestID 与当前请求精确相等，Actor / Reason 非空白，Outcome 仅允许原 approve / reject 常量。</li></ol><p>这些规则用于发现明显错配，不重放全部历史、不验证工具参数业务语义、身份权限、记录来源或是否过期。空白校验不规范化合法字符串；Gob 字段兼容行为仍按标准库，不宣称严格拒绝所有未知字段或存在唯一规范字节表示。</p></article>
+<article class="contract"><h3>EncodePauseSnapshot(s PauseSnapshot) ([]byte, error)</h3><p>先按上述规则校验，再创建一条独立 Gob 流；成功返回调用方拥有的字节。校验、Gob 编码失败或结果超上限时统一返回 nil / ErrInvalidPauseSnapshot，不保留 Gob 内部错误链。</p><p>采用 Gob 是为了保留 Arguments=json.RawMessage 的字节内容，包括空白或非 JSON 字节；本层不负责 JSON 有效性。直接 JSON 重编码可能改变原参数表示，与前序按字节匹配的证据不兼容。Gob 保留内容，但空切片可能归一为 nil，不承诺内存表示或编码输出逐字稳定。</p><p>无 ctx、文件、网络或 Store 调用，不支持中途取消。大小检查发生在编码后，可能先分配较大缓冲区；宿主仍需限制数据来源和资源使用。</p></article>
+<article class="contract"><h3>DecodePauseSnapshot(data []byte) (PauseSnapshot, error)</h3><p>拒绝空输入或超上限输入；用独立 bytes.Reader 解一条 Gob 值，要求没有剩余字节，再按相同规则校验。截断、垃圾、尾随数据/第二条流、旧或未知格式、关联失败统一返回零候选 / ErrInvalidPauseSnapshot。</p><p>成功数据不引用输入字节，每次解码结果互相独立。没有 ctx、迁移、保存确认或恢复调用；输入在解码期间不得被并发改写。本格式面向受信宿主记录，不是任意网络文件的安全解析器；上限不替代认证、来源校验或资源隔离。</p></article>
+<h3>四个成功信号不能混用</h3><table><thead><tr><th>入口</th><th>证明什么</th><th>本日实现</th></tr></thead><tbody><tr><td>Gate.PauseSnapshot</td><td>一个锁内观察点的一致候选</td><td>是</td></tr><tr><td>Encode / Decode</td><td>本格式可表示且通过有限一致性检查</td><td>是</td></tr><tr><td>真实存储提交确认</td><td>按后端契约确认写入、版本和失败结果</td><td>未实现</td></tr><tr><td>恢复与执行核验</td><td>新鲜度、执行归属、授权和外部结果确认</td><td>未实现</td></tr></tbody></table><p>本日没有外部依赖，因此没有 Store/网络失败路径；不为测试失败而虚构 I/O。Day18 MemoryStore 的成功也只是进程内保存，不能替本日完整暂停候选提供持久确认。</p></section>
+<section id="rules"><h2>行为规则与完整测试对应</h2><table><thead><tr><th>规则 / 输入</th><th>结果</th><th>准确测试名</th></tr></thead><tbody>
+<tr><td>R1 暂停与可选决定</td><td>无决定 / approve / reject 均一致捕获，原状态不变，StartTools 仍 ErrPaused</td><td>TestDay25CaptureDoesNotAdvance</td></tr>
+<tr><td>R2 所有权</td><td>Clone、捕获与门禁的参数/决定不串改，零值可Clone</td><td>TestDay25Ownership</td></tr>
+<tr><td>R3 编解码往返</td><td>可选决定和原参数字节保留，结果互相独立，不引用输入字节</td><td>TestDay25CodecRoundTrip</td></tr>
+<tr><td>R4 候选不一致</td><td>格式、边界、预算、消息/调用、决定关联等错配统一拒绝；不把旧Checkpoint当新格式</td><td>TestDay25InvalidEnvelope</td></tr>
+<tr><td>R5 格式与大小</td><td>空/垃圾/截断/尾随/第二条流/超大输入或编码结果拒绝，零结果</td><td>TestDay25MalformedAndSize</td></tr>
+<tr><td>R6 不可捕获与取消</td><td>无请求或已消费 ErrNoPause；取消优先，捕获不转终态/清理；原上下文错误保留</td><td>TestDay25UnavailableAndCancellation</td></tr>
+<tr><td>R7 并发读写副本</td><td>16个捕获/编解码读者可各改输出，门禁不变，race通过</td><td>TestDay25ConcurrentCapture</td></tr>
+<tr><td>R8 与控制动作竞争</td><td>决定完整或nil；消费前旧候选或消费后无请求，不产生混合值；旧候选不是新鲜证明</td><td>TestDay25CaptureVersusControl</td></tr></tbody></table><p>DeadlineExceeded 用可控 context，竞争用同步信号，不依赖固定 sleep。测试只证明内存一致性、格式和所有权；没有真实存储、工具副作用、恢复或模型行为的验证。</p></section>
+<section id="prepare"><h2>准备可编译的红灯练习</h2><p>在原仓库根执行建议命令。prepare 创建仓库外的新副本，复用根 go.mod 与前序支持文件，不以实际工程进度决定课程，也不覆盖原 internal/cmd。</p><pre><code>python3 docs/learning/exercises/prepare.py 25
+# cd 到打印的练习副本目录，再运行：
+go test ./internal/runstate -run '^$'
+go test ./internal/runstate -run '^TestDay25' -count=1 -v -timeout 20s</code></pre><p>练习目标 internal/runstate/pause_snapshot.go；完整测试 day25_contract_test.go。先编译，再确认目标因 TODO 失败；缺包或没有匹配用例不算红灯。已有兼容实现可直接跑测试，不需挖空重做。</p><h3 class="file-label">新增 · internal/runstate/pause_snapshot.go（完整 TODO）</h3><p><a href="exercises/day25/skeleton/internal/runstate/pause_snapshot.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="skeleton" data-source="day25/skeleton/internal/runstate/pause_snapshot.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day25-skeleton-internal-runstate-pause_snapshot-go-txt"><code>package runstate
+
+import &quot;errors&quot;
+
+const (
+	PauseSnapshotSchema   = 1
+	MaxPauseSnapshotBytes = 1 &lt;&lt; 20
+)
+
+var ErrInvalidPauseSnapshot = errors.New(&quot;runstate: invalid pause snapshot&quot;)
+
+type PauseSnapshot struct {
+	SchemaVersion int
+	Request       PauseRequest
+	Decision      *ApprovalDecision
+}
+
+func (s PauseSnapshot) Clone() PauseSnapshot {
+	panic(&quot;TODO: implement Clone&quot;)
+}
+func (g *PauseGate) PauseSnapshot() (PauseSnapshot, error) {
+	panic(&quot;TODO: implement PauseSnapshot&quot;)
+}
+func EncodePauseSnapshot(s PauseSnapshot) ([]byte, error) {
+	panic(&quot;TODO: implement EncodePauseSnapshot&quot;)
+}
+func DecodePauseSnapshot(data []byte) (PauseSnapshot, error) {
+	panic(&quot;TODO: implement DecodePauseSnapshot&quot;)
+}
+</code></pre><button type="button" data-copy="day25-skeleton-internal-runstate-pause_snapshot-go-txt">复制本文件</button></details><details><summary>七份原样支持文件：离线全文</summary><p>state / run / checkpoint / store / pause / approval / resolve 均为前序契约。store只复用基础校验，不在本日执行Save；resolve用于竞争测试，不代表解码会自动消费。</p><h3 class="file-label">复用 · internal/runstate/state.go</h3><p><a href="exercises/day25/support/internal/runstate/state.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="support" data-source="day25/support/internal/runstate/state.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day25-support-internal-runstate-state-go-txt"><code>// Package runstate models in-memory transitions. It is not a checkpoint store.
+package runstate
+
+import (
+	&quot;errors&quot;
+	&quot;strings&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+)
+
+type Phase string
+
+const (
+	Ready        Phase = &quot;ready&quot;
+	ModelRunning Phase = &quot;model_running&quot;
+	ToolsPending Phase = &quot;tools_pending&quot;
+	ToolsRunning Phase = &quot;tools_running&quot;
+	Completed    Phase = &quot;completed&quot;
+	Failed       Phase = &quot;failed&quot;
+	Cancelled    Phase = &quot;cancelled&quot;
+)
+
+type EventKind string
+
+const (
+	StartModel    EventKind = &quot;start_model&quot;
+	ModelReturned EventKind = &quot;model_returned&quot;
+	StartTools    EventKind = &quot;start_tools&quot;
+	ToolsReturned EventKind = &quot;tools_returned&quot;
+	Abort         EventKind = &quot;abort&quot;
+	Cancel        EventKind = &quot;cancel&quot;
+)
+
+var (
+	ErrTransition = errors.New(&quot;runstate: invalid transition&quot;)
+	ErrMaxSteps   = errors.New(&quot;runstate: max model rounds exceeded&quot;)
+)
+
+type State struct {
+	RunID           string
+	Phase           Phase
+	Step, MaxSteps  int
+	Messages        []model.Message
+	Pending         []model.ToolCall
+	Result, Failure string
+}
+type Event struct {
+	Kind     EventKind
+	Response *model.Response
+	Results  []model.Message
+	Reason   string
+}
+
+func New(runID, input string, maxSteps int) (State, error) {
+	if strings.TrimSpace(runID) == &quot;&quot; || maxSteps &lt;= 0 {
+		return State{}, ErrTransition
+	}
+	return State{RunID: runID, Phase: Ready, MaxSteps: maxSteps, Messages: []model.Message{{Role: &quot;user&quot;, Content: input}}}, nil
+}
+func cloneCalls(calls []model.ToolCall) []model.ToolCall {
+	if calls == nil {
+		return nil
+	}
+	out := append([]model.ToolCall{}, calls...)
+	for i := range out {
+		out[i].Arguments = append([]byte(nil), out[i].Arguments...)
+	}
+	return out
+}
+func cloneMessages(ms []model.Message) []model.Message {
+	if ms == nil {
+		return nil
+	}
+	out := append([]model.Message{}, ms...)
+	for i := range out {
+		out[i].ToolCalls = cloneCalls(out[i].ToolCalls)
+	}
+	return out
+}
+func cloneState(s State) State {
+	s.Messages = cloneMessages(s.Messages)
+	s.Pending = cloneCalls(s.Pending)
+	return s
+}
+func terminal(p Phase) bool { return p == Completed || p == Failed || p == Cancelled }
+
+// Advance has no I/O. The host performs calls between start/returned events.
+// It accepts states from New/Advance and never mutates input state/event buffers.
+func Advance(current State, e Event) (State, error) {
+	if terminal(current.Phase) {
+		return State{}, ErrTransition
+	}
+	next := cloneState(current)
+	switch e.Kind {
+	case StartModel:
+		if current.Phase != Ready {
+			return State{}, ErrTransition
+		}
+		if current.Step &gt;= current.MaxSteps {
+			return State{}, ErrMaxSteps
+		}
+		next.Step++
+		next.Phase = ModelRunning
+	case ModelReturned:
+		if current.Phase != ModelRunning || e.Response == nil || e.Response.Message.Role != &quot;assistant&quot; {
+			return State{}, ErrTransition
+		}
+		msg := e.Response.Message
+		ids := map[string]bool{}
+		for _, call := range msg.ToolCalls {
+			if call.ID == &quot;&quot; || strings.TrimSpace(call.Name) == &quot;&quot; || ids[call.ID] {
+				return State{}, ErrTransition
+			}
+			ids[call.ID] = true
+		}
+		next.Messages = append(next.Messages, cloneMessages([]model.Message{msg})...)
+		if len(msg.ToolCalls) == 0 {
+			next.Phase = Completed
+			next.Result = msg.Content
+		} else {
+			next.Phase = ToolsPending
+			next.Pending = cloneCalls(msg.ToolCalls)
+		}
+	case StartTools:
+		if current.Phase != ToolsPending {
+			return State{}, ErrTransition
+		}
+		next.Phase = ToolsRunning
+	case ToolsReturned:
+		if current.Phase != ToolsRunning || len(e.Results) != len(current.Pending) {
+			return State{}, ErrTransition
+		}
+		for i, msg := range e.Results {
+			if msg.Role != &quot;tool&quot; || msg.ToolCallID != current.Pending[i].ID {
+				return State{}, ErrTransition
+			}
+		}
+		next.Messages = append(next.Messages, cloneMessages(e.Results)...)
+		next.Pending = nil
+		next.Phase = Ready
+	case Abort:
+		if strings.TrimSpace(e.Reason) == &quot;&quot; {
+			return State{}, ErrTransition
+		}
+		next.Phase = Failed
+		next.Failure = e.Reason
+	case Cancel:
+		next.Phase = Cancelled
+		next.Failure = &quot;cancelled&quot;
+	default:
+		return State{}, ErrTransition
+	}
+	return next, nil
+}
+</code></pre><button type="button" data-copy="day25-support-internal-runstate-state-go-txt">复制本文件</button></details><h3 class="file-label">复用 · internal/runstate/run.go</h3><p><a href="exercises/day25/support/internal/runstate/run.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="support" data-source="day25/support/internal/runstate/run.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day25-support-internal-runstate-run-go-txt"><code>package runstate
+
+import (
+	&quot;context&quot;
+	&quot;sync&quot;
+)
+
+// Run owns one in-memory State. Use its pointer; do not copy it after use.
+// The zero value is not usable; construct with NewRun.
+type Run struct {
+	ctx   context.Context
+	mu    sync.Mutex
+	state State
+}
+
+// NewRun retains ctx for cancellation/deadlines, not for storing State.
+// A cancelled context rejects construction; invalid identity/budget uses ErrTransition.
+func NewRun(ctx context.Context, runID, input string, maxSteps int) (*Run, error) {
+	if ctx == nil {
+		return nil, ErrTransition
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	s, err := New(runID, input, maxSteps)
+	if err != nil {
+		return nil, err
+	}
+	return &amp;Run{ctx: ctx, state: s}, nil
+}
+
+// Context returns the original context. The host owns any cancel function.
+// Model/tool I/O must use this context outside Apply, never while holding its lock.
+func (r *Run) Context() context.Context { return r.ctx }
+
+// Snapshot returns an independent copy without triggering transitions.
+func (r *Run) Snapshot() State {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return cloneState(r.state)
+}
+
+// Apply commits exactly one valid event, or returns the unchanged current copy.
+// For a nonterminal Run, observed context cancellation commits Cancel and rejects
+// the event with the original context error. A terminal State is never overwritten.
+// This serializes transitions, not a snapshot -&gt; external I/O -&gt; Apply transaction.
+func (r *Run) Apply(e Event) (State, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if terminal(r.state.Phase) {
+		return cloneState(r.state), ErrTransition
+	}
+	if err := r.ctx.Err(); err != nil {
+		next, transitionErr := Advance(r.state, Event{Kind: Cancel})
+		if transitionErr != nil {
+			return cloneState(r.state), transitionErr
+		}
+		r.state = next
+		return cloneState(r.state), err
+	}
+	next, err := Advance(r.state, e)
+	if err != nil {
+		return cloneState(r.state), err
+	}
+	r.state = next
+	return cloneState(r.state), nil
+}
+</code></pre><button type="button" data-copy="day25-support-internal-runstate-run-go-txt">复制本文件</button></details><h3 class="file-label">复用 · internal/runstate/checkpoint.go</h3><p><a href="exercises/day25/support/internal/runstate/checkpoint.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="support" data-source="day25/support/internal/runstate/checkpoint.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day25-support-internal-runstate-checkpoint-go-txt"><code>package runstate
+
+import &quot;errors&quot;
+
+type CheckpointBoundary string
+
+const (
+	CheckpointReady       CheckpointBoundary = &quot;ready&quot;
+	CheckpointBeforeTools CheckpointBoundary = &quot;before_tools&quot;
+	CheckpointTerminal    CheckpointBoundary = &quot;terminal&quot;
+)
+
+var ErrCheckpointBoundary = errors.New(&quot;runstate: checkpoint requires a stable boundary&quot;)
+
+// Checkpoint is an in-memory candidate, not a storage acknowledgement or resume token.
+// State uses the existing message/call contract. Boundary classifies State.Phase.
+type Checkpoint struct {
+	Boundary CheckpointBoundary
+	State    State
+}
+
+// Clone copies nested mutable state. It does not validate or authorize a checkpoint.
+func (c Checkpoint) Clone() Checkpoint {
+	c.State = cloneState(c.State)
+	return c
+}
+
+// Checkpoint samples boundary and state under the same lock.
+// It does not observe context cancellation, advance state, pause the driver,
+// perform I/O, or promise that an external tool has not already taken effect.
+func (r *Run) Checkpoint() (Checkpoint, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var boundary CheckpointBoundary
+	switch r.state.Phase {
+	case Ready:
+		boundary = CheckpointReady
+	case ToolsPending:
+		boundary = CheckpointBeforeTools
+	case Completed, Failed, Cancelled:
+		boundary = CheckpointTerminal
+	default:
+		return Checkpoint{}, ErrCheckpointBoundary
+	}
+	return Checkpoint{Boundary: boundary, State: cloneState(r.state)}, nil
+}
+</code></pre><button type="button" data-copy="day25-support-internal-runstate-checkpoint-go-txt">复制本文件</button></details><h3 class="file-label">复用 · internal/runstate/store.go</h3><p><a href="exercises/day25/support/internal/runstate/store.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="support" data-source="day25/support/internal/runstate/store.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day25-support-internal-runstate-store-go-txt"><code>package runstate
+
+import (
+	&quot;context&quot;
+	&quot;errors&quot;
+	&quot;strings&quot;
+	&quot;sync&quot;
+)
+
+var (
+	ErrCheckpointNotFound = errors.New(&quot;runstate: checkpoint not found&quot;)
+	ErrCheckpointConflict = errors.New(&quot;runstate: checkpoint version conflict&quot;)
+	ErrInvalidCheckpoint  = errors.New(&quot;runstate: invalid checkpoint request&quot;)
+)
+
+// StoredCheckpoint is the latest saved value. Version is a per-RunID CAS token,
+// not State.Step, a schema version, an execution lease or a resume permission.
+type StoredCheckpoint struct {
+	Version    uint64
+	Checkpoint Checkpoint
+}
+
+type CheckpointStore interface {
+	Load(context.Context, string) (StoredCheckpoint, error)
+	Save(context.Context, Checkpoint, uint64) (StoredCheckpoint, error)
+}
+
+// MemoryCheckpointStore is process-local and not durable. Its zero value works.
+// Do not copy after use. It retains only the latest record for each exact RunID.
+type MemoryCheckpointStore struct {
+	mu      sync.Mutex
+	records map[string]StoredCheckpoint
+}
+
+func NewMemoryCheckpointStore() *MemoryCheckpointStore { return &amp;MemoryCheckpointStore{} }
+
+func cloneStored(v StoredCheckpoint) StoredCheckpoint {
+	v.Checkpoint = v.Checkpoint.Clone()
+	return v
+}
+func storeContext(ctx context.Context) error {
+	if ctx == nil {
+		return ErrInvalidCheckpoint
+	}
+	return ctx.Err()
+}
+
+// validateCandidate checks only the trusted candidate envelope, not full message
+// history, authorization, authenticity or an untrusted serialized payload.
+func validateCandidate(cp Checkpoint) bool {
+	s := cp.State
+	if strings.TrimSpace(s.RunID) == &quot;&quot; || s.MaxSteps &lt;= 0 || s.Step &lt; 0 || s.Step &gt; s.MaxSteps {
+		return false
+	}
+	switch cp.Boundary {
+	case CheckpointReady:
+		return s.Phase == Ready
+	case CheckpointBeforeTools:
+		return s.Phase == ToolsPending
+	case CheckpointTerminal:
+		return terminal(s.Phase)
+	default:
+		return false
+	}
+}
+
+func (s *MemoryCheckpointStore) Load(ctx context.Context, runID string) (StoredCheckpoint, error) {
+	if err := storeContext(ctx); err != nil {
+		return StoredCheckpoint{}, err
+	}
+	if strings.TrimSpace(runID) == &quot;&quot; {
+		return StoredCheckpoint{}, ErrInvalidCheckpoint
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return StoredCheckpoint{}, err
+	}
+	v, ok := s.records[runID]
+	if !ok {
+		return StoredCheckpoint{}, ErrCheckpointNotFound
+	}
+	return cloneStored(v), nil
+}
+
+// Save: expected=0 creates only if absent; otherwise it must equal current Version.
+// A successful write increments Version even for identical content.
+// Errors in this in-memory implementation return zero and leave stored data intact.
+// Cancellation is sampled before and after locking; later cancellation can still
+// accompany a committed success. The lock wait itself is not context-interruptible.
+func (s *MemoryCheckpointStore) Save(ctx context.Context, cp Checkpoint, expected uint64) (StoredCheckpoint, error) {
+	if err := storeContext(ctx); err != nil {
+		return StoredCheckpoint{}, err
+	}
+	if expected == ^uint64(0) || !validateCandidate(cp) {
+		return StoredCheckpoint{}, ErrInvalidCheckpoint
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return StoredCheckpoint{}, err
+	}
+	current := s.records[cp.State.RunID]
+	if current.Version != expected {
+		return StoredCheckpoint{}, ErrCheckpointConflict
+	}
+	next := StoredCheckpoint{Version: expected + 1, Checkpoint: cp.Clone()}
+	if s.records == nil {
+		s.records = make(map[string]StoredCheckpoint)
+	}
+	s.records[cp.State.RunID] = next
+	return cloneStored(next), nil
+}
+</code></pre><button type="button" data-copy="day25-support-internal-runstate-store-go-txt">复制本文件</button></details><h3 class="file-label">复用 · internal/runstate/pause.go</h3><p><a href="exercises/day25/support/internal/runstate/pause.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="support" data-source="day25/support/internal/runstate/pause.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day25-support-internal-runstate-pause-go-txt"><code>package runstate
+
+import (
+	&quot;errors&quot;
+	&quot;strings&quot;
+	&quot;sync&quot;
+)
+
+var (
+	ErrInvalidPause  = errors.New(&quot;runstate: invalid pause request&quot;)
+	ErrPauseBoundary = errors.New(&quot;runstate: pause requires tools_pending&quot;)
+	ErrPaused        = errors.New(&quot;runstate: gate is paused&quot;)
+)
+
+// PauseRequest is an owned in-memory interruption snapshot, not a saved receipt,
+// an approval, a resume token or a declaration about external side effects.
+type PauseRequest struct {
+	ID         string
+	Reason     string
+	Checkpoint Checkpoint
+}
+
+// PauseGate coordinates transitions only through this gate. The host must
+// transfer exclusive write ownership of the Run to ONE gate and never bypass it.
+// Zero value is not usable; do not copy after use.
+type PauseGate struct {
+	mu       sync.Mutex
+	run      *Run
+	request  *PauseRequest
+	decision *ApprovalDecision
+}
+
+func NewPauseGate(run *Run) (*PauseGate, error) {
+	if run == nil {
+		return nil, ErrInvalidPause
+	}
+	return &amp;PauseGate{run: run}, nil
+}
+
+func (g *PauseGate) Snapshot() State { return g.run.Snapshot() }
+
+func (g *PauseGate) CurrentInterrupt() (PauseRequest, bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.request == nil {
+		return PauseRequest{}, false
+	}
+	out := *g.request
+	out.Checkpoint = out.Checkpoint.Clone()
+	return out, true
+}
+
+// Pause captures only ToolsPending, before StartTools through this gate.
+// It samples the original Run context and performs no I/O or state transition.
+func (g *PauseGate) Pause(id, reason string) (PauseRequest, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if err := g.run.Context().Err(); err != nil {
+		return PauseRequest{}, err
+	}
+	if strings.TrimSpace(id) == &quot;&quot; || strings.TrimSpace(reason) == &quot;&quot; {
+		return PauseRequest{}, ErrInvalidPause
+	}
+	if g.request != nil {
+		return PauseRequest{}, ErrPaused
+	}
+	cp, err := g.run.Checkpoint()
+	if err != nil || cp.State.Phase != ToolsPending {
+		return PauseRequest{}, ErrPauseBoundary
+	}
+	if err := g.run.Context().Err(); err != nil {
+		return PauseRequest{}, err
+	}
+	request := PauseRequest{ID: id, Reason: reason, Checkpoint: cp}
+	g.request = &amp;request
+	out := request
+	out.Checkpoint = out.Checkpoint.Clone()
+	return out, nil
+}
+
+// Apply preserves Run.Apply semantics while open. During a live pause every
+// event is rejected with a current owned State and ErrPaused. Observed context
+// cancellation is allowed through to Run.Apply; terminal state clears the pause.
+// The host may perform I/O only AFTER a successful transition; no I/O runs here.
+func (g *PauseGate) Apply(e Event) (State, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.request != nil &amp;&amp; g.run.Context().Err() == nil {
+		return g.run.Snapshot(), ErrPaused
+	}
+	state, err := g.run.Apply(e)
+	if terminal(state.Phase) {
+		g.request = nil
+		g.decision = nil
+	}
+	return state, err
+}
+</code></pre><button type="button" data-copy="day25-support-internal-runstate-pause-go-txt">复制本文件</button></details><h3 class="file-label">复用 · internal/runstate/approval.go</h3><p><a href="exercises/day25/support/internal/runstate/approval.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="support" data-source="day25/support/internal/runstate/approval.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day25-support-internal-runstate-approval-go-txt"><code>package runstate
+
+import (
+	&quot;errors&quot;
+	&quot;strings&quot;
+)
+
+type DecisionOutcome string
+
+const (
+	DecisionApprove DecisionOutcome = &quot;approve&quot;
+	DecisionReject  DecisionOutcome = &quot;reject&quot;
+)
+
+var (
+	ErrInvalidDecision  = errors.New(&quot;runstate: invalid approval decision&quot;)
+	ErrNoPause          = errors.New(&quot;runstate: no held pause request&quot;)
+	ErrDecisionMismatch = errors.New(&quot;runstate: decision does not match held request&quot;)
+	ErrDecisionRecorded = errors.New(&quot;runstate: decision already recorded&quot;)
+)
+
+// ApprovalDecision is host-provided metadata, not proof of identity, authority,
+// persistence or permission to execute. All fields are immutable value strings.
+type ApprovalDecision struct {
+	RunID     string
+	RequestID string
+	Actor     string
+	Outcome   DecisionOutcome
+	Reason    string
+}
+
+// Decide records the first valid decision for this gate&#x27;s held pause.
+// It does not unpause, execute, terminate or write a checkpoint.
+func (g *PauseGate) Decide(d ApprovalDecision) (ApprovalDecision, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if err := g.run.Context().Err(); err != nil {
+		return ApprovalDecision{}, err
+	}
+	if strings.TrimSpace(d.RunID) == &quot;&quot; || strings.TrimSpace(d.RequestID) == &quot;&quot; ||
+		strings.TrimSpace(d.Actor) == &quot;&quot; || strings.TrimSpace(d.Reason) == &quot;&quot; ||
+		(d.Outcome != DecisionApprove &amp;&amp; d.Outcome != DecisionReject) {
+		return ApprovalDecision{}, ErrInvalidDecision
+	}
+	if g.request == nil {
+		return ApprovalDecision{}, ErrNoPause
+	}
+	if d.RunID != g.request.Checkpoint.State.RunID || d.RequestID != g.request.ID {
+		return ApprovalDecision{}, ErrDecisionMismatch
+	}
+	if g.decision != nil {
+		return ApprovalDecision{}, ErrDecisionRecorded
+	}
+	if err := g.run.Context().Err(); err != nil {
+		return ApprovalDecision{}, err
+	}
+	g.decision = &amp;d
+	return d, nil
+}
+
+// CurrentDecision reads held metadata without observing cancellation.
+// A terminal Apply clears it together with the held pause request.
+func (g *PauseGate) CurrentDecision() (ApprovalDecision, bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.decision == nil {
+		return ApprovalDecision{}, false
+	}
+	return *g.decision, true
+}
+</code></pre><button type="button" data-copy="day25-support-internal-runstate-approval-go-txt">复制本文件</button></details><h3 class="file-label">复用 · internal/runstate/resolve.go</h3><p><a href="exercises/day25/support/internal/runstate/resolve.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="support" data-source="day25/support/internal/runstate/resolve.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day25-support-internal-runstate-resolve-go-txt"><code>package runstate
+
+import (
+	&quot;errors&quot;
+	&quot;strings&quot;
+)
+
+var ErrDecisionRequired = errors.New(&quot;runstate: a recorded decision is required&quot;)
+
+// ResolveDecision consumes the held decision and commits one transition.
+// Approve starts ToolsRunning; reject commits Failed using the recorded reason.
+// No external I/O runs here. The host may execute tools only after nil error AND
+// ToolsRunning from this call, never by inspecting a retry&#x27;s returned State alone.
+func (g *PauseGate) ResolveDecision(runID, requestID string) (State, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	// Preserve Run.Apply&#x27;s cancellation observation and terminal-first behavior.
+	if g.run.Context().Err() != nil {
+		state, err := g.run.Apply(Event{Kind: Cancel})
+		if terminal(state.Phase) {
+			g.request, g.decision = nil, nil
+		}
+		return state, err
+	}
+	current := g.run.Snapshot()
+	if strings.TrimSpace(runID) == &quot;&quot; || strings.TrimSpace(requestID) == &quot;&quot; {
+		return current, ErrInvalidDecision
+	}
+	if g.request == nil {
+		return current, ErrNoPause
+	}
+	if runID != g.request.Checkpoint.State.RunID || requestID != g.request.ID {
+		return current, ErrDecisionMismatch
+	}
+	if g.decision == nil {
+		return current, ErrDecisionRequired
+	}
+	event := Event{Kind: StartTools}
+	if g.decision.Outcome == DecisionReject {
+		event = Event{Kind: Abort, Reason: g.decision.Reason}
+	}
+	state, err := g.run.Apply(event)
+	if err == nil || terminal(state.Phase) {
+		g.request, g.decision = nil, nil
+	}
+	return state, err
+}
+</code></pre><button type="button" data-copy="day25-support-internal-runstate-resolve-go-txt">复制本文件</button></details></details></section><section id="tests"><h2>完整测试：先预测返回值与不变量</h2><p>自带完整 fixture，不依赖另一章的测试辅助函数；测试只 import 练习副本 internal，不绕到 examples 参考，不需要网络或 API Key。</p><h3 class="file-label">新增 · internal/runstate/day25_contract_test.go</h3><p><a href="exercises/day25/tests/internal/runstate/day25_contract_test.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="tests" data-source="day25/tests/internal/runstate/day25_contract_test.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day25-tests-internal-runstate-day25_contract_test-go-txt"><code>package runstate_test
+
+import (
+	&quot;bytes&quot;
+	&quot;context&quot;
+	&quot;encoding/gob&quot;
+	&quot;errors&quot;
+	&quot;fmt&quot;
+	&quot;reflect&quot;
+	&quot;strings&quot;
+	&quot;sync&quot;
+	&quot;testing&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/runstate&quot;
+)
+
+func gate25(t *testing.T, ctx context.Context, paused bool) *runstate.PauseGate {
+	t.Helper()
+	r, e := runstate.NewRun(ctx, &quot;r25&quot;, &quot;读取 doc-1&quot;, 3)
+	if e != nil {
+		t.Fatal(e)
+	}
+	g, e := runstate.NewPauseGate(r)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if paused {
+		if _, e = g.Apply(runstate.Event{Kind: runstate.StartModel}); e != nil {
+			t.Fatal(e)
+		}
+		response := model.Response{Message: model.Message{Role: &quot;assistant&quot;, ToolCalls: []model.ToolCall{{ID: &quot;call-1&quot;, Name: &quot;get_document&quot;, Arguments: []byte(&quot;{ \&quot;id\&quot; : \&quot;doc-1\&quot; }\n&quot;)}}}}
+		if _, e = g.Apply(runstate.Event{Kind: runstate.ModelReturned, Response: &amp;response}); e != nil {
+			t.Fatal(e)
+		}
+		if _, e = g.Pause(&quot; pause-1 &quot;, &quot; waiting-for-host &quot;); e != nil {
+			t.Fatal(e)
+		}
+	}
+	return g
+}
+func decide25(t *testing.T, g *runstate.PauseGate, outcome runstate.DecisionOutcome) {
+	t.Helper()
+	_, e := g.Decide(runstate.ApprovalDecision{RunID: &quot;r25&quot;, RequestID: &quot; pause-1 &quot;, Actor: &quot; reviewer-1 &quot;, Outcome: outcome, Reason: &quot; reviewed doc-1 &quot;})
+	if e != nil {
+		t.Fatal(e)
+	}
+}
+func snapshot25(t *testing.T, g *runstate.PauseGate) runstate.PauseSnapshot {
+	t.Helper()
+	s, e := g.PauseSnapshot()
+	if e != nil {
+		t.Fatal(e)
+	}
+	return s
+}
+func raw25(t *testing.T, v any) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	if e := gob.NewEncoder(&amp;buf).Encode(v); e != nil {
+		t.Fatal(e)
+	}
+	return buf.Bytes()
+}
+func zeroSnapshot25(t *testing.T, s runstate.PauseSnapshot, e, want error) {
+	t.Helper()
+	if !errors.Is(e, want) || !reflect.DeepEqual(s, runstate.PauseSnapshot{}) {
+		t.Fatal(s, e, want)
+	}
+}
+func TestDay25CaptureDoesNotAdvance(t *testing.T) {
+	for _, outcome := range []runstate.DecisionOutcome{&quot;&quot;, runstate.DecisionApprove, runstate.DecisionReject} {
+		t.Run(string(outcome), func(t *testing.T) {
+			g := gate25(t, context.Background(), true)
+			if outcome != &quot;&quot; {
+				decide25(t, g, outcome)
+			}
+			before := g.Snapshot()
+			request, _ := g.CurrentInterrupt()
+			decision, recorded := g.CurrentDecision()
+			s := snapshot25(t, g)
+			if s.SchemaVersion != runstate.PauseSnapshotSchema || !reflect.DeepEqual(s.Request, request) || (s.Decision != nil) != recorded {
+				t.Fatal(s)
+			}
+			if recorded &amp;&amp; *s.Decision != decision {
+				t.Fatal(s.Decision)
+			}
+			if !reflect.DeepEqual(before, g.Snapshot()) {
+				t.Fatal(&quot;capture advanced run&quot;)
+			}
+			if _, e := g.Apply(runstate.Event{Kind: runstate.StartTools}); !errors.Is(e, runstate.ErrPaused) {
+				t.Fatal(e)
+			}
+		})
+	}
+}
+func TestDay25Ownership(t *testing.T) {
+	g := gate25(t, context.Background(), true)
+	decide25(t, g, runstate.DecisionApprove)
+	s := snapshot25(t, g)
+	original := s.Clone()
+	clone := s.Clone()
+	clone.Request.Checkpoint.State.Pending[0].Arguments[0] = &#x27;p&#x27;
+	clone.Request.Checkpoint.State.Messages[1].ToolCalls[0].Arguments[0] = &#x27;h&#x27;
+	clone.Decision.Actor = &quot;changed clone&quot;
+	if !reflect.DeepEqual(s, original) {
+		t.Fatal(&quot;Clone aliases input&quot;)
+	}
+	s.Decision.Reason = &quot;changed capture&quot;
+	s.Request.Checkpoint.State.Pending[0].Arguments[0] = &#x27;c&#x27;
+	if got := snapshot25(t, g); !reflect.DeepEqual(got, original) {
+		t.Fatal(&quot;capture aliases gate&quot;)
+	}
+	if copy := (runstate.PauseSnapshot{}).Clone(); !reflect.DeepEqual(copy, runstate.PauseSnapshot{}) {
+		t.Fatal(copy)
+	}
+}
+func TestDay25CodecRoundTrip(t *testing.T) {
+	for _, outcome := range []runstate.DecisionOutcome{&quot;&quot;, runstate.DecisionApprove, runstate.DecisionReject} {
+		g := gate25(t, context.Background(), true)
+		if outcome != &quot;&quot; {
+			decide25(t, g, outcome)
+		}
+		s := snapshot25(t, g)
+		// RawMessage bytes are not JSON-decoded or reformatted by this codec.
+		for _, args := range [][]byte{[]byte(&quot;{ \&quot;id\&quot; : \&quot;doc-1\&quot; }\n&quot;), {0xff, 0, 1}} {
+			s = s.Clone()
+			s.Request.Checkpoint.State.Pending[0].Arguments = append([]byte(nil), args...)
+			s.Request.Checkpoint.State.Messages[1].ToolCalls[0].Arguments = append([]byte(nil), args...)
+			data, e := runstate.EncodePauseSnapshot(s)
+			if e != nil {
+				t.Fatal(e)
+			}
+			got, e := runstate.DecodePauseSnapshot(data)
+			if e != nil || !reflect.DeepEqual(s, got) {
+				t.Fatal(got, e)
+			}
+			got.Request.Checkpoint.State.Pending[0].Arguments[0] = &#x27;x&#x27;
+			if got.Decision != nil {
+				got.Decision.Actor = &quot;changed&quot;
+			}
+			again, e := runstate.DecodePauseSnapshot(data)
+			if e != nil || !reflect.DeepEqual(s, again) {
+				t.Fatal(again, e)
+			}
+			for i := range data {
+				data[i] = 0
+			}
+			if !bytes.Equal(again.Request.Checkpoint.State.Pending[0].Arguments, args) {
+				t.Fatal(&quot;decoded data aliases input bytes&quot;)
+			}
+		}
+	}
+}
+func TestDay25InvalidEnvelope(t *testing.T) {
+	g := gate25(t, context.Background(), true)
+	decide25(t, g, runstate.DecisionApprove)
+	base := snapshot25(t, g)
+	rows := []struct {
+		name   string
+		change func(*runstate.PauseSnapshot)
+	}{
+		{&quot;schema_zero&quot;, func(s *runstate.PauseSnapshot) { s.SchemaVersion = 0 }},
+		{&quot;schema_future&quot;, func(s *runstate.PauseSnapshot) { s.SchemaVersion = 2 }},
+		{&quot;request_id&quot;, func(s *runstate.PauseSnapshot) { s.Request.ID = &quot; &quot; }},
+		{&quot;request_reason&quot;, func(s *runstate.PauseSnapshot) { s.Request.Reason = &quot;&quot; }},
+		{&quot;run_id&quot;, func(s *runstate.PauseSnapshot) { s.Request.Checkpoint.State.RunID = &quot; &quot; }},
+		{&quot;budget&quot;, func(s *runstate.PauseSnapshot) { s.Request.Checkpoint.State.MaxSteps = 0 }},
+		{&quot;step&quot;, func(s *runstate.PauseSnapshot) { s.Request.Checkpoint.State.Step = 4 }},
+		{&quot;boundary&quot;, func(s *runstate.PauseSnapshot) { s.Request.Checkpoint.Boundary = runstate.CheckpointReady }},
+		{&quot;phase&quot;, func(s *runstate.PauseSnapshot) { s.Request.Checkpoint.State.Phase = runstate.ToolsRunning }},
+		{&quot;result&quot;, func(s *runstate.PauseSnapshot) { s.Request.Checkpoint.State.Result = &quot;done&quot; }},
+		{&quot;failure&quot;, func(s *runstate.PauseSnapshot) { s.Request.Checkpoint.State.Failure = &quot;failed&quot; }},
+		{&quot;messages&quot;, func(s *runstate.PauseSnapshot) { s.Request.Checkpoint.State.Messages = nil }},
+		{&quot;first_role&quot;, func(s *runstate.PauseSnapshot) { s.Request.Checkpoint.State.Messages[0].Role = &quot;tool&quot; }},
+		{&quot;pending_empty&quot;, func(s *runstate.PauseSnapshot) { s.Request.Checkpoint.State.Pending = nil }},
+		{&quot;last_role&quot;, func(s *runstate.PauseSnapshot) { s.Request.Checkpoint.State.Messages[1].Role = &quot;user&quot; }},
+		{&quot;last_calls&quot;, func(s *runstate.PauseSnapshot) { s.Request.Checkpoint.State.Messages[1].ToolCalls = nil }},
+		{&quot;call_id&quot;, func(s *runstate.PauseSnapshot) { s.Request.Checkpoint.State.Pending[0].ID = &quot;&quot; }},
+		{&quot;call_name&quot;, func(s *runstate.PauseSnapshot) { s.Request.Checkpoint.State.Pending[0].Name = &quot; &quot; }},
+		{&quot;call_args&quot;, func(s *runstate.PauseSnapshot) { s.Request.Checkpoint.State.Pending[0].Arguments = []byte(&quot;other&quot;) }},
+		{&quot;duplicate_call&quot;, func(s *runstate.PauseSnapshot) {
+			st := &amp;s.Request.Checkpoint.State
+			st.Pending = append(st.Pending, st.Pending[0])
+			st.Messages[1].ToolCalls = append(st.Messages[1].ToolCalls, st.Messages[1].ToolCalls[0])
+		}},
+		{&quot;decision_run&quot;, func(s *runstate.PauseSnapshot) { s.Decision.RunID = &quot;other&quot; }},
+		{&quot;decision_request&quot;, func(s *runstate.PauseSnapshot) { s.Decision.RequestID = &quot;pause-1&quot; }},
+		{&quot;decision_actor&quot;, func(s *runstate.PauseSnapshot) { s.Decision.Actor = &quot; &quot; }},
+		{&quot;decision_reason&quot;, func(s *runstate.PauseSnapshot) { s.Decision.Reason = &quot;&quot; }},
+		{&quot;decision_outcome&quot;, func(s *runstate.PauseSnapshot) { s.Decision.Outcome = &quot;APPROVE&quot; }},
+	}
+	for _, row := range rows {
+		t.Run(row.name, func(t *testing.T) {
+			s := base.Clone()
+			row.change(&amp;s)
+			if data, e := runstate.EncodePauseSnapshot(s); !errors.Is(e, runstate.ErrInvalidPauseSnapshot) || data != nil {
+				t.Fatal(data, e)
+			}
+			got, e := runstate.DecodePauseSnapshot(raw25(t, s))
+			zeroSnapshot25(t, got, e, runstate.ErrInvalidPauseSnapshot)
+		})
+	}
+	// An old Checkpoint contains no request/decision/schema; do not invent them.
+	got, e := runstate.DecodePauseSnapshot(raw25(t, base.Request.Checkpoint))
+	zeroSnapshot25(t, got, e, runstate.ErrInvalidPauseSnapshot)
+}
+func TestDay25MalformedAndSize(t *testing.T) {
+	s := snapshot25(t, gate25(t, context.Background(), true))
+	data, e := runstate.EncodePauseSnapshot(s)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, input := range [][]byte{nil, {}, []byte(&quot;not gob&quot;), data[:len(data)-1], append(append([]byte(nil), data...), 0), append(append([]byte(nil), data...), data...), make([]byte, runstate.MaxPauseSnapshotBytes+1)} {
+		got, e := runstate.DecodePauseSnapshot(input)
+		zeroSnapshot25(t, got, e, runstate.ErrInvalidPauseSnapshot)
+	}
+	s.Request.Checkpoint.State.Messages[0].Content = strings.Repeat(&quot;x&quot;, runstate.MaxPauseSnapshotBytes)
+	if data, e := runstate.EncodePauseSnapshot(s); !errors.Is(e, runstate.ErrInvalidPauseSnapshot) || data != nil {
+		t.Fatal(len(data), e)
+	}
+}
+
+type deadline25 struct{ context.Context }
+
+func (d deadline25) Err() error {
+	if d.Context.Err() != nil {
+		return context.DeadlineExceeded
+	}
+	return nil
+}
+func TestDay25UnavailableAndCancellation(t *testing.T) {
+	open := gate25(t, context.Background(), false)
+	s, e := open.PauseSnapshot()
+	zeroSnapshot25(t, s, e, runstate.ErrNoPause)
+	for _, outcome := range []runstate.DecisionOutcome{runstate.DecisionApprove, runstate.DecisionReject} {
+		g := gate25(t, context.Background(), true)
+		decide25(t, g, outcome)
+		if _, e := g.ResolveDecision(&quot;r25&quot;, &quot; pause-1 &quot;); e != nil {
+			t.Fatal(e)
+		}
+		s, e := g.PauseSnapshot()
+		zeroSnapshot25(t, s, e, runstate.ErrNoPause)
+	}
+	for _, deadline := range []bool{false, true} {
+		for _, paused := range []bool{false, true} {
+			t.Run(fmt.Sprintf(&quot;deadline=%v/paused=%v&quot;, deadline, paused), func(t *testing.T) {
+				base, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				var ctx context.Context = base
+				want := error(context.Canceled)
+				if deadline {
+					ctx = deadline25{base}
+					want = context.DeadlineExceeded
+				}
+				g := gate25(t, ctx, paused)
+				before := g.Snapshot()
+				if paused {
+					decide25(t, g, runstate.DecisionApprove)
+				}
+				cancel()
+				s, e := g.PauseSnapshot()
+				zeroSnapshot25(t, s, e, want)
+				if !reflect.DeepEqual(before, g.Snapshot()) {
+					t.Fatal(&quot;capture committed cancellation&quot;)
+				}
+				if _, ok := g.CurrentInterrupt(); ok != paused {
+					t.Fatal(&quot;capture cleared pause&quot;)
+				}
+				if _, ok := g.CurrentDecision(); ok != paused {
+					t.Fatal(&quot;capture cleared decision&quot;)
+				}
+				if s, e := g.Apply(runstate.Event{Kind: runstate.StartTools}); !errors.Is(e, want) || s.Phase != runstate.Cancelled {
+					t.Fatal(s, e)
+				}
+			})
+		}
+	}
+}
+func TestDay25ConcurrentCapture(t *testing.T) {
+	g := gate25(t, context.Background(), true)
+	decide25(t, g, runstate.DecisionApprove)
+	original := snapshot25(t, g)
+	var wg sync.WaitGroup
+	for i := 0; i &lt; 16; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s, e := g.PauseSnapshot()
+			if e != nil {
+				t.Error(e)
+				return
+			}
+			data, e := runstate.EncodePauseSnapshot(s)
+			if e != nil {
+				t.Error(e)
+				return
+			}
+			copy, e := runstate.DecodePauseSnapshot(data)
+			if e != nil || !reflect.DeepEqual(copy, original) {
+				t.Error(copy, e)
+				return
+			}
+			s.Request.Checkpoint.State.Pending[0].Arguments[0] = &#x27;x&#x27;
+			copy.Decision.Actor = &quot;edit&quot;
+		}()
+	}
+	wg.Wait()
+	if !reflect.DeepEqual(snapshot25(t, g), original) {
+		t.Fatal(&quot;concurrent snapshots alias gate&quot;)
+	}
+}
+func TestDay25CaptureVersusControl(t *testing.T) {
+	for i := 0; i &lt; 24; i++ {
+		g := gate25(t, context.Background(), true)
+		start := make(chan struct{})
+		done := make(chan error, 1)
+		go func() {
+			&lt;-start
+			_, e := g.Decide(runstate.ApprovalDecision{RunID: &quot;r25&quot;, RequestID: &quot; pause-1 &quot;, Actor: &quot;reviewer&quot;, Outcome: runstate.DecisionApprove, Reason: &quot;reviewed&quot;})
+			done &lt;- e
+		}()
+		close(start)
+		s, e := g.PauseSnapshot()
+		if e != nil {
+			t.Fatal(e)
+		}
+		if e = &lt;-done; e != nil {
+			t.Fatal(e)
+		}
+		if s.Decision != nil &amp;&amp; (s.Decision.RequestID != s.Request.ID || s.Decision.RunID != s.Request.Checkpoint.State.RunID) {
+			t.Fatal(&quot;torn decision&quot;, s)
+		}
+		// Capture vs consumption yields an older valid snapshot or ErrNoPause.
+		start = make(chan struct{})
+		go func() { &lt;-start; _, e := g.ResolveDecision(&quot;r25&quot;, &quot; pause-1 &quot;); done &lt;- e }()
+		close(start)
+		s, e = g.PauseSnapshot()
+		if e != nil {
+			zeroSnapshot25(t, s, e, runstate.ErrNoPause)
+		}
+		if e = &lt;-done; e != nil {
+			t.Fatal(e)
+		}
+		if g.Snapshot().Phase != runstate.ToolsRunning {
+			t.Fatal(&quot;resolution failed&quot;)
+		}
+		if s.SchemaVersion != 0 {
+			if s.Request.Checkpoint.State.Phase != runstate.ToolsPending {
+				t.Fatal(s)
+			}
+			if _, e := runstate.EncodePauseSnapshot(s); e != nil {
+				t.Fatal(&quot;old capture is still encodable, not fresh-state proof&quot;, e)
+			}
+		}
+	}
+}
+</code></pre><button type="button" data-copy="day25-tests-internal-runstate-day25_contract_test-go-txt">复制本文件</button></details></section><section id="tasks"><h2>80分钟：四步实现候选边界</h2><article class="step"><h3>1 · 15分钟：建立候选与深拷贝</h3><p><strong>为什么：</strong>建立候选与深拷贝，把一个数据边界变成可测的不变量。</p><p><strong>位置：</strong>新增 pause_snapshot.go 的类型、常量、Clone。</p><p><strong>输入 → 输出 / 动作：</strong>把 r25 / 请求 / 可选决定表示成一份值；Checkpoint只保留一份。复用Checkpoint.Clone，单独复制Decision值，不改旧结构。</p><pre><code>go test ./internal/runstate -run '^TestDay25Ownership$' -count=1 -v</code></pre><p><strong>完成证据：</strong>输入、Clone、门禁互不串改，零值Clone不出错；下一步才接同锁捕获。</p><details><summary>卡住时提示</summary><p>结构体按值复制仍含切片和指针；不要复制锁或context。</p></details></article><article class="step"><h3>2 · 20分钟：在同一门禁下捕获</h3><p><strong>为什么：</strong>在同一门禁下捕获，把一个数据边界变成可测的不变量。</p><p><strong>位置：</strong>新增 Gate.PauseSnapshot 与有限校验。</p><p><strong>输入 → 输出 / 动作：</strong>ToolsPending暂停 → 一份带SchemaVersion的独立候选；无请求或取消返回明确错误，不推进、不清理。</p><pre><code>go test ./internal/runstate -run '^(TestDay25CaptureDoesNotAdvance|TestDay25UnavailableAndCancellation)$' -count=1 -v</code></pre><p><strong>完成证据：</strong>三种决定状态可捕获，取消不变成偷偷Apply；已有暂停仍拦StartTools。</p><details><summary>卡住时提示</summary><p>复用g.mu读取request和decision，避免调用另一个会获取同一把锁的门禁方法。</p></details></article><article class="step"><h3>3 · 25分钟：实现 Gob 编解码与一致性拒绝</h3><p><strong>为什么：</strong>实现 Gob 编解码与一致性拒绝，把一个数据边界变成可测的不变量。</p><p><strong>位置：</strong>新增 EncodePauseSnapshot / DecodePauseSnapshot 及校验辅助函数。</p><p><strong>输入 → 输出 / 动作：</strong>候选 → 有界字节 → 独立候选。复用基础预算/边界校验，补上Pending与最后assistant、决定目标关联；不解析业务参数。</p><pre><code>go test ./internal/runstate -run '^(TestDay25CodecRoundTrip|TestDay25InvalidEnvelope|TestDay25MalformedAndSize)$' -count=1 -v</code></pre><p><strong>完成证据：</strong>原参数字节保留，错关联、未知版本、截断、尾随与超大载荷明确拒绝；错误无半份结果。</p><details><summary>卡住时提示</summary><p>用新的Gob流处理每份数据；校验成功不代表来源可信，别在编解码里调用Store。</p></details></article><article class="step"><h3>4 · 20分钟：检验竞争与保存语义</h3><p><strong>为什么：</strong>检验竞争与保存语义，把一个数据边界变成可测的不变量。</p><p><strong>位置：</strong>捕获/Clone/编解码的所有权与同一门禁协调。</p><p><strong>输入 → 输出 / 动作：</strong>16个读者各改输出；与Decide竞争看到完整记录，与Resolve竞争看到旧候选或无请求。全绿后整理校验，再跑同一测试与累计回归。</p><pre><code>go test ./internal/runstate -run '^(TestDay25ConcurrentCapture|TestDay25CaptureVersusControl)$' -count=1 -v</code></pre><p><strong>完成证据：</strong>race通过，旧候选仍可编码却不能证明新鲜；能指出存储确认和恢复执行还在哪一层。</p><details><summary>卡住时提示</summary><p>不要把返回的候选绑定为实时视图，也不要用“可解码”替代重新核验。</p></details></article></section><section id="review"><h2>20分钟测试与复盘</h2><h3>12分钟 · 目标、race 与累计回归</h3><pre><code># 练习副本根：建议命令
+go test ./internal/runstate -run '^TestDay25' -count=1 -v -timeout 20s
+go test -race ./internal/runstate -run '^TestDay25' -count=1 -timeout 30s
+go test ./internal/... -timeout 60s
+# 参考仓库根：建议命令
+go test ./examples/...
+go test -race ./examples/...</code></pre><p>这些是学习者建议验收命令，不声称你的实现已经完成或执行。全绿后再重构，保留明确错误与所有权语义。</p><h3>8分钟 · 合上代码回答</h3><ol><li>画出doc-1从暂停、记录决定、一致捕获到编码/解码的路径。哪一步仍没有保存确认？</li><li>SchemaVersion、StoredCheckpoint.Version、State.Step分别解决什么问题，能互相代替吗？</li><li>为何不能用两次读取拼快照？为何旧候选解码成功后仍可能已过时？</li><li>原参数是RawMessage，为什么不能随意重编码后声称保持字节身份？Gob方案又有哪些格式耦合和输入限制？</li><li>若换成数据库，需要新增哪些写入确认、冲突、来源、新鲜度和恢复归属规则？发生写入超时能否直接重试执行工具？</li></ol><h3>DoD / 完成定义</h3><p><strong>实作：</strong>R1–R8八组测试及子场景、目标/race和受影响累计回归真实通过；原门禁/决定/消费语义保留，记录实际输出及未验证项。</p><p><strong>理解：</strong>能不看代码解释候选所有权、格式版本、存储版本和保存确认的差别；能指出参数身份与恢复信任边界，并把新“持久化/恢复执行”需求定位到独立层。</p><h3>本次材料验证</h3><p class="note" id="verification-status">Go1.22.2 linux/amd64：原样骨架编译通过，目标确实执行并因TODO失败；同一完整测试在隔离internal参考通过含race，兼容副本累计回归通过。仓库根 go test ./examples/... 与 go test -race ./examples/... 均退出码0，包含前序门禁/决定/消费回归。学习者原实现、真实存储确认、来源与权限、模型/工具后端和持久恢复未验证。</p><p><a href="exercises/day25/verification.json">原始红绿与累计记录</a> · <a href="exercises/day25/browser-verification.json">离线浏览器记录</a></p><h3>学习清单</h3><div class="meta"><span>本浏览器自评进度</span><span id="count">0 / 8</span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="fill" class="fill"></div></div><div id="checks"></div><noscript><p>关闭脚本仍可离线阅读，清单不会自动保存。</p></noscript></section><section id="answer"><h2>最后再看：兼容参考答案</h2><p>实际累计参考为 examples/internal/runstate/pause_snapshot.go；以下映射到练习 internal 路径。行为测试仅映射 import 前缀，断言不变。</p><h3 class="file-label">参考 · internal/runstate/pause_snapshot.go</h3><p><a href="exercises/day25/reference/internal/runstate/pause_snapshot.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="reference" data-source="day25/reference/internal/runstate/pause_snapshot.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day25-reference-internal-runstate-pause_snapshot-go-txt"><code>package runstate
+
+import (
+	&quot;bytes&quot;
+	&quot;encoding/gob&quot;
+	&quot;errors&quot;
+	&quot;strings&quot;
+)
+
+const (
+	PauseSnapshotSchema   = 1
+	MaxPauseSnapshotBytes = 1 &lt;&lt; 20
+)
+
+var ErrInvalidPauseSnapshot = errors.New(&quot;runstate: invalid pause snapshot&quot;)
+
+// PauseSnapshot is a versioned host-owned candidate, not a saved receipt,
+// restored Gate, fresh-state proof, approval credential or execution lease.
+type PauseSnapshot struct {
+	SchemaVersion int
+	Request       PauseRequest
+	Decision      *ApprovalDecision
+}
+
+// Clone copies mutable messages, calls and the optional decision.
+// It does not validate, save or authorize this value.
+func (s PauseSnapshot) Clone() PauseSnapshot {
+	s.Request.Checkpoint = s.Request.Checkpoint.Clone()
+	if s.Decision != nil {
+		d := *s.Decision
+		s.Decision = &amp;d
+	}
+	return s
+}
+
+// PauseSnapshot captures held request and decision under the same gate lock.
+// It observes cancellation without committing it; it never calls Apply or I/O.
+func (g *PauseGate) PauseSnapshot() (PauseSnapshot, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if err := g.run.Context().Err(); err != nil {
+		return PauseSnapshot{}, err
+	}
+	if g.request == nil {
+		return PauseSnapshot{}, ErrNoPause
+	}
+	s := PauseSnapshot{SchemaVersion: PauseSnapshotSchema, Request: *g.request, Decision: g.decision}.Clone()
+	if !pauseSnapshotValid(s) {
+		return PauseSnapshot{}, ErrInvalidPauseSnapshot
+	}
+	if err := g.run.Context().Err(); err != nil {
+		return PauseSnapshot{}, err
+	}
+	return s, nil
+}
+
+// Limited consistency checks, not full history/provenance/authorization checks.
+func pauseSnapshotValid(s PauseSnapshot) bool {
+	p, cp := s.Request, s.Request.Checkpoint
+	st := cp.State
+	if s.SchemaVersion != PauseSnapshotSchema || strings.TrimSpace(p.ID) == &quot;&quot; || strings.TrimSpace(p.Reason) == &quot;&quot; ||
+		!validateCandidate(cp) || cp.Boundary != CheckpointBeforeTools || st.Phase != ToolsPending ||
+		st.Result != &quot;&quot; || st.Failure != &quot;&quot; || len(st.Messages) == 0 || st.Messages[0].Role != &quot;user&quot; || len(st.Pending) == 0 {
+		return false
+	}
+	last := st.Messages[len(st.Messages)-1]
+	if last.Role != &quot;assistant&quot; || len(last.ToolCalls) != len(st.Pending) {
+		return false
+	}
+	ids := map[string]bool{}
+	for i, call := range st.Pending {
+		h := last.ToolCalls[i]
+		if call.ID == &quot;&quot; || strings.TrimSpace(call.Name) == &quot;&quot; || ids[call.ID] || call.ID != h.ID || call.Name != h.Name || !bytes.Equal(call.Arguments, h.Arguments) {
+			return false
+		}
+		ids[call.ID] = true
+	}
+	if d := s.Decision; d != nil {
+		if d.RunID != st.RunID || d.RequestID != p.ID || strings.TrimSpace(d.Actor) == &quot;&quot; || strings.TrimSpace(d.Reason) == &quot;&quot; ||
+			(d.Outcome != DecisionApprove &amp;&amp; d.Outcome != DecisionReject) {
+			return false
+		}
+	}
+	return true
+}
+
+// EncodePauseSnapshot uses a fresh gob stream and preserves argument bytes.
+// No I/O/ctx is involved. This is not canonical encoding or a storage commit.
+func EncodePauseSnapshot(s PauseSnapshot) ([]byte, error) {
+	if !pauseSnapshotValid(s) {
+		return nil, ErrInvalidPauseSnapshot
+	}
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&amp;buf).Encode(s); err != nil || buf.Len() &gt; MaxPauseSnapshotBytes {
+		return nil, ErrInvalidPauseSnapshot
+	}
+	return buf.Bytes(), nil
+}
+
+// DecodePauseSnapshot accepts one bounded host artifact, not arbitrary network
+// input. Gob type/field handling remains the standard library&#x27;s compatibility
+// behavior; this is not an authenticated or hostile-input-safe file format.
+func DecodePauseSnapshot(data []byte) (PauseSnapshot, error) {
+	if len(data) == 0 || len(data) &gt; MaxPauseSnapshotBytes {
+		return PauseSnapshot{}, ErrInvalidPauseSnapshot
+	}
+	reader := bytes.NewReader(data)
+	var out PauseSnapshot
+	if err := gob.NewDecoder(reader).Decode(&amp;out); err != nil || reader.Len() != 0 || !pauseSnapshotValid(out) {
+		return PauseSnapshot{}, ErrInvalidPauseSnapshot
+	}
+	return out, nil
+}
+</code></pre><button type="button" data-copy="day25-reference-internal-runstate-pause_snapshot-go-txt">复制本文件</button></details><h3>次日衔接 · Day26</h3><p>今天明确了暂停候选要携带什么数据，并建立一致捕获和编解码边界。明天进入故障与外部执行确认：本地记录、存储结果和工具实际副作用可能分离，恢复前还必须知道什么？</p></section><footer><nav class="page-navigation" aria-label="页面导航"><a class="page-nav-button" href="agent-runtime-day-24.html">上一项</a><a class="page-nav-button" href="../../index.html">返回主页</a><span class="page-nav-button is-disabled" aria-disabled="true">下一项</span></nav><p class="page-meta">Day25 / 56 · 第四周：中断、审批、人机协作与故障恢复 · 离线图解与完整练习</p></footer></main><script>
+const items=["用自己的话解释当天三个概念", "根据两张图讲清输入、职责和返回", "完成官方阅读并写下问题答案", "确认骨架可编译且目标出现预期红灯", "按任务卡逐步完成当天实现", "完整目标与 race 测试通过", "记录累计回归实际结果和未验证项", "合上代码完成需求变化与失败边界复盘"];const key="mini-agent-runtime-day-25-tdd-v1";
+let saved=[];try{const value=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(value))saved=value}catch(_){}
+const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const percent=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=percent+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(percent))}
+items.forEach((s,i)=>{const row=document.createElement("div");row.className="check";const input=document.createElement("input");input.type="checkbox";input.id="task-"+i;input.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=input.id;label.textContent=s;row.append(input,label);box.append(row);input.onchange=()=>{saved[i]=input.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+document.querySelectorAll("button[data-copy]").forEach(button=>button.addEventListener("click",async()=>{const target=document.getElementById(button.dataset.copy);try{await navigator.clipboard.writeText(target.textContent);button.textContent="已复制"}catch(_){const range=document.createRange();range.selectNodeContents(target);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);button.textContent="已选中，请手动复制"}}));
+</script></body></html>

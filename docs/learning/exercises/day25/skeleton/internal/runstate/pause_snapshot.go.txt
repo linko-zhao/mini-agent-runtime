@@ -1,0 +1,29 @@
+package runstate
+
+import "errors"
+
+const (
+	PauseSnapshotSchema   = 1
+	MaxPauseSnapshotBytes = 1 << 20
+)
+
+var ErrInvalidPauseSnapshot = errors.New("runstate: invalid pause snapshot")
+
+type PauseSnapshot struct {
+	SchemaVersion int
+	Request       PauseRequest
+	Decision      *ApprovalDecision
+}
+
+func (s PauseSnapshot) Clone() PauseSnapshot {
+	panic("TODO: implement Clone")
+}
+func (g *PauseGate) PauseSnapshot() (PauseSnapshot, error) {
+	panic("TODO: implement PauseSnapshot")
+}
+func EncodePauseSnapshot(s PauseSnapshot) ([]byte, error) {
+	panic("TODO: implement EncodePauseSnapshot")
+}
+func DecodePauseSnapshot(data []byte) (PauseSnapshot, error) {
+	panic("TODO: implement DecodePauseSnapshot")
+}
