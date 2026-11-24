@@ -1187,7 +1187,7 @@ func PlanReplay(ctx context.Context, recovery RecoveryPlan, evidence ReplayEvide
 	return out, nil
 }
 </code></pre><button type="button" data-copy="day20-reference-internal-runstate-replay-go-txt">复制本文件</button></details><h3>Day21怎样做第三周复盘？</h3><p>今天把记录判读与重放证据衔接，仍然没有自动执行。明天以整周装配与故障场景检验状态、捕获、存储、判读和决策之间的接口，明确持久性、执行归属及后端确认尚未实现的边界。</p></section>
-<footer><nav class="page-navigation" aria-label="页面导航"><a class="page-nav-button" href="agent-runtime-day-19.html">上一项</a><a class="page-nav-button" href="../../index.html">返回主页</a><span class="page-nav-button is-disabled" aria-disabled="true">下一项</span></nav><p class="page-meta">Day20 / 56 · 第三周 · 正文、图示、骨架与完整测试离线可读</p></footer></main><script>
+<footer><nav class="page-navigation" aria-label="页面导航"><a class="page-nav-button" href="agent-runtime-day-19.html">上一项</a><a class="page-nav-button" href="../../index.html">返回主页</a><a class="page-nav-button" href="agent-runtime-day-21.html">下一项</a></nav><p class="page-meta">Day20 / 56 · 第三周 · 正文、图示、骨架与完整测试离线可读</p></footer></main><script>
 const items=["用自己的话解释当天三个概念", "根据两张图讲清输入、职责和返回", "完成官方阅读并写下问题答案", "确认骨架可编译且目标出现预期红灯", "按任务卡逐步完成当天实现", "完整目标与 race 测试通过", "记录累计回归实际结果和未验证项", "合上代码完成需求变化与失败边界复盘"];const key="mini-agent-runtime-day-20-tdd-v1";
 let saved=[];try{const value=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(value))saved=value}catch(_){}
 const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const percent=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=percent+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(percent))}
