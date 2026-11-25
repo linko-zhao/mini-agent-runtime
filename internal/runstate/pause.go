@@ -33,26 +33,47 @@ func (g *PauseGate) Snapshot() State {
 	return g.run.Snapshot()
 }
 func (g *PauseGate) CurrentInterrupt() (PauseRequest, bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	if g.request == nil {
 		return PauseRequest{}, false
 	}
 	return PauseRequest{ID: g.request.ID, Reason: g.request.Reason, Checkpoint: g.request.Checkpoint.Clone()}, true
 }
 func (g *PauseGate) Pause(id, reason string) (PauseRequest, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.run.ctx.Err() != nil {
+		return PauseRequest{}, g.run.ctx.Err()
+	}
 	if strings.TrimSpace(id) == "" || strings.TrimSpace(reason) == "" {
 		return PauseRequest{}, ErrInvalidPause
 	}
 	if g.request != nil {
 		return PauseRequest{}, ErrPaused
 	}
-	return PauseRequest{ID: id, Reason: reason, Checkpoint: g.request.Checkpoint.Clone()}, nil
+	cp, err := g.run.Checkpoint()
+	if err != nil || cp.State.Phase != ToolsPending  {
+		return PauseRequest{}, ErrPauseBoundary
+	}
+	if g.run.ctx.Err() != nil {
+		return PauseRequest{}, g.run.ctx.Err()
+	}
+	r := PauseRequest{ID: id, Reason: reason, Checkpoint: cp.Clone()}
+	g.request = &r
+	out := r
+	out.Checkpoint = out.Checkpoint.Clone()
+	return out, nil
 }
 func (g *PauseGate) Apply(e Event) (State, error) {
-	if g.request == nil {
-		return g.run.Apply(e)
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.request != nil && g.run.ctx.Err() == nil {
+		return g.run.Snapshot(), ErrPaused
 	}
-	if g.run.ctx.Err() == nil {
-		return g.request.Checkpoint.State, ErrPaused
+	s, err := g.run.Apply(e)
+	if terminal(s.Phase) {
+		g.request = nil
 	}
-	return State{}, nil
+	return s, err
 }
