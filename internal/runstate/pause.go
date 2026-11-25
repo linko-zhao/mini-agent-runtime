@@ -18,9 +18,9 @@ type PauseRequest struct {
 	Checkpoint Checkpoint
 }
 type PauseGate struct {
-	mu      sync.Mutex
-	run     *Run
-	request *PauseRequest
+	mu       sync.Mutex
+	run      *Run
+	request  *PauseRequest
 	desicion *ApprovalDecision
 }
 
@@ -54,7 +54,7 @@ func (g *PauseGate) Pause(id, reason string) (PauseRequest, error) {
 		return PauseRequest{}, ErrPaused
 	}
 	cp, err := g.run.Checkpoint()
-	if err != nil || cp.State.Phase != ToolsPending  {
+	if err != nil || cp.State.Phase != ToolsPending {
 		return PauseRequest{}, ErrPauseBoundary
 	}
 	if g.run.ctx.Err() != nil {

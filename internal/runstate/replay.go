@@ -64,7 +64,7 @@ func PlanReplay(ctx context.Context, recovery RecoveryPlan, evidence ReplayEvide
 	}
 	rp := ReplayPlan{
 		Record: cloneStore(record),
-		Steps: make([]ReplayStep, 0),
+		Steps:  make([]ReplayStep, 0),
 	}
 	idKeys := map[string]bool{}
 	for i, e := range evidence.Calls {

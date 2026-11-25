@@ -43,7 +43,7 @@ func (g *PauseGate) Decide(d ApprovalDecision) (ApprovalDecision, error) {
 		return ApprovalDecision{}, ErrNoPause
 	}
 	if d.RunID != g.run.state.RunID || d.RequestID != g.request.ID {
-		return  ApprovalDecision{}, ErrDecisionMismatch
+		return ApprovalDecision{}, ErrDecisionMismatch
 	}
 	if g.desicion != nil {
 		return ApprovalDecision{}, ErrDecisionRecorded
