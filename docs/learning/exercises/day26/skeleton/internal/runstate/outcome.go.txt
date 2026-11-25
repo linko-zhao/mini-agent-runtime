@@ -1,0 +1,48 @@
+package runstate
+
+import (
+	"context"
+	"errors"
+
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+)
+
+var (
+	ErrOutcomeState          = errors.New("runstate: invalid outcome observation")
+	ErrOutcomeSourceRequired = errors.New("runstate: outcome source required")
+)
+
+// ToolAttempt identifies the logical call being inspected, not a network retry
+// counter. The host must additionally bind tenant, authority and backend scope.
+type ToolAttempt struct {
+	RunID string
+	Step  int
+	Call  model.ToolCall
+}
+
+type ToolOutcomeEvidence struct {
+	RunID    string
+	Step     int
+	Evidence ReplayEvidence
+}
+
+// ToolOutcomeSource is a trusted read-only host adapter. It must cooperate with
+// ctx, support intended concurrency and return owned buffers; Lookup must not
+// execute/retry the business operation while looking for its outcome.
+type ToolOutcomeSource interface {
+	Lookup(context.Context, ToolAttempt) (ToolOutcomeEvidence, error)
+}
+
+// ToolOutcomeReport is a point-in-time report, not fresh-state proof, a restored
+// Run or authorization. Results is nil unless ALL results are positively known.
+type ToolOutcomeReport struct {
+	Observed        State
+	Evidence        []ToolOutcomeEvidence
+	AllResultsKnown bool
+	Results         []model.Message
+}
+
+// InspectToolOutcomes only reads evidence; it never executes business calls.
+func InspectToolOutcomes(ctx context.Context, source ToolOutcomeSource, observed State) (ToolOutcomeReport, error) {
+	panic("TODO: implement InspectToolOutcomes")
+}

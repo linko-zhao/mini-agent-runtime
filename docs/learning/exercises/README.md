@@ -170,3 +170,11 @@ main 在本批讲义准备期间新增了 agent.RunWithState、RunSnapshot 与�
 原仓库根运行 `python3 docs/learning/exercises/prepare.py 25`，进入打印的仓库外副本，再运行 `go test ./internal/runstate -run '^$'` 和 `go test ./internal/runstate -run '^TestDay25' -count=1 -v`。材料不覆盖或验证学习者原internal/cmd。
 
 重跑 `python3 docs/learning/exercises/verify.py --go /你的Go/bin/go --days 25 --report /tmp/day25-verification.json`。见[原始红绿/累计记录](day25/verification.json)、[离线浏览器记录](day25/browser-verification.json)。编码成功不是存储确认，解码不重建Run或允许工具执行。
+
+## Day26：故障与外部执行确认
+
+[Day26页面](../agent-runtime-day-26.html)内嵌outcome.go完整TODO、七组公开行为测试和九份前序支持文件。新增只读ToolOutcomeSource与InspectToolOutcomes，复用ReplayEvidence；共享根go.mod，不改旧接口，参考在examples/internal，练习在internal。
+
+原仓库根运行 `python3 docs/learning/exercises/prepare.py 26`，进入打印的仓库外副本，再执行 `go test ./internal/runstate -run '^$'` 和 `go test ./internal/runstate -run '^TestDay26' -count=1 -v`。材料不覆盖或验证原internal/cmd。
+
+重跑 `python3 docs/learning/exercises/verify.py --go /你的Go/bin/go --days 26 --report /tmp/day26-verification.json`。见[原始红绿/累计记录](day26/verification.json)、[离线浏览器记录](day26/browser-verification.json)。报告不代表可自动重试、当前运行可推进或外部来源已验证。

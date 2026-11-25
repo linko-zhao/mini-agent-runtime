@@ -431,3 +431,19 @@ EvidenceSource是可信宿主端口，应遵守只读核验约定；适配器自
 迁移只新增文件；宿主需要候选时用Gate.PauseSnapshot一次捕获，替代分次拼接CurrentInterrupt/CurrentDecision。旧构造、类型与方法不改参；旧Checkpoint映射Request.Checkpoint、PauseRequest/ApprovalDecision原定义复用，新增格式版本；旧字节没有完整字段时拒绝，不自动迁移。未来修改导出结构需显式版本/迁移设计。
 
 练习internal/runstate/pause_snapshot.go，七份support为state/run/checkpoint/store/pause/approval/resolve，store仅复用基础校验，不调用Save。完整骨架/测试/支持/参考及红绿/race/累计证据见docs/learning/exercises/day25；import只映射examples/internal→internal，不改断言。学习者原实现、真实存储/工具/模型、身份权限、持久恢复均未验证。
+
+## Day26：故障与外部执行确认
+
+新增examples/internal/runstate/outcome.go、outcome_test.go，复用State/Run/门禁及Day20 ReplayEvidence/ReplayBasis，不改旧公开签名、消息、Phase/Event或根internal/cmd。输入是可信ToolsRunning观察，不把Day25 ToolsPending暂停候选改成进行中，也不伪造StoredCheckpoint.Version去调用PlanReplay。
+
+- ToolAttempt{RunID string; Step int; Call model.ToolCall}：逻辑调用身份；Step仍为模型轮次，不是网络重试次数。宿主另行绑定租户/权限/后端操作作用域。
+- ToolOutcomeEvidence{RunID string; Step int; Evidence ReplayEvidence}：返回RunID/Step及Evidence.Call.ID/Name/Arguments原字节须精确匹配。只接受Unknown/NotStarted/ResultKnown，前两者Result=nil，后者Result非nil且Role=tool/ToolCallID匹配/无ToolCalls；Content可空。全部IdempotencyKey必须空，BackendDedup与未知Basis拒绝。Day20重放策略不变，本日不将去重能力当结果。
+- ToolOutcomeSource.Lookup(context.Context,ToolAttempt)(ToolOutcomeEvidence,error)：可信只读宿主端口，传原核验ctx，合作取消、支持所需并发、返回owned buffers；不得重执行业务操作。可修改输入副本，不得返回后继续并发修改输出。身份、权限、真实性/新鲜度/操作关联由来源与宿主负责；台账未查到不是NotStarted证明。
+- ToolOutcomeReport{Observed State; Evidence []ToolOutcomeEvidence; AllResultsKnown bool; Results []model.Message}：Observed独立观察，Evidence按Pending顺序完整保留；仅每项ResultKnown时AllResultsKnown=true并提供完整Results，否则Results=nil。Observed/Evidence.Call/Evidence.Result/Results及来源/输入分别独立。报告不是原子检查Apply令牌、执行权、保存确认或实时状态。
+- InspectToolOutcomes(ctx,source,observed)(ToolOutcomeReport,error)：nilctx→ErrOutcomeState；已取消ctx原错误优先；非法观察ErrOutcomeState、零查询；有效观察而nilsource→ErrOutcomeSourceRequired。来源须可用接口，typed-nil不属支持前提。
+- 观察有限校验：非空白RunID，ToolsRunning，MaxSteps>0且0<Step≤MaxSteps，Result/Failure空，首条user、末条assistant，Pending非空且与末条ToolCalls逐项等长/ID/Name/参数字节一致，ID非空唯一、Name非空白。不重放完整历史或校验业务参数/来源真实性。
+- 每项查询前采样ctx，用独立ToolAttempt按顺序Lookup一次；返回后取消优先于值和来源错误，否则原错误链原样返回；再校验身份/形状，失败ErrReplayEvidence。全部处理后再次采样ctx。所有错误零报告，立即停止，无自动重试；已发生的只读查询不会因零报告撤销。
+- 查询失败不能伪造Unknown，Unknown不能推导NotStarted，NotStarted不触发Invoke。函数不Apply/Save/Load/Invoke或创建恢复Run；只有仍拥有当前运行的宿主重新核对ctx/Phase/Step/Pending和归属后才能考虑完整ToolsReturned。原执行ctx取消时，新核验ctx不会使Run恢复执行。
+- 输入处理期间不得并发修改；来源支持并发时可并发核验同一只读观察，各改返回报告。最后ctx检查后仍可取消；来源须合作，不强杀协程/硬超时。没有持久确认、外部执行日志实现、租约、真实后端幂等或exactly-once保证。
+
+迁移只新增文件；旧类型/构造/记录/消费方法均不改参。复用ReplayEvidence逐项内容，新增RunID/Step封装；宿主在故障分支注入只读来源并调用新入口，后续回填与恢复协调独立处理。练习internal/runstate/outcome.go，九份support为state/run/checkpoint/store/recovery/replay/pause/approval/resolve，store/recovery随累计replay依赖提供，本日不执行其Load/Save。共享根go.mod，reference import仅examples/internal→internal映射，不改断言。原始红绿/race/累计记录见docs/learning/exercises/day26，学习者原实现、真实台账/模型/工具副作用、持久恢复及来源真实性未验证。

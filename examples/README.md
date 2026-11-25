@@ -1,6 +1,6 @@
 # Agent Runtime 累计示例
 
-这是依据 Day 01–25 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
+这是依据 Day 01–26 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
 
 共享仓库根目录的 `go.mod`（Go 1.22.2），无需新建 Module，也不导入根目录 `internal` 中的练习实现。所有命令在仓库根目录运行：
 
@@ -218,3 +218,9 @@ Ready、预算耗尽与终态只返回Recovery，Replay=nil且不查询Source；
 新增internal/runstate/pause_snapshot.go、pause_snapshot_test.go。PauseSnapshot在同一门禁锁内捕获请求与可选决定；SchemaVersion=1，Clone与Gob编解码保持消息/参数所有权和参数字节内容。只交付候选数据，不调用Store或恢复执行；格式版本不等于CAS版本。完整规则与旧数据映射见CONTRACTS.md和[Day25页面](../docs/learning/agent-runtime-day-25.html)。
 
 从仓库根运行go test ./examples/...与go test -race ./examples/...；材料真实记录见docs/learning/exercises/day25/verification.json。编解码仅用于受信宿主数据，不保证来源、新鲜度、保存确认或持久恢复；学习者原实现未验证。
+
+## Day26：故障与外部执行确认
+
+新增internal/runstate/outcome.go、outcome_test.go。InspectToolOutcomes接收ToolsRunning观察，逐项只读Lookup并核对RunID/Step/Call原字节身份；复用ReplayEvidence，只有整批ResultKnown才返回完整Results。Unknown/NotStarted不重试，来源失败保留错误链，不Apply/Save/Invoke。旧门禁、快照、重放策略不改。完整契约见CONTRACTS.md和[Day26页面](../docs/learning/agent-runtime-day-26.html)。
+
+在仓库根运行go test ./examples/...与go test -race ./examples/...；材料真实结果见docs/learning/exercises/day26/verification.json。来源为离线fake，未验证真实台账、模型/工具后端、真实性、新鲜度、持久恢复或学习者实现。
