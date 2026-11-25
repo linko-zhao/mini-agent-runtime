@@ -21,6 +21,7 @@ type PauseGate struct {
 	mu      sync.Mutex
 	run     *Run
 	request *PauseRequest
+	desicion *ApprovalDecision
 }
 
 func NewPauseGate(run *Run) (*PauseGate, error) {
@@ -74,6 +75,7 @@ func (g *PauseGate) Apply(e Event) (State, error) {
 	s, err := g.run.Apply(e)
 	if terminal(s.Phase) {
 		g.request = nil
+		g.desicion = nil
 	}
 	return s, err
 }
