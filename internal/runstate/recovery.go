@@ -20,7 +20,7 @@ type RecoveryPlan struct {
 	Record   StoredCheckpoint
 }
 
-func recoveryRecordValid(v StoredCheckpoint, runID string) bool {
+func validateRecoveryRecord(v StoredCheckpoint, runID string) bool {
 	cp := v.Checkpoint
 	s := cp.State
 	if v.Version <= 0 || s.RunID != runID || !validateCheckpoint(cp) || len(s.Messages) == 0 || s.Messages[0].Role != "user" {
@@ -67,7 +67,7 @@ func PlanRecovery(ctx context.Context, store CheckpointStore, runID string) (Rec
 	if err != nil {
 		return RecoveryPlan{}, err
 	}
-	if !recoveryRecordValid(sc, runID) {
+	if !validateRecoveryRecord(sc, runID) {
 		return RecoveryPlan{}, ErrInvalidCheckpoint
 	}
 	p := RecoveryTerminal

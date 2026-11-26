@@ -56,7 +56,7 @@ func PlanReplay(ctx context.Context, recovery RecoveryPlan, evidence ReplayEvide
 		return ReplayPlan{}, err
 	}
 	record := recovery.Record
-	if recovery.Position != RecoveryReviewPending || record.Checkpoint.State.Phase != ToolsPending || !recoveryRecordValid(recovery.Record, record.Checkpoint.State.RunID) {
+	if recovery.Position != RecoveryReviewPending || record.Checkpoint.State.Phase != ToolsPending || !validateRecoveryRecord(recovery.Record, record.Checkpoint.State.RunID) {
 		return ReplayPlan{}, ErrInvalidCheckpoint
 	}
 	if record.Version != evidence.Version || record.Checkpoint.State.RunID != evidence.RunID || len(evidence.Calls) != len(record.Checkpoint.State.Pending) {
