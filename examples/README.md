@@ -1,6 +1,6 @@
 # Agent Runtime 累计示例
 
-这是依据 Day 01–26 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
+这是依据 Day 01–27 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
 
 共享仓库根目录的 `go.mod`（Go 1.22.2），无需新建 Module，也不导入根目录 `internal` 中的练习实现。所有命令在仓库根目录运行：
 
@@ -224,3 +224,9 @@ Ready、预算耗尽与终态只返回Recovery，Replay=nil且不查询Source；
 新增internal/runstate/outcome.go、outcome_test.go。InspectToolOutcomes接收ToolsRunning观察，逐项只读Lookup并核对RunID/Step/Call原字节身份；复用ReplayEvidence，只有整批ResultKnown才返回完整Results。Unknown/NotStarted不重试，来源失败保留错误链，不Apply/Save/Invoke。旧门禁、快照、重放策略不改。完整契约见CONTRACTS.md和[Day26页面](../docs/learning/agent-runtime-day-26.html)。
 
 在仓库根运行go test ./examples/...与go test -race ./examples/...；材料真实结果见docs/learning/exercises/day26/verification.json。来源为离线fake，未验证真实台账、模型/工具后端、真实性、新鲜度、持久恢复或学习者实现。
+
+## Day27：恢复编排与竞争边界
+
+新增internal/runstate/reconcile.go、reconcile_test.go。Gate.ReconcileToolResults在锁外复用Day26核验，整批结果明确后在同一门禁锁内比较当前State并委托ToolsReturned，防止旧观察重复回填。新增Incomplete/Conflict错误，保留queryCtx与原执行ctx的不同边界。没有持久加载或新Run恢复，不改旧接口。详见CONTRACTS.md与[Day27页面](../docs/learning/agent-runtime-day-27.html)。
+
+仓库根运行go test ./examples/...与go test -race ./examples/...；材料真实记录见docs/learning/exercises/day27/verification.json。来源为离线fake，未验证学习者原实现、真实后端、持久恢复、真实性/新鲜度或分布式执行归属。

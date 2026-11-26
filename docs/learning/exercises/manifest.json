@@ -766,5 +766,64 @@
         "file": "day26/support/internal/runstate/resolve.go.txt"
       }
     ]
+  },
+  "27": {
+    "package": "./internal/runstate",
+    "pattern": "^TestDay27",
+    "targets": [
+      {
+        "path": "internal/runstate/reconcile.go",
+        "reference": "day27/reference/internal/runstate/reconcile.go.txt",
+        "skeleton": "day27/skeleton/internal/runstate/reconcile.go.txt"
+      }
+    ],
+    "tests": [
+      {
+        "path": "internal/runstate/day27_contract_test.go",
+        "file": "day27/tests/internal/runstate/day27_contract_test.go.txt"
+      }
+    ],
+    "support": [
+      {
+        "path": "internal/runstate/state.go",
+        "file": "day27/support/internal/runstate/state.go.txt"
+      },
+      {
+        "path": "internal/runstate/run.go",
+        "file": "day27/support/internal/runstate/run.go.txt"
+      },
+      {
+        "path": "internal/runstate/checkpoint.go",
+        "file": "day27/support/internal/runstate/checkpoint.go.txt"
+      },
+      {
+        "path": "internal/runstate/store.go",
+        "file": "day27/support/internal/runstate/store.go.txt"
+      },
+      {
+        "path": "internal/runstate/recovery.go",
+        "file": "day27/support/internal/runstate/recovery.go.txt"
+      },
+      {
+        "path": "internal/runstate/replay.go",
+        "file": "day27/support/internal/runstate/replay.go.txt"
+      },
+      {
+        "path": "internal/runstate/pause.go",
+        "file": "day27/support/internal/runstate/pause.go.txt"
+      },
+      {
+        "path": "internal/runstate/approval.go",
+        "file": "day27/support/internal/runstate/approval.go.txt"
+      },
+      {
+        "path": "internal/runstate/resolve.go",
+        "file": "day27/support/internal/runstate/resolve.go.txt"
+      },
+      {
+        "path": "internal/runstate/outcome.go",
+        "file": "day27/support/internal/runstate/outcome.go.txt"
+      }
+    ]
   }
 }

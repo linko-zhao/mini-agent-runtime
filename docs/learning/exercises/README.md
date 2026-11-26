@@ -178,3 +178,11 @@ main 在本批讲义准备期间新增了 agent.RunWithState、RunSnapshot 与�
 原仓库根运行 `python3 docs/learning/exercises/prepare.py 26`，进入打印的仓库外副本，再执行 `go test ./internal/runstate -run '^$'` 和 `go test ./internal/runstate -run '^TestDay26' -count=1 -v`。材料不覆盖或验证原internal/cmd。
 
 重跑 `python3 docs/learning/exercises/verify.py --go /你的Go/bin/go --days 26 --report /tmp/day26-verification.json`。见[原始红绿/累计记录](day26/verification.json)、[离线浏览器记录](day26/browser-verification.json)。报告不代表可自动重试、当前运行可推进或外部来源已验证。
+
+## Day27：恢复编排与竞争边界
+
+[Day27页面](../agent-runtime-day-27.html)内嵌reconcile.go完整TODO、八组公开行为测试、十份原样支持文件与末尾折叠参考。新入口只编排同一Run的核验与条件提交，旧接口保持；全部共享根go.mod。
+
+原仓库根执行 `python3 docs/learning/exercises/prepare.py 27`，进入打印的仓库外副本，再运行 `go test ./internal/runstate -run '^$'` 与 `go test ./internal/runstate -run '^TestDay27' -count=1 -v`。材料不覆盖或验证原internal/cmd，测试import只映射examples/internal→internal。
+
+重跑 `python3 docs/learning/exercises/verify.py --go /你的Go/bin/go --days 27 --report /tmp/day27-verification.json`。见[原始红绿/累计记录](day27/verification.json)、[离线浏览器记录](day27/browser-verification.json)。channel确定竞争顺序，3秒timer只作死锁防护；本地一次提交不代表跨进程恢复或外部副作用exactly-once。

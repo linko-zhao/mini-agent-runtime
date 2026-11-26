@@ -447,3 +447,18 @@ EvidenceSource是可信宿主端口，应遵守只读核验约定；适配器自
 - 输入处理期间不得并发修改；来源支持并发时可并发核验同一只读观察，各改返回报告。最后ctx检查后仍可取消；来源须合作，不强杀协程/硬超时。没有持久确认、外部执行日志实现、租约、真实后端幂等或exactly-once保证。
 
 迁移只新增文件；旧类型/构造/记录/消费方法均不改参。复用ReplayEvidence逐项内容，新增RunID/Step封装；宿主在故障分支注入只读来源并调用新入口，后续回填与恢复协调独立处理。练习internal/runstate/outcome.go，九份support为state/run/checkpoint/store/recovery/replay/pause/approval/resolve，store/recovery随累计replay依赖提供，本日不执行其Load/Save。共享根go.mod，reference import仅examples/internal→internal映射，不改断言。原始红绿/race/累计记录见docs/learning/exercises/day26，学习者原实现、真实台账/模型/工具副作用、持久恢复及来源真实性未验证。
+
+## Day27：恢复编排与竞争边界
+
+新增examples/internal/runstate/reconcile.go、reconcile_test.go。新增Gate.ReconcileToolResults(queryCtx context.Context,source ToolOutcomeSource)(State,error)、ErrOutcomeIncomplete与ErrOutcomeConflict。旧类型/消息/Phase/Event、门禁构造、决定/消费/快照/核验/存储接口全不改，不改根internal/cmd，不新建module。
+
+- 作用是同一存活Run内缺失工具消息的协调回填，不是字节加载/进程重建、分布式接管、持久确认或真实工具exactly-once。
+- 阶段一不持g.mu：Gate.Snapshot观察→InspectToolOutcomes(queryCtx,source,observed)。原核验错误保持，包括nilctx/非法观察ErrOutcomeState、缺来源ErrOutcomeSourceRequired、ctx错误、来源Is/As错误链、ErrReplayEvidence；返回点读取当前独立State，不提交。合法但非AllResultsKnown→当前State/ErrOutcomeIncomplete，不重试、Invoke或部分回填。
+- 阶段二同一g.mu：读取当前Run.State→再次检查queryCtx→完整State与report.Observed按值比较→不符ErrOutcomeConflict或委托原Run.Apply(ToolsReturned,report.Results)。完整比较包括RunID/Phase/Step/MaxSteps/全部消息与参数字节/Pending/Result/Failure和值表示，不只比较CallID或Phase。不能比较后放锁再Apply，不能递归Gate.Apply锁死自己。
+- 比较和提交仅由唯一Gate协调，宿主必须交出原Run独占写入权；不得绕过Run.Apply或新建另一Gate。来源需受信只读、合作取消和支持所需并发，沿用Day26输入输出所有权。函数不接收外部构造报告，也不重新实现来源验证规则。
+- 成功ToolsReturned→Ready、Pending=nil，按顺序追加完整工具结果，Step不变；后续模型仍由宿主驱动。本次成功后普通再次调用初始Ready→ErrOutcomeState且零查询；两位协调者都已持旧观察时则一成功一ErrOutcomeConflict。所有返回State独立，错误也可能返回其它动作推进后的Ready/Cancelled，不能只看Phase声称本次成功。
+- queryCtx只控制只读查询与提交前检查，查询阶段失败不Apply，也不主动提交原Run取消；同一个ctx预取消可能返回ToolsRunning/Canceled。提交时原Run.Apply检查原执行ctx：当前仍匹配且原ctx取消→Cancelled/原Canceled或DeadlineExceeded，保留Pending、不追加结果，按旧门禁终态规则清request/decision。若其它动作已改变当前状态，先返回冲突保留它；queryCtx检查在比较之前。
+- 最后queryCtx检查后仍可能取消；若原执行ctx独立且允许，提交仍可能成功，不在提交后用查询取消错误掩盖已提交结果、不回滚。锁等待不可取消、无公平性；Lookup在锁外，阻塞时其它合法门禁操作仍可进入。
+- 不自动重查/重试、不调用工具/模型、不Load/Save、不创建恢复Run。当前State不变只说明本地条件匹配，不证明来源真实/新鲜或授权、后端幂等、全局租约。新轮次即使相同调用ID/参数，Step/历史变化也使旧报告冲突。
+
+迁移只新增文件；宿主原Snapshot→Inspect→Apply故障分支可改为Gate.ReconcileToolResults，并同时检查本次error。成功后不再次手动ToolsReturned；原Inspect仍用于独立诊断。共享根go.mod，练习internal/runstate/reconcile.go，十份support为state/run/checkpoint/store/recovery/replay/pause/approval/resolve/outcome，前序依赖原样提供；reference import只examples/internal→internal映射，不改断言。原始红绿/race/累计记录见docs/learning/exercises/day27；学习者原实现、真实来源/工具/模型后端、持久恢复和分布式执行归属未验证。

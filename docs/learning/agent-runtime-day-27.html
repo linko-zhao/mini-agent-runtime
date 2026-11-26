@@ -1,0 +1,1620 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>Day 27 · 恢复编排与竞争边界</title><style>/* Shared visual system for every learning page. Keep presentation here. */
+:root {
+  color-scheme: light;
+  --page-bg: #f5f7fb;
+  --surface: #fff;
+  --ink: #182337;
+  --muted: #58667b;
+  --line: #dce4ef;
+  --accent: #2459bd;
+  --accent-dark: #183561;
+  --accent-pale: #edf3ff;
+  --focus: #dc7900;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--page-bg);
+  color: var(--ink);
+  font: 16px/1.72 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+main {
+  width: min(100% - 32px, 840px);
+  min-width: 0;
+  margin: 0 auto;
+  padding: 28px 0 48px;
+}
+h1, h2, h3 { color: var(--ink); line-height: 1.45; }
+h1 { font-size: clamp(1.6rem, 4vw, 1.9rem); }
+h2 { margin: 0 0 18px; font-size: 20px; }
+h3 { font-size: 17px; }
+p, li, .node, figcaption { overflow-wrap: anywhere; }
+p { margin: 10px 0; }
+li { margin: 8px 0; }
+a { color: var(--accent); text-underline-offset: 3px; }
+a:hover { color: var(--accent-dark); }
+a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+header, .hero {
+  border-radius: 18px;
+  background: var(--accent-dark);
+  color: #fff;
+  padding: clamp(22px, 5vw, 34px);
+}
+header h1, .hero h1, header h2, .hero h2, header h3, .hero h3 { color: inherit; }
+header p, .hero p { color: #e6eefa; }
+header a, .hero a { color: #cce4ff; }
+.hero h1 { margin: 12px 0; }
+.eyebrow, .time { font-size: 13px; font-weight: 700; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips span, .chip {
+  border: 1px solid #9cb5d9;
+  border-radius: 20px;
+  padding: 3px 12px;
+  font-size: 13px;
+}
+
+section, main > nav:not(.page-navigation) {
+  min-width: 0;
+  margin-top: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  padding: clamp(18px, 4vw, 28px);
+}
+section:target { scroll-margin-top: 18px; }
+article, .card, .rule, .step {
+  min-width: 0;
+  margin: 18px 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+.card h3, .step h3 { margin-top: 0; }
+figure { margin: 20px 0; }
+.flow { display: flex; flex-direction: column; gap: 10px; margin: 20px 0; }
+.node {
+  min-width: 0;
+  border: 2px solid #9eb6db;
+  border-radius: 10px;
+  background: #f4f8ff;
+  padding: 15px;
+}
+.node strong { display: block; }
+.node small { display: block; }
+.arrow { text-align: center; color: #345276; font-size: 16px; }
+.branch { border: 2px dashed #9b6500; background: #fff7e8; }
+.muted, figcaption { color: var(--muted); font-size: 13px; }
+.note, .goal, .info {
+  border-left: 4px solid var(--accent);
+  border-radius: 4px;
+  background: var(--accent-pale);
+  padding: 14px 18px;
+}
+.warn { border-left-color: #9b6500; background: #fff6e3; }
+.phase { color: var(--accent-dark); font-weight: 700; }
+
+code {
+  overflow-wrap: anywhere;
+  border-radius: 4px;
+  background: #edf1f7;
+  padding: 2px 4px;
+  font-size: .88em;
+}
+pre {
+  max-width: 100%;
+  overflow: auto;
+  border-radius: 10px;
+  background: #142136;
+  color: #e7f3ff;
+  padding: 18px;
+  font-size: 13px;
+  line-height: 1.7;
+  tab-size: 4;
+}
+pre code { overflow-wrap: normal; background: none; padding: 0; font-size: inherit; }
+details { margin: 16px 0; border: 1px solid var(--line); border-radius: 9px; padding: 12px 16px; }
+details > pre { margin-bottom: 12px; }
+summary { cursor: pointer; font-weight: 650; }
+button {
+  cursor: pointer;
+  border: 1px solid #9eb6db;
+  border-radius: 7px;
+  background: var(--accent-pale);
+  color: var(--accent-dark);
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 13px;
+}
+.file-label { overflow-wrap: anywhere; }
+.download { font-size: 13px; }
+.code-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; }
+.copy-state, .copy-status { color: var(--muted); font-size: 13px; }
+.code-file { min-width: 0; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+}
+
+.check, .checks label { display: flex; gap: 12px; margin: 14px 0; }
+.check input, .checks input {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-top: 7px;
+  accent-color: var(--accent);
+}
+.check label, .checks label { cursor: pointer; }
+.done label, .check.done label { color: var(--muted); text-decoration: line-through; }
+.progress { height: 12px; overflow: hidden; border-radius: 8px; background: #e3e9f2; }
+.fill, #fill { width: 0; height: 100%; background: var(--accent); }
+.meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-bottom: 12px; font-size: 13px; }
+
+.toplinks { display: flex; flex-wrap: wrap; gap: 10px 22px; }
+footer { margin: 28px 0 0; color: var(--muted); text-align: center; font-size: 13px; }
+.page-navigation {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 28px 0 12px;
+}
+.page-nav-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #9ab0d0;
+  border-radius: 9px;
+  background: var(--accent-pale);
+  color: #153b70;
+  padding: 8px 12px;
+  font: inherit;
+  font-weight: 650;
+  line-height: 1.35;
+  text-align: center;
+  text-decoration: none;
+}
+.page-nav-button:hover { border-color: var(--accent); background: #dceaff; color: #153b70; }
+.page-nav-button.is-disabled { cursor: not-allowed; border-color: var(--line); background: #f0f2f5; color: #798496; }
+.page-meta { margin: 8px 0 0; }
+
+/* Supplemental styles used by the snapshot reference page. */
+.matrix-scroll { overflow-x: auto; }
+.matrix-scroll table { min-width: 660px; }
+table { max-width: 100%; border-collapse: collapse; }
+th, td { border-bottom: 1px solid var(--line); padding: 9px; text-align: left; vertical-align: top; }
+th { background: #f4f7fc; }
+.tag { display: inline-block; margin-right: 6px; border-radius: 5px; background: #eaf0fc; color: var(--accent); padding: 2px 7px; font-size: 12px; }
+.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.grid > div { border-radius: 9px; background: #f6f8fc; padding: 12px; }
+.grid strong { display: block; font-size: 19px; }
+.grid span { color: var(--muted); font-size: 12px; }
+.hero small { opacity: .8; letter-spacing: 1px; }
+td code { overflow-wrap: anywhere; }
+
+img, video, iframe { max-width: 100%; }
+@media (max-width: 600px) {
+  main { width: min(100% - 20px, 840px); padding-top: 12px; }
+  section, main > nav:not(.page-navigation) { padding: 20px 16px; }
+  header, .hero { padding: 23px 20px; }
+  body { font-size: 15px; }
+  .hero h1 { font-size: 23px; }
+  h2 { font-size: 19px; }
+  pre { padding: 14px; font-size: 12px; }
+  article, .card, .rule, .step { padding: 14px; }
+  .grid { grid-template-columns: 1fr; }
+  .page-navigation { gap: 6px; }
+  .page-nav-button { min-height: 42px; padding: 7px 4px; font-size: .88rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+.diagram-flow{display:grid;gap:10px;margin:14px 0}.diagram-flow .node{padding:12px;border:1px solid #bccde6;border-radius:10px;background:#edf3ff;overflow-wrap:anywhere}.diagram-flow .arrow{text-align:center;font-size:.9rem;color:#183561}.diagram-flow strong{display:block}.contract{margin:18px 0;padding:14px;border:1px solid #dce4ef;border-radius:10px}table{width:100%;table-layout:fixed}td,th{overflow-wrap:anywhere}code{overflow-wrap:anywhere}
+h1,h2,h3 { overflow-wrap: anywhere; }
+</style></head><body><main><header class="hero"><p class="eyebrow">AGENT RUNTIME · DAY 27 / 56 · WEEK 04</p><h1>恢复编排与竞争边界</h1><p>今天实现原运行内的结果回填协调，让锁外核验报告只能在当前状态仍匹配时提交一次。</p><p>20分钟 Eino 阅读 · 80分钟 Go 连续练习 · 20分钟测试复盘</p></header>
+<section id="goal"><h2>报告已确认，为什么还不能直接 Apply？</h2><p>延续 doc-1 / doc-2：r27第1轮处于ToolsRunning，两个来源结果都已确认。协调者A和B可能同时拿到同一观察，各自查询后都准备回填；查询期间，宿主也可能取消运行或已经进入下一轮。</p><p>Day26 的报告只描述一次观察。本日把“比较当前状态”和“提交ToolsReturned”放在同一门禁内，只有仍匹配原观察的协调者能够写入；外部Lookup仍在锁外，避免查询阻塞取消和其它门禁操作。</p><p class="note">今天恢复的是同一个存活Run内缺失的工具消息链路。没有从持久字节重建Run、进程重启恢复或分布式租约；不调用业务工具、不自动重试、不Save，也不证明来源真实或新鲜。原Run的独占写入权仍须交给唯一Gate。</p><h3>三个概念</h3><ul><li><strong>观察：</strong>查询前读到的State副本。它含RunID、Phase、Step、Messages和Pending，不是查询结束时的实时状态。</li><li><strong>有条件提交：</strong>只有当前完整State仍与报告的Observed相同，才允许提交。新方法ReconcileToolResults承担这个协调，不把报告当永久许可。</li><li><strong>冲突：</strong>另一个动作已改变运行，旧观察失效。ErrOutcomeConflict保留当前状态，不覆盖、不回滚，也不自动重新核验。</li></ul></section>
+<section id="design"><h2>两张图：长查询放在锁外，短提交放在锁内</h2><h3>图一 · 职责与锁边界</h3><div class="diagram-flow" role="img" aria-label="宿主调用门禁ReconcileToolResults，先取得观察并在锁外调用Day26核验，全部结果已知才进入同一门禁锁，重新读取当前State并比较，匹配则委托Run.Apply提交ToolsReturned。"><div class="node"><strong>宿主 / 唯一PauseGate</strong>调用ReconcileToolResults(queryCtx, source)，保留原运行与授权边界</div><div class="arrow">↓ 读取State观察 → 锁外调用InspectToolOutcomes</div><div class="node"><strong>Day26只读核验（锁外）</strong>按原顺序Lookup，核对身份和证据；外部I/O不持有g.mu，取消/其它门禁动作仍可进入</div><div class="arrow">↓ 全部ResultKnown才进入下一框；错误/不完整直接返回当前副本</div><div class="node"><strong>短临界区（同一g.mu内）</strong>读取当前State → 再查queryCtx → 比较完整Observed → Run.Apply(ToolsReturned)</div><div class="arrow">↑ 独立State、error；Run.Apply在这里检查原执行ctx</div><div class="node"><strong>宿主后续</strong>成功Ready可进入下一轮模型；冲突或取消按本次error处理，不能只看返回Phase决定推进</div></div><p>等价文字：观察和查询可以与其它操作交错，比较和写入必须由同一门禁协调。底层Run仍负责合法事件、消息副本和原执行上下文，本日不直接改它的字段。</p>
+<h3>图二 · 两个协调者的一次回填</h3><div class="diagram-flow" role="img" aria-label="A和B都观察到同一ToolsRunning状态并各自在锁外核验，A先进入提交临界区写入两条工具消息变Ready，B再进入时比较失败，返回Ready和冲突错误，历史只增加两条消息。"><div class="node"><strong>① A与B都看到同一观察</strong>r27 / Step=1 / ToolsRunning / Pending=[call-1,call-2]</div><div class="arrow">↓ A、B各自在锁外核验两项结果；总查询4次</div><div class="node"><strong>② A先取得门禁锁</strong>queryCtx有效，当前State等于Observed → Run.Apply(ToolsReturned) → Ready、nil</div><div class="arrow">↓ 写入call-1、call-2两条工具消息并释放锁</div><div class="node"><strong>③ B随后取得锁</strong>当前已Ready，与旧ToolsRunning观察不同 → Ready、ErrOutcomeConflict；不再Apply</div><div class="arrow">↓ 历史只增加2条消息，Step仍为1；宿主可再StartModel</div><div class="node"><strong>④ 下一轮模型</strong>读取完整工具消息后生成摘要。若查询期间运行已取消，旧报告也不能覆盖终态</div></div><p>反例：仅比较CallID不够。原运行已进入第2轮，即使再次使用相同调用ID和参数，旧第1轮报告也必须冲突；完整State比较还包含Step、历史和当前阶段。</p><details><summary>宿主使用示意（教学伪代码，非独立可运行程序）</summary><pre><code>state, err := gate.ReconcileToolResults(queryCtx, source)
+if err != nil {
+    // 可能返回Ready + ErrOutcomeConflict：它表示别的动作已推进。
+    // 记录/展示当前状态，不宣称本次回填成功，不自动重试。
+    return err
+}
+// 本次成功已提交完整ToolsReturned；原Phase为ToolsRunning，现为Ready。
+// 后续模型调用仍由宿主按原ctx、预算与门禁接口驱动。
+</code></pre></details></section>
+<section id="continuity"><h2>承接前序设计</h2><p>共享根go.mod：github.com/linko-zhao/mini-agent-runtime，Go≥1.22.2。累计参考路径examples/internal/runstate，练习副本internal/runstate；不新建每日module，不混用两套model类型。</p><p>沿用Day15 State/Event/Advance、Day16 Run.Apply、Day22唯一门禁、Day24消费决定，以及Day26 InspectToolOutcomes/ToolOutcomeSource/ToolOutcomeReport。Day25 PauseSnapshot仍只表示暂停候选，不把它改成进行中状态或恢复凭据。</p><h3>本日增量</h3><ul><li><strong>新增参考：</strong>examples/internal/runstate/reconcile.go、reconcile_test.go。新增Gate.ReconcileToolResults与ErrOutcomeIncomplete、ErrOutcomeConflict。</li><li><strong>原样复用：</strong>State、消息、Phase/Event、门禁构造、决定、消费、核验接口和前序错误不变。没有新的公开数据结构、字段或存储协议。</li><li><strong>新增练习：</strong>internal/runstate/reconcile.go与day27_contract_test.go；十份累计支持文件完整提供。</li><li><strong>修改材料：</strong>examples/README.md、CONTRACTS.md、练习manifest/脚本范围/README、本页和首页Day27相对入口。根internal/cmd不修改。</li></ul><h3>旧调用方式 → 新协调入口</h3><p>此前宿主自行执行“Snapshot → Inspect → Apply”；新入口把这些步骤编排起来，并在同一门禁锁内重新比较与提交。原Inspect仍可独立生成诊断报告，本日没有更改它的只读职责或零报告错误契约。</p><ol><li>在同一runstate包新增reconcile.go，复用g.mu/g.run，不新增第二把互不协调的锁。</li><li>需要回填结果的宿主改为Gate.ReconcileToolResults(queryCtx, source)；不要在它成功后再次手工Apply(ToolsReturned)。</li><li>继续把Run写入权交给唯一Gate；所有推进经过门禁，不直接Run.Apply或另建Gate绕过协调。来源仍须受信、只读、合作取消并按需要支持并发。</li><li>独立诊断仍可用Inspect；要从字节恢复进程则需要另行设计可信加载、保存确认、授权与执行归属，本日不自动合成这些能力。</li></ol><p>这个比较是当前进程中同一门禁的状态条件，不是存储CAS Version或分布式租约。后端事实新鲜度与来源真实性仍由宿主核验，不能用“本地状态没变”证明它们。</p></section>
+<section id="reading"><h2>20分钟：Eino的恢复编排与目标上下文</h2><p>带着问题读：恢复入口怎样串联加载与执行？目标数据在哪一步进入上下文？哪些持久化/并发保证仍依赖外部协议？</p><article class="step"><h3>前12分钟 · Runner的恢复流水线</h3><p>官方<a href="https://github.com/cloudwego/eino/blob/main/adk/runner.go">adk/runner.go</a>，本次读取文件SHA <code>a7d722e6f9b9a48aeef95e3321057879eb0d6a8b</code>。定位TypedRunner.Resume、ResumeWithParams、typedRunnerResumeInternalImpl；Runner是TypedRunner[*schema.Message]的默认别名。</p><p>阅读目标：画出store存在检查 → runnerLoadCheckPointImpl → 恢复run context/session → 注入resumeData → 调用可恢复Agent的顺序。注意恢复流式模式沿用Checkpoint里的EnableStreaming，而非新构造配置。</p><p>自研映射：本日也将多个已有步骤放在宿主协调入口，但只修复存活Run中的缺失工具消息，没有Eino的持久加载和Agent.Resume。阅读“存在恢复入口”不能推导出应用已具备跨进程执行归属或真实工具去重。</p></article><article class="step"><h3>后8分钟 · 路由数据不是提交锁</h3><p>官方<a href="https://github.com/cloudwego/eino/blob/main/compose/resume.go">compose/resume.go</a>，本次读取文件SHA <code>a4513fcfc734ffe220acb815afed2dee4d7beb6b</code>。定位ResumeWithData、BatchResumeWithData、GetResumeContext。</p><p>阅读目标：解释interrupt ID到data的路由与组件读取的关系；不要把上下文目标信号当成本课程的状态比较、存储版本或授权令牌。自研新入口以同一门禁下的比较与事件提交协调本地竞争，不复制Eino地址树。</p><p>产出：写“加载/观察、外部核验、目标路由、条件提交、持久确认”五行映射，标出本日实际实现和未实现的层。若增加跨进程恢复，说明还需要哪些版本/所有权规则。</p></article><p>官方链接需联网；本页图、代码和测试离线可读。Eino只作源码对照，不成为本课程运行依赖。</p></section>
+<section id="api"><h2>接口卡片：一个入口，两段工作</h2><article class="contract"><h3>Gate.ReconcileToolResults(queryCtx context.Context, source ToolOutcomeSource) (State, error)</h3><p><strong>职责：</strong>对当前存活Run读取观察、复用Day26查询，再有条件地回填一整批已知结果。需要有效且使用后不可复制的唯一PauseGate；零值/未构造Gate不属支持前提。</p><p><strong>queryCtx：</strong>本次只读查询和进入提交阶段前的取消边界，由宿主配置期限。<strong>source：</strong>沿用受信只读ToolOutcomeSource，输入/输出所有权、并发和合作取消要求保持。</p><p><strong>返回State：</strong>各返回点读取的独立当前副本，成功或失败都不是零值约定；返回后仍可能变化。错误时可能已经是别的动作推进的Ready/Cancelled，不能只凭Phase声称本次成功。</p><p><strong>成功：</strong>原观察仍匹配、全部结果明确且原执行ctx允许时，委托既有ToolsReturned一次，Phase→Ready、Pending→nil，Messages按原顺序增加完整工具结果，Step不变。下一轮模型仍由宿主驱动，不在此生成回复。</p></article>
+<article class="contract"><h3>阶段一：观察与核验（不持有g.mu）</h3><ol><li>通过Gate.Snapshot取得观察，调用原InspectToolOutcomes(queryCtx, source, observed)。</li><li>原核验错误直接保留，包括nilctx的ErrOutcomeState、原ctx错误、非法阶段、缺来源、来源Is/As错误链和ErrReplayEvidence；返回点重新读取当前State，不提交事件。</li><li>合法报告但AllResultsKnown=false → 当前State / 新增ErrOutcomeIncomplete，既不写半批消息，也不执行或重试工具。</li></ol><p>初始状态需满足Day26的ToolsRunning有限校验。一次成功回填后的普通再次调用通常从Ready开始，返回ErrOutcomeState且零查询；它与同时拿到旧观察的并发输家ErrOutcomeConflict不同。</p><p>阶段一失败不调用Run.Apply，不主动提交原Run的取消。若queryCtx与原执行ctx是同一个且已取消，可能返回ToolsRunning / Canceled，直到其它推进入口观察取消。</p></article>
+<article class="contract"><h3>阶段二：比较与提交（同一g.mu内）</h3><ol><li>取得门禁锁并读取原Run当前State；再次观察queryCtx，若取消则返回当前副本和原查询ctx错误，不提交。</li><li>比较当前完整State与报告Observed，包括RunID、Phase、Step/MaxSteps、全部消息与参数字节、Pending、Result/Failure。值表示也需相同，不只比较CallID或Phase。</li><li>不相同 → 当前State / 新增ErrOutcomeConflict，不Apply、不覆盖、不自动重新查询。</li><li>相同 → 委托原Run.Apply(ToolsReturned, report.Results)，保持原返回状态/错误。委托若得到终态，沿门禁旧规则清request/decision；不递归调用会再次获取g.mu的Gate.Apply。</li></ol><p>原Run.Apply在最后一步检查<strong>原执行ctx</strong>。如果它已取消且当前尚未提交终态，即使新的queryCtx有效、结果都已知，也会提交Cancelled并返回原Canceled/DeadlineExceeded，保留Pending且不追加结果消息。</p><p>若其它动作已经改变状态，包括提交取消终态，则本地比较先发现冲突，保留该状态。查询ctx检查在比较之前；不同错误不能用一条“取消永远优先”的物理时间规则概括。</p></article>
+<article class="contract"><h3>两个新增错误与已有错误</h3><p><strong>ErrOutcomeIncomplete：</strong>来源查询成功，但至少一项Unknown或NotStarted，等待更多事实或宿主其它策略；本入口不发起Invoke。</p><p><strong>ErrOutcomeConflict：</strong>查询期间本地状态已改变，旧报告不再匹配；不是自动重试信号。前序ErrOutcomeState、ErrOutcomeSourceRequired、ErrReplayEvidence与来源错误保持原语义，用errors.Is/As判断。</p><p>本入口不接收外部构造的报告，使用内部调用Inspect得到的独立报告。来源真实性、查询新鲜度、权限与后端关联仍按Day26宿主契约负责，不因封装而被证明。</p></article>
+<article class="contract"><h3>并发、锁与取消的精确边界</h3><p>Lookup在锁外，等待来源时CurrentInterrupt、CurrentDecision和合法Gate.Apply仍可进入。锁只覆盖当前状态读取、比较和一次Run.Apply；等待门禁锁本身不可取消，无公平性保证。</p><p>两位协调者都可以查询，随后最多一位提交同一批结果；另一位返回当前Ready和冲突。若已进入新轮次，即使调用ID/参数相同，完整State也不匹配。</p><p>最后queryCtx检查之后仍可能取消；若原执行ctx与之不同且允许，提交可能成功。提交后不再用一次查询取消错误掩盖已完成写入，不回滚成功。原ctx若在Run.Apply边界取消，则沿原取消规则处理。</p><p>输入/返回副本所有权沿用Run与Inspect。原Run不得被绕过门禁写入；本地条件提交不是外部业务副作用exactly-once、分布式CAS、持久恢复或来源新鲜度证明。</p></article></section>
+<section id="rules"><h2>行为契约与完整测试</h2><table><thead><tr><th>规则</th><th>触发 → 可观察结果</th><th>准确测试名</th></tr></thead><tbody>
+<tr><td>R1 完整回填</td><td>两项ResultKnown → Ready、Step不变、按顺序追加两条消息；返回独立，可继续模型下一轮；事后普通重调不再查询</td><td>TestDay27CommitAndContinue</td></tr>
+<tr><td>R2 不完整</td><td>Unknown/NotStarted混合结果 → ErrOutcomeIncomplete，运行和消息不变，查询各一次</td><td>TestDay27IncompleteDoesNotCommit</td></tr>
+<tr><td>R3 原核验失败</td><td>nilctx/缺来源/来源失败/错证据原错误保留，当前State独立，不提交</td><td>TestDay27DelegatedFailures</td></tr>
+<tr><td>R4 查询取消</td><td>查询后取消优先于来源错误，原Run不变；同ctx预取消零查询且不偷偷Apply</td><td>TestDay27QueryCancellation</td></tr>
+<tr><td>R5 原执行取消</td><td>独立查询ctx仍完成核验；提交时原ctx取消 → Cancelled、原错误、Pending保留、无结果消息</td><td>TestDay27OriginalCancellationAtCommit</td></tr>
+<tr><td>R6 I/O在锁外</td><td>阻塞Lookup期间Gate.Apply(Cancel)仍完成；迟到核验冲突，不覆盖终态</td><td>TestDay27QueryOutsideGateLock</td></tr>
+<tr><td>R7 两位协调者</td><td>两份核验共4次查询，恰一成功一冲突，历史只加2条；返回副本不串改</td><td>TestDay27TwoCoordinatorsCommitOnce</td></tr>
+<tr><td>R8 旧轮次迟到</td><td>新轮次相同CallID/参数，旧观察仍冲突，不覆盖新ToolsRunning状态</td><td>TestDay27OldRoundCannotOverwriteNew</td></tr></tbody></table><p>顺序由channel同步，不用sleep猜测。测试的3秒timer仅为死锁防护，不参与谁先完成的判断；DeadlineExceeded由可控context产生。来源为离线fake，计数是查询次数，不是工具执行或真实存储验证。</p></section>
+<section id="prepare"><h2>准备可编译的红灯练习</h2><p>原仓库根运行以下建议命令；prepare在仓库外创建新副本，复用根go.mod与前序依赖，不读取学习者实现决定课程，也不覆盖原internal/cmd。</p><pre><code>python3 docs/learning/exercises/prepare.py 27
+# cd 到打印的练习副本目录，再运行：
+go test ./internal/runstate -run '^$'
+go test ./internal/runstate -run '^TestDay27' -count=1 -v -timeout 20s</code></pre><p>目标internal/runstate/reconcile.go，完整测试day27_contract_test.go。先确认骨架可编译，再确认目标确实因TODO失败；缺依赖或没有匹配用例不算红灯。已有兼容实现可直接应用测试，不必挖空重做。</p><h3 class="file-label">新增 · internal/runstate/reconcile.go（完整 TODO）</h3><p><a href="exercises/day27/skeleton/internal/runstate/reconcile.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="skeleton" data-source="day27/skeleton/internal/runstate/reconcile.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day27-skeleton-internal-runstate-reconcile-go-txt"><code>package runstate
+
+import (
+	&quot;context&quot;
+	&quot;errors&quot;
+)
+
+var (
+	ErrOutcomeIncomplete = errors.New(&quot;runstate: not all tool results are known&quot;)
+	ErrOutcomeConflict   = errors.New(&quot;runstate: run changed during outcome inspection&quot;)
+)
+
+// ReconcileToolResults queries outside the lock and conditionally commits once.
+func (g *PauseGate) ReconcileToolResults(queryCtx context.Context, source ToolOutcomeSource) (State, error) {
+	panic(&quot;TODO: implement ReconcileToolResults&quot;)
+}
+</code></pre><button type="button" data-copy="day27-skeleton-internal-runstate-reconcile-go-txt">复制本文件</button></details><details><summary>十份原样支持文件：完整离线内容</summary><p>state/run/checkpoint/store/recovery/replay/pause/approval/resolve/outcome为累计依赖，store/recovery随replay编译提供，本日不Load/Save。所有参考路径含examples前缀，练习映射到internal，不混用两套model。</p><h3 class="file-label">复用 · internal/runstate/state.go</h3><p><a href="exercises/day27/support/internal/runstate/state.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="support" data-source="day27/support/internal/runstate/state.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day27-support-internal-runstate-state-go-txt"><code>// Package runstate models in-memory transitions. It is not a checkpoint store.
+package runstate
+
+import (
+	&quot;errors&quot;
+	&quot;strings&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+)
+
+type Phase string
+
+const (
+	Ready        Phase = &quot;ready&quot;
+	ModelRunning Phase = &quot;model_running&quot;
+	ToolsPending Phase = &quot;tools_pending&quot;
+	ToolsRunning Phase = &quot;tools_running&quot;
+	Completed    Phase = &quot;completed&quot;
+	Failed       Phase = &quot;failed&quot;
+	Cancelled    Phase = &quot;cancelled&quot;
+)
+
+type EventKind string
+
+const (
+	StartModel    EventKind = &quot;start_model&quot;
+	ModelReturned EventKind = &quot;model_returned&quot;
+	StartTools    EventKind = &quot;start_tools&quot;
+	ToolsReturned EventKind = &quot;tools_returned&quot;
+	Abort         EventKind = &quot;abort&quot;
+	Cancel        EventKind = &quot;cancel&quot;
+)
+
+var (
+	ErrTransition = errors.New(&quot;runstate: invalid transition&quot;)
+	ErrMaxSteps   = errors.New(&quot;runstate: max model rounds exceeded&quot;)
+)
+
+type State struct {
+	RunID           string
+	Phase           Phase
+	Step, MaxSteps  int
+	Messages        []model.Message
+	Pending         []model.ToolCall
+	Result, Failure string
+}
+type Event struct {
+	Kind     EventKind
+	Response *model.Response
+	Results  []model.Message
+	Reason   string
+}
+
+func New(runID, input string, maxSteps int) (State, error) {
+	if strings.TrimSpace(runID) == &quot;&quot; || maxSteps &lt;= 0 {
+		return State{}, ErrTransition
+	}
+	return State{RunID: runID, Phase: Ready, MaxSteps: maxSteps, Messages: []model.Message{{Role: &quot;user&quot;, Content: input}}}, nil
+}
+func cloneCalls(calls []model.ToolCall) []model.ToolCall {
+	if calls == nil {
+		return nil
+	}
+	out := append([]model.ToolCall{}, calls...)
+	for i := range out {
+		out[i].Arguments = append([]byte(nil), out[i].Arguments...)
+	}
+	return out
+}
+func cloneMessages(ms []model.Message) []model.Message {
+	if ms == nil {
+		return nil
+	}
+	out := append([]model.Message{}, ms...)
+	for i := range out {
+		out[i].ToolCalls = cloneCalls(out[i].ToolCalls)
+	}
+	return out
+}
+func cloneState(s State) State {
+	s.Messages = cloneMessages(s.Messages)
+	s.Pending = cloneCalls(s.Pending)
+	return s
+}
+func terminal(p Phase) bool { return p == Completed || p == Failed || p == Cancelled }
+
+// Advance has no I/O. The host performs calls between start/returned events.
+// It accepts states from New/Advance and never mutates input state/event buffers.
+func Advance(current State, e Event) (State, error) {
+	if terminal(current.Phase) {
+		return State{}, ErrTransition
+	}
+	next := cloneState(current)
+	switch e.Kind {
+	case StartModel:
+		if current.Phase != Ready {
+			return State{}, ErrTransition
+		}
+		if current.Step &gt;= current.MaxSteps {
+			return State{}, ErrMaxSteps
+		}
+		next.Step++
+		next.Phase = ModelRunning
+	case ModelReturned:
+		if current.Phase != ModelRunning || e.Response == nil || e.Response.Message.Role != &quot;assistant&quot; {
+			return State{}, ErrTransition
+		}
+		msg := e.Response.Message
+		ids := map[string]bool{}
+		for _, call := range msg.ToolCalls {
+			if call.ID == &quot;&quot; || strings.TrimSpace(call.Name) == &quot;&quot; || ids[call.ID] {
+				return State{}, ErrTransition
+			}
+			ids[call.ID] = true
+		}
+		next.Messages = append(next.Messages, cloneMessages([]model.Message{msg})...)
+		if len(msg.ToolCalls) == 0 {
+			next.Phase = Completed
+			next.Result = msg.Content
+		} else {
+			next.Phase = ToolsPending
+			next.Pending = cloneCalls(msg.ToolCalls)
+		}
+	case StartTools:
+		if current.Phase != ToolsPending {
+			return State{}, ErrTransition
+		}
+		next.Phase = ToolsRunning
+	case ToolsReturned:
+		if current.Phase != ToolsRunning || len(e.Results) != len(current.Pending) {
+			return State{}, ErrTransition
+		}
+		for i, msg := range e.Results {
+			if msg.Role != &quot;tool&quot; || msg.ToolCallID != current.Pending[i].ID {
+				return State{}, ErrTransition
+			}
+		}
+		next.Messages = append(next.Messages, cloneMessages(e.Results)...)
+		next.Pending = nil
+		next.Phase = Ready
+	case Abort:
+		if strings.TrimSpace(e.Reason) == &quot;&quot; {
+			return State{}, ErrTransition
+		}
+		next.Phase = Failed
+		next.Failure = e.Reason
+	case Cancel:
+		next.Phase = Cancelled
+		next.Failure = &quot;cancelled&quot;
+	default:
+		return State{}, ErrTransition
+	}
+	return next, nil
+}
+</code></pre><button type="button" data-copy="day27-support-internal-runstate-state-go-txt">复制本文件</button></details><h3 class="file-label">复用 · internal/runstate/run.go</h3><p><a href="exercises/day27/support/internal/runstate/run.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="support" data-source="day27/support/internal/runstate/run.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day27-support-internal-runstate-run-go-txt"><code>package runstate
+
+import (
+	&quot;context&quot;
+	&quot;sync&quot;
+)
+
+// Run owns one in-memory State. Use its pointer; do not copy it after use.
+// The zero value is not usable; construct with NewRun.
+type Run struct {
+	ctx   context.Context
+	mu    sync.Mutex
+	state State
+}
+
+// NewRun retains ctx for cancellation/deadlines, not for storing State.
+// A cancelled context rejects construction; invalid identity/budget uses ErrTransition.
+func NewRun(ctx context.Context, runID, input string, maxSteps int) (*Run, error) {
+	if ctx == nil {
+		return nil, ErrTransition
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	s, err := New(runID, input, maxSteps)
+	if err != nil {
+		return nil, err
+	}
+	return &amp;Run{ctx: ctx, state: s}, nil
+}
+
+// Context returns the original context. The host owns any cancel function.
+// Model/tool I/O must use this context outside Apply, never while holding its lock.
+func (r *Run) Context() context.Context { return r.ctx }
+
+// Snapshot returns an independent copy without triggering transitions.
+func (r *Run) Snapshot() State {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return cloneState(r.state)
+}
+
+// Apply commits exactly one valid event, or returns the unchanged current copy.
+// For a nonterminal Run, observed context cancellation commits Cancel and rejects
+// the event with the original context error. A terminal State is never overwritten.
+// This serializes transitions, not a snapshot -&gt; external I/O -&gt; Apply transaction.
+func (r *Run) Apply(e Event) (State, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if terminal(r.state.Phase) {
+		return cloneState(r.state), ErrTransition
+	}
+	if err := r.ctx.Err(); err != nil {
+		next, transitionErr := Advance(r.state, Event{Kind: Cancel})
+		if transitionErr != nil {
+			return cloneState(r.state), transitionErr
+		}
+		r.state = next
+		return cloneState(r.state), err
+	}
+	next, err := Advance(r.state, e)
+	if err != nil {
+		return cloneState(r.state), err
+	}
+	r.state = next
+	return cloneState(r.state), nil
+}
+</code></pre><button type="button" data-copy="day27-support-internal-runstate-run-go-txt">复制本文件</button></details><h3 class="file-label">复用 · internal/runstate/checkpoint.go</h3><p><a href="exercises/day27/support/internal/runstate/checkpoint.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="support" data-source="day27/support/internal/runstate/checkpoint.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day27-support-internal-runstate-checkpoint-go-txt"><code>package runstate
+
+import &quot;errors&quot;
+
+type CheckpointBoundary string
+
+const (
+	CheckpointReady       CheckpointBoundary = &quot;ready&quot;
+	CheckpointBeforeTools CheckpointBoundary = &quot;before_tools&quot;
+	CheckpointTerminal    CheckpointBoundary = &quot;terminal&quot;
+)
+
+var ErrCheckpointBoundary = errors.New(&quot;runstate: checkpoint requires a stable boundary&quot;)
+
+// Checkpoint is an in-memory candidate, not a storage acknowledgement or resume token.
+// State uses the existing message/call contract. Boundary classifies State.Phase.
+type Checkpoint struct {
+	Boundary CheckpointBoundary
+	State    State
+}
+
+// Clone copies nested mutable state. It does not validate or authorize a checkpoint.
+func (c Checkpoint) Clone() Checkpoint {
+	c.State = cloneState(c.State)
+	return c
+}
+
+// Checkpoint samples boundary and state under the same lock.
+// It does not observe context cancellation, advance state, pause the driver,
+// perform I/O, or promise that an external tool has not already taken effect.
+func (r *Run) Checkpoint() (Checkpoint, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var boundary CheckpointBoundary
+	switch r.state.Phase {
+	case Ready:
+		boundary = CheckpointReady
+	case ToolsPending:
+		boundary = CheckpointBeforeTools
+	case Completed, Failed, Cancelled:
+		boundary = CheckpointTerminal
+	default:
+		return Checkpoint{}, ErrCheckpointBoundary
+	}
+	return Checkpoint{Boundary: boundary, State: cloneState(r.state)}, nil
+}
+</code></pre><button type="button" data-copy="day27-support-internal-runstate-checkpoint-go-txt">复制本文件</button></details><h3 class="file-label">复用 · internal/runstate/store.go</h3><p><a href="exercises/day27/support/internal/runstate/store.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="support" data-source="day27/support/internal/runstate/store.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day27-support-internal-runstate-store-go-txt"><code>package runstate
+
+import (
+	&quot;context&quot;
+	&quot;errors&quot;
+	&quot;strings&quot;
+	&quot;sync&quot;
+)
+
+var (
+	ErrCheckpointNotFound = errors.New(&quot;runstate: checkpoint not found&quot;)
+	ErrCheckpointConflict = errors.New(&quot;runstate: checkpoint version conflict&quot;)
+	ErrInvalidCheckpoint  = errors.New(&quot;runstate: invalid checkpoint request&quot;)
+)
+
+// StoredCheckpoint is the latest saved value. Version is a per-RunID CAS token,
+// not State.Step, a schema version, an execution lease or a resume permission.
+type StoredCheckpoint struct {
+	Version    uint64
+	Checkpoint Checkpoint
+}
+
+type CheckpointStore interface {
+	Load(context.Context, string) (StoredCheckpoint, error)
+	Save(context.Context, Checkpoint, uint64) (StoredCheckpoint, error)
+}
+
+// MemoryCheckpointStore is process-local and not durable. Its zero value works.
+// Do not copy after use. It retains only the latest record for each exact RunID.
+type MemoryCheckpointStore struct {
+	mu      sync.Mutex
+	records map[string]StoredCheckpoint
+}
+
+func NewMemoryCheckpointStore() *MemoryCheckpointStore { return &amp;MemoryCheckpointStore{} }
+
+func cloneStored(v StoredCheckpoint) StoredCheckpoint {
+	v.Checkpoint = v.Checkpoint.Clone()
+	return v
+}
+func storeContext(ctx context.Context) error {
+	if ctx == nil {
+		return ErrInvalidCheckpoint
+	}
+	return ctx.Err()
+}
+
+// validateCandidate checks only the trusted candidate envelope, not full message
+// history, authorization, authenticity or an untrusted serialized payload.
+func validateCandidate(cp Checkpoint) bool {
+	s := cp.State
+	if strings.TrimSpace(s.RunID) == &quot;&quot; || s.MaxSteps &lt;= 0 || s.Step &lt; 0 || s.Step &gt; s.MaxSteps {
+		return false
+	}
+	switch cp.Boundary {
+	case CheckpointReady:
+		return s.Phase == Ready
+	case CheckpointBeforeTools:
+		return s.Phase == ToolsPending
+	case CheckpointTerminal:
+		return terminal(s.Phase)
+	default:
+		return false
+	}
+}
+
+func (s *MemoryCheckpointStore) Load(ctx context.Context, runID string) (StoredCheckpoint, error) {
+	if err := storeContext(ctx); err != nil {
+		return StoredCheckpoint{}, err
+	}
+	if strings.TrimSpace(runID) == &quot;&quot; {
+		return StoredCheckpoint{}, ErrInvalidCheckpoint
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return StoredCheckpoint{}, err
+	}
+	v, ok := s.records[runID]
+	if !ok {
+		return StoredCheckpoint{}, ErrCheckpointNotFound
+	}
+	return cloneStored(v), nil
+}
+
+// Save: expected=0 creates only if absent; otherwise it must equal current Version.
+// A successful write increments Version even for identical content.
+// Errors in this in-memory implementation return zero and leave stored data intact.
+// Cancellation is sampled before and after locking; later cancellation can still
+// accompany a committed success. The lock wait itself is not context-interruptible.
+func (s *MemoryCheckpointStore) Save(ctx context.Context, cp Checkpoint, expected uint64) (StoredCheckpoint, error) {
+	if err := storeContext(ctx); err != nil {
+		return StoredCheckpoint{}, err
+	}
+	if expected == ^uint64(0) || !validateCandidate(cp) {
+		return StoredCheckpoint{}, ErrInvalidCheckpoint
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return StoredCheckpoint{}, err
+	}
+	current := s.records[cp.State.RunID]
+	if current.Version != expected {
+		return StoredCheckpoint{}, ErrCheckpointConflict
+	}
+	next := StoredCheckpoint{Version: expected + 1, Checkpoint: cp.Clone()}
+	if s.records == nil {
+		s.records = make(map[string]StoredCheckpoint)
+	}
+	s.records[cp.State.RunID] = next
+	return cloneStored(next), nil
+}
+</code></pre><button type="button" data-copy="day27-support-internal-runstate-store-go-txt">复制本文件</button></details><h3 class="file-label">复用 · internal/runstate/recovery.go</h3><p><a href="exercises/day27/support/internal/runstate/recovery.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="support" data-source="day27/support/internal/runstate/recovery.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day27-support-internal-runstate-recovery-go-txt"><code>package runstate
+
+import (
+	&quot;bytes&quot;
+	&quot;context&quot;
+	&quot;strings&quot;
+)
+
+type RecoveryPosition string
+
+const (
+	RecoveryReady         RecoveryPosition = &quot;recorded_ready&quot;
+	RecoveryReviewPending RecoveryPosition = &quot;review_pending&quot;
+	RecoveryTerminal      RecoveryPosition = &quot;terminal&quot;
+	RecoveryExhausted     RecoveryPosition = &quot;budget_exhausted&quot;
+)
+
+// RecoveryPlan is a read-only description of one loaded record, not permission
+// to execute or a restored Run. Record retains the store&#x27;s observed Version.
+type RecoveryPlan struct {
+	Position RecoveryPosition
+	Record   StoredCheckpoint
+}
+
+// recoveryRecordValid performs limited consistency checks, not complete replay,
+// provenance verification, schema migration or external-effect reconciliation.
+func recoveryRecordValid(v StoredCheckpoint, runID string) bool {
+	cp := v.Checkpoint
+	s := cp.State
+	if v.Version == 0 || s.RunID != runID || !validateCandidate(cp) || len(s.Messages) == 0 || s.Messages[0].Role != &quot;user&quot; {
+		return false
+	}
+	last := s.Messages[len(s.Messages)-1]
+	if s.Phase == Completed {
+		return len(s.Pending) == 0 &amp;&amp; last.Role == &quot;assistant&quot; &amp;&amp; len(last.ToolCalls) == 0 &amp;&amp; s.Result == last.Content
+	}
+	if s.Phase == Ready {
+		return len(s.Pending) == 0 &amp;&amp; len(last.ToolCalls) == 0
+	}
+	if s.Phase == ToolsPending &amp;&amp; len(s.Pending) == 0 {
+		return false
+	}
+	if len(s.Pending) &gt; 0 {
+		if last.Role != &quot;assistant&quot; || len(last.ToolCalls) != len(s.Pending) {
+			return false
+		}
+		ids := map[string]bool{}
+		for i, c := range s.Pending {
+			h := last.ToolCalls[i]
+			if c.ID == &quot;&quot; || strings.TrimSpace(c.Name) == &quot;&quot; || ids[c.ID] || c.ID != h.ID || c.Name != h.Name || !bytes.Equal(c.Arguments, h.Arguments) {
+				return false
+			}
+			ids[c.ID] = true
+		}
+	}
+	return true
+}
+
+// PlanRecovery loads exactly once; never Save, Apply, Generate or Invoke.
+// Pre-cancelled contexts cause no Load. Cancellation observed after Load wins over
+// any returned value/error. Later cancellation can still follow a successful read.
+// The injected store must support the caller&#x27;s concurrency and owned return data.
+func PlanRecovery(ctx context.Context, store CheckpointStore, runID string) (RecoveryPlan, error) {
+	if err := storeContext(ctx); err != nil {
+		return RecoveryPlan{}, err
+	}
+	if store == nil || strings.TrimSpace(runID) == &quot;&quot; {
+		return RecoveryPlan{}, ErrInvalidCheckpoint
+	}
+	v, err := store.Load(ctx, runID)
+	if cancelErr := ctx.Err(); cancelErr != nil {
+		return RecoveryPlan{}, cancelErr
+	}
+	if err != nil {
+		return RecoveryPlan{}, err
+	}
+	if !recoveryRecordValid(v, runID) {
+		return RecoveryPlan{}, ErrInvalidCheckpoint
+	}
+	position := RecoveryTerminal
+	switch v.Checkpoint.State.Phase {
+	case Ready:
+		position = RecoveryReady
+		if v.Checkpoint.State.Step &gt;= v.Checkpoint.State.MaxSteps {
+			position = RecoveryExhausted
+		}
+	case ToolsPending:
+		position = RecoveryReviewPending
+	}
+	return RecoveryPlan{Position: position, Record: cloneStored(v)}, nil
+}
+</code></pre><button type="button" data-copy="day27-support-internal-runstate-recovery-go-txt">复制本文件</button></details><h3 class="file-label">复用 · internal/runstate/replay.go</h3><p><a href="exercises/day27/support/internal/runstate/replay.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="support" data-source="day27/support/internal/runstate/replay.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day27-support-internal-runstate-replay-go-txt"><code>package runstate
+
+import (
+	&quot;bytes&quot;
+	&quot;context&quot;
+	&quot;errors&quot;
+	&quot;strings&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+)
+
+type ReplayBasis string
+
+const (
+	BasisUnknown      ReplayBasis = &quot;unknown&quot;
+	BasisNotStarted   ReplayBasis = &quot;not_started&quot;
+	BasisResultKnown  ReplayBasis = &quot;result_known&quot;
+	BasisBackendDedup ReplayBasis = &quot;backend_dedup&quot;
+)
+
+type ReplayAction string
+
+const (
+	ActionHold   ReplayAction = &quot;hold&quot;
+	ActionInvoke ReplayAction = &quot;invoke&quot;
+	ActionReuse  ReplayAction = &quot;reuse_result&quot;
+)
+
+var ErrReplayEvidence = errors.New(&quot;runstate: invalid replay evidence&quot;)
+
+// Evidence is a trusted host assertion, not model output or a verified backend
+// receipt. BackendDedup means the host has separately verified key scope,
+// payload binding, validity window and same-operation replay behavior.
+type ReplayEvidence struct {
+	Call           model.ToolCall
+	Basis          ReplayBasis
+	Result         *model.Message
+	IdempotencyKey string
+}
+type ReplayEvidenceSet struct {
+	RunID   string
+	Version uint64
+	Calls   []ReplayEvidence
+}
+type ReplayStep struct {
+	Call           model.ToolCall
+	Action         ReplayAction
+	Result         *model.Message
+	IdempotencyKey string
+}
+type ReplayPlan struct {
+	Record  StoredCheckpoint
+	Steps   []ReplayStep
+	Blocked bool // any Hold blocks the entire batch before effects/history updates
+}
+
+// PlanReplay is pure decision logic. It never loads/saves, invokes tools or
+// grants a lease. Even an unblocked plan needs fresh ownership/authorization.
+// Inputs must remain immutable while it runs; returned nested data is owned.
+func PlanReplay(ctx context.Context, recovery RecoveryPlan, evidence ReplayEvidenceSet) (ReplayPlan, error) {
+	if err := storeContext(ctx); err != nil {
+		return ReplayPlan{}, err
+	}
+	record := recovery.Record
+	if recovery.Position != RecoveryReviewPending || record.Checkpoint.State.Phase != ToolsPending || !recoveryRecordValid(record, record.Checkpoint.State.RunID) {
+		return ReplayPlan{}, ErrInvalidCheckpoint
+	}
+	calls := record.Checkpoint.State.Pending
+	if evidence.RunID != record.Checkpoint.State.RunID || evidence.Version != record.Version || len(evidence.Calls) != len(calls) {
+		return ReplayPlan{}, ErrReplayEvidence
+	}
+	out := ReplayPlan{Record: cloneStored(record), Steps: make([]ReplayStep, len(calls))}
+	keys := map[string]bool{}
+	for i, c := range calls {
+		if err := ctx.Err(); err != nil {
+			return ReplayPlan{}, err
+		}
+		e := evidence.Calls[i]
+		if e.Call.ID != c.ID || e.Call.Name != c.Name || !bytes.Equal(e.Call.Arguments, c.Arguments) {
+			return ReplayPlan{}, ErrReplayEvidence
+		}
+		step := ReplayStep{Call: cloneCalls([]model.ToolCall{c})[0]}
+		switch e.Basis {
+		case BasisUnknown:
+			if e.Result != nil || e.IdempotencyKey != &quot;&quot; {
+				return ReplayPlan{}, ErrReplayEvidence
+			}
+			step.Action = ActionHold
+			out.Blocked = true
+		case BasisNotStarted:
+			if e.Result != nil || e.IdempotencyKey != &quot;&quot; {
+				return ReplayPlan{}, ErrReplayEvidence
+			}
+			step.Action = ActionInvoke
+		case BasisResultKnown:
+			if e.Result == nil || e.Result.Role != &quot;tool&quot; || e.Result.ToolCallID != c.ID || len(e.Result.ToolCalls) != 0 || e.IdempotencyKey != &quot;&quot; {
+				return ReplayPlan{}, ErrReplayEvidence
+			}
+			msg := cloneMessages([]model.Message{*e.Result})[0]
+			step.Action = ActionReuse
+			step.Result = &amp;msg
+		case BasisBackendDedup:
+			if e.Result != nil || strings.TrimSpace(e.IdempotencyKey) == &quot;&quot; || keys[e.IdempotencyKey] {
+				return ReplayPlan{}, ErrReplayEvidence
+			}
+			keys[e.IdempotencyKey] = true
+			step.Action = ActionInvoke
+			step.IdempotencyKey = e.IdempotencyKey
+		default:
+			return ReplayPlan{}, ErrReplayEvidence
+		}
+		out.Steps[i] = step
+	}
+	if err := ctx.Err(); err != nil {
+		return ReplayPlan{}, err
+	}
+	return out, nil
+}
+</code></pre><button type="button" data-copy="day27-support-internal-runstate-replay-go-txt">复制本文件</button></details><h3 class="file-label">复用 · internal/runstate/pause.go</h3><p><a href="exercises/day27/support/internal/runstate/pause.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="support" data-source="day27/support/internal/runstate/pause.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day27-support-internal-runstate-pause-go-txt"><code>package runstate
+
+import (
+	&quot;errors&quot;
+	&quot;strings&quot;
+	&quot;sync&quot;
+)
+
+var (
+	ErrInvalidPause  = errors.New(&quot;runstate: invalid pause request&quot;)
+	ErrPauseBoundary = errors.New(&quot;runstate: pause requires tools_pending&quot;)
+	ErrPaused        = errors.New(&quot;runstate: gate is paused&quot;)
+)
+
+// PauseRequest is an owned in-memory interruption snapshot, not a saved receipt,
+// an approval, a resume token or a declaration about external side effects.
+type PauseRequest struct {
+	ID         string
+	Reason     string
+	Checkpoint Checkpoint
+}
+
+// PauseGate coordinates transitions only through this gate. The host must
+// transfer exclusive write ownership of the Run to ONE gate and never bypass it.
+// Zero value is not usable; do not copy after use.
+type PauseGate struct {
+	mu       sync.Mutex
+	run      *Run
+	request  *PauseRequest
+	decision *ApprovalDecision
+}
+
+func NewPauseGate(run *Run) (*PauseGate, error) {
+	if run == nil {
+		return nil, ErrInvalidPause
+	}
+	return &amp;PauseGate{run: run}, nil
+}
+
+func (g *PauseGate) Snapshot() State { return g.run.Snapshot() }
+
+func (g *PauseGate) CurrentInterrupt() (PauseRequest, bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.request == nil {
+		return PauseRequest{}, false
+	}
+	out := *g.request
+	out.Checkpoint = out.Checkpoint.Clone()
+	return out, true
+}
+
+// Pause captures only ToolsPending, before StartTools through this gate.
+// It samples the original Run context and performs no I/O or state transition.
+func (g *PauseGate) Pause(id, reason string) (PauseRequest, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if err := g.run.Context().Err(); err != nil {
+		return PauseRequest{}, err
+	}
+	if strings.TrimSpace(id) == &quot;&quot; || strings.TrimSpace(reason) == &quot;&quot; {
+		return PauseRequest{}, ErrInvalidPause
+	}
+	if g.request != nil {
+		return PauseRequest{}, ErrPaused
+	}
+	cp, err := g.run.Checkpoint()
+	if err != nil || cp.State.Phase != ToolsPending {
+		return PauseRequest{}, ErrPauseBoundary
+	}
+	if err := g.run.Context().Err(); err != nil {
+		return PauseRequest{}, err
+	}
+	request := PauseRequest{ID: id, Reason: reason, Checkpoint: cp}
+	g.request = &amp;request
+	out := request
+	out.Checkpoint = out.Checkpoint.Clone()
+	return out, nil
+}
+
+// Apply preserves Run.Apply semantics while open. During a live pause every
+// event is rejected with a current owned State and ErrPaused. Observed context
+// cancellation is allowed through to Run.Apply; terminal state clears the pause.
+// The host may perform I/O only AFTER a successful transition; no I/O runs here.
+func (g *PauseGate) Apply(e Event) (State, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.request != nil &amp;&amp; g.run.Context().Err() == nil {
+		return g.run.Snapshot(), ErrPaused
+	}
+	state, err := g.run.Apply(e)
+	if terminal(state.Phase) {
+		g.request = nil
+		g.decision = nil
+	}
+	return state, err
+}
+</code></pre><button type="button" data-copy="day27-support-internal-runstate-pause-go-txt">复制本文件</button></details><h3 class="file-label">复用 · internal/runstate/approval.go</h3><p><a href="exercises/day27/support/internal/runstate/approval.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="support" data-source="day27/support/internal/runstate/approval.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day27-support-internal-runstate-approval-go-txt"><code>package runstate
+
+import (
+	&quot;errors&quot;
+	&quot;strings&quot;
+)
+
+type DecisionOutcome string
+
+const (
+	DecisionApprove DecisionOutcome = &quot;approve&quot;
+	DecisionReject  DecisionOutcome = &quot;reject&quot;
+)
+
+var (
+	ErrInvalidDecision  = errors.New(&quot;runstate: invalid approval decision&quot;)
+	ErrNoPause          = errors.New(&quot;runstate: no held pause request&quot;)
+	ErrDecisionMismatch = errors.New(&quot;runstate: decision does not match held request&quot;)
+	ErrDecisionRecorded = errors.New(&quot;runstate: decision already recorded&quot;)
+)
+
+// ApprovalDecision is host-provided metadata, not proof of identity, authority,
+// persistence or permission to execute. All fields are immutable value strings.
+type ApprovalDecision struct {
+	RunID     string
+	RequestID string
+	Actor     string
+	Outcome   DecisionOutcome
+	Reason    string
+}
+
+// Decide records the first valid decision for this gate&#x27;s held pause.
+// It does not unpause, execute, terminate or write a checkpoint.
+func (g *PauseGate) Decide(d ApprovalDecision) (ApprovalDecision, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if err := g.run.Context().Err(); err != nil {
+		return ApprovalDecision{}, err
+	}
+	if strings.TrimSpace(d.RunID) == &quot;&quot; || strings.TrimSpace(d.RequestID) == &quot;&quot; ||
+		strings.TrimSpace(d.Actor) == &quot;&quot; || strings.TrimSpace(d.Reason) == &quot;&quot; ||
+		(d.Outcome != DecisionApprove &amp;&amp; d.Outcome != DecisionReject) {
+		return ApprovalDecision{}, ErrInvalidDecision
+	}
+	if g.request == nil {
+		return ApprovalDecision{}, ErrNoPause
+	}
+	if d.RunID != g.request.Checkpoint.State.RunID || d.RequestID != g.request.ID {
+		return ApprovalDecision{}, ErrDecisionMismatch
+	}
+	if g.decision != nil {
+		return ApprovalDecision{}, ErrDecisionRecorded
+	}
+	if err := g.run.Context().Err(); err != nil {
+		return ApprovalDecision{}, err
+	}
+	g.decision = &amp;d
+	return d, nil
+}
+
+// CurrentDecision reads held metadata without observing cancellation.
+// A terminal Apply clears it together with the held pause request.
+func (g *PauseGate) CurrentDecision() (ApprovalDecision, bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.decision == nil {
+		return ApprovalDecision{}, false
+	}
+	return *g.decision, true
+}
+</code></pre><button type="button" data-copy="day27-support-internal-runstate-approval-go-txt">复制本文件</button></details><h3 class="file-label">复用 · internal/runstate/resolve.go</h3><p><a href="exercises/day27/support/internal/runstate/resolve.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="support" data-source="day27/support/internal/runstate/resolve.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day27-support-internal-runstate-resolve-go-txt"><code>package runstate
+
+import (
+	&quot;errors&quot;
+	&quot;strings&quot;
+)
+
+var ErrDecisionRequired = errors.New(&quot;runstate: a recorded decision is required&quot;)
+
+// ResolveDecision consumes the held decision and commits one transition.
+// Approve starts ToolsRunning; reject commits Failed using the recorded reason.
+// No external I/O runs here. The host may execute tools only after nil error AND
+// ToolsRunning from this call, never by inspecting a retry&#x27;s returned State alone.
+func (g *PauseGate) ResolveDecision(runID, requestID string) (State, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	// Preserve Run.Apply&#x27;s cancellation observation and terminal-first behavior.
+	if g.run.Context().Err() != nil {
+		state, err := g.run.Apply(Event{Kind: Cancel})
+		if terminal(state.Phase) {
+			g.request, g.decision = nil, nil
+		}
+		return state, err
+	}
+	current := g.run.Snapshot()
+	if strings.TrimSpace(runID) == &quot;&quot; || strings.TrimSpace(requestID) == &quot;&quot; {
+		return current, ErrInvalidDecision
+	}
+	if g.request == nil {
+		return current, ErrNoPause
+	}
+	if runID != g.request.Checkpoint.State.RunID || requestID != g.request.ID {
+		return current, ErrDecisionMismatch
+	}
+	if g.decision == nil {
+		return current, ErrDecisionRequired
+	}
+	event := Event{Kind: StartTools}
+	if g.decision.Outcome == DecisionReject {
+		event = Event{Kind: Abort, Reason: g.decision.Reason}
+	}
+	state, err := g.run.Apply(event)
+	if err == nil || terminal(state.Phase) {
+		g.request, g.decision = nil, nil
+	}
+	return state, err
+}
+</code></pre><button type="button" data-copy="day27-support-internal-runstate-resolve-go-txt">复制本文件</button></details><h3 class="file-label">复用 · internal/runstate/outcome.go</h3><p><a href="exercises/day27/support/internal/runstate/outcome.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="support" data-source="day27/support/internal/runstate/outcome.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day27-support-internal-runstate-outcome-go-txt"><code>package runstate
+
+import (
+	&quot;bytes&quot;
+	&quot;context&quot;
+	&quot;errors&quot;
+	&quot;strings&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+)
+
+var (
+	ErrOutcomeState          = errors.New(&quot;runstate: invalid outcome observation&quot;)
+	ErrOutcomeSourceRequired = errors.New(&quot;runstate: outcome source required&quot;)
+)
+
+// ToolAttempt identifies the logical call being inspected, not a network retry
+// counter. The host must additionally bind tenant, authority and backend scope.
+type ToolAttempt struct {
+	RunID string
+	Step  int
+	Call  model.ToolCall
+}
+
+type ToolOutcomeEvidence struct {
+	RunID    string
+	Step     int
+	Evidence ReplayEvidence
+}
+
+// ToolOutcomeSource is a trusted read-only host adapter. It must cooperate with
+// ctx, support intended concurrency and return owned buffers; Lookup must not
+// execute/retry the business operation while looking for its outcome.
+type ToolOutcomeSource interface {
+	Lookup(context.Context, ToolAttempt) (ToolOutcomeEvidence, error)
+}
+
+// ToolOutcomeReport is a point-in-time report, not fresh-state proof, a restored
+// Run or authorization. Results is nil unless ALL results are positively known.
+type ToolOutcomeReport struct {
+	Observed        State
+	Evidence        []ToolOutcomeEvidence
+	AllResultsKnown bool
+	Results         []model.Message
+}
+
+func outcomeStateValid(s State) bool {
+	if strings.TrimSpace(s.RunID) == &quot;&quot; || s.Phase != ToolsRunning || s.MaxSteps &lt;= 0 || s.Step &lt;= 0 || s.Step &gt; s.MaxSteps ||
+		s.Result != &quot;&quot; || s.Failure != &quot;&quot; || len(s.Messages) == 0 || s.Messages[0].Role != &quot;user&quot; || len(s.Pending) == 0 {
+		return false
+	}
+	last := s.Messages[len(s.Messages)-1]
+	if last.Role != &quot;assistant&quot; || len(last.ToolCalls) != len(s.Pending) {
+		return false
+	}
+	ids := map[string]bool{}
+	for i, call := range s.Pending {
+		h := last.ToolCalls[i]
+		if call.ID == &quot;&quot; || strings.TrimSpace(call.Name) == &quot;&quot; || ids[call.ID] || call.ID != h.ID || call.Name != h.Name || !bytes.Equal(call.Arguments, h.Arguments) {
+			return false
+		}
+		ids[call.ID] = true
+	}
+	return true
+}
+
+// InspectToolOutcomes queries each pending logical call once in input order.
+// Every failure returns zero report. It never Apply/Save/Invoke, retries a
+// query or converts missing responses into confirmed not-started evidence.
+func InspectToolOutcomes(ctx context.Context, source ToolOutcomeSource, observed State) (ToolOutcomeReport, error) {
+	if ctx == nil {
+		return ToolOutcomeReport{}, ErrOutcomeState
+	}
+	if err := ctx.Err(); err != nil {
+		return ToolOutcomeReport{}, err
+	}
+	if !outcomeStateValid(observed) {
+		return ToolOutcomeReport{}, ErrOutcomeState
+	}
+	if source == nil {
+		return ToolOutcomeReport{}, ErrOutcomeSourceRequired
+	}
+	out := ToolOutcomeReport{Observed: cloneState(observed), Evidence: make([]ToolOutcomeEvidence, len(observed.Pending)), AllResultsKnown: true}
+	results := make([]model.Message, len(observed.Pending))
+	for i, call := range out.Observed.Pending {
+		if err := ctx.Err(); err != nil {
+			return ToolOutcomeReport{}, err
+		}
+		input := ToolAttempt{RunID: observed.RunID, Step: observed.Step, Call: cloneCalls([]model.ToolCall{call})[0]}
+		e, err := source.Lookup(ctx, input)
+		if cancelErr := ctx.Err(); cancelErr != nil {
+			return ToolOutcomeReport{}, cancelErr
+		}
+		if err != nil {
+			return ToolOutcomeReport{}, err
+		}
+		v := e.Evidence
+		if e.RunID != observed.RunID || e.Step != observed.Step || v.Call.ID != call.ID || v.Call.Name != call.Name ||
+			!bytes.Equal(v.Call.Arguments, call.Arguments) || v.IdempotencyKey != &quot;&quot; {
+			return ToolOutcomeReport{}, ErrReplayEvidence
+		}
+		switch v.Basis {
+		case BasisUnknown, BasisNotStarted:
+			if v.Result != nil {
+				return ToolOutcomeReport{}, ErrReplayEvidence
+			}
+			out.AllResultsKnown = false
+		case BasisResultKnown:
+			if v.Result == nil || v.Result.Role != &quot;tool&quot; || v.Result.ToolCallID != call.ID || len(v.Result.ToolCalls) != 0 {
+				return ToolOutcomeReport{}, ErrReplayEvidence
+			}
+			results[i] = cloneMessages([]model.Message{*v.Result})[0]
+			msg := cloneMessages([]model.Message{*v.Result})[0]
+			v.Result = &amp;msg
+		default: // BackendDedup is a retry policy assertion, not a known outcome.
+			return ToolOutcomeReport{}, ErrReplayEvidence
+		}
+		v.Call = cloneCalls([]model.ToolCall{call})[0]
+		out.Evidence[i] = ToolOutcomeEvidence{RunID: e.RunID, Step: e.Step, Evidence: v}
+	}
+	if err := ctx.Err(); err != nil {
+		return ToolOutcomeReport{}, err
+	}
+	if out.AllResultsKnown {
+		out.Results = results
+	}
+	return out, nil
+}
+</code></pre><button type="button" data-copy="day27-support-internal-runstate-outcome-go-txt">复制本文件</button></details></details></section><section id="tests"><h2>完整测试：预测等待、冲突与提交</h2><p>自带source fake和fixture，不依赖另一章测试辅助函数，不需要网络或API Key。测试只导入练习internal，不绕到examples答案。</p><h3 class="file-label">新增 · internal/runstate/day27_contract_test.go</h3><p><a href="exercises/day27/tests/internal/runstate/day27_contract_test.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="tests" data-source="day27/tests/internal/runstate/day27_contract_test.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day27-tests-internal-runstate-day27_contract_test-go-txt"><code>package runstate_test
+
+import (
+	&quot;context&quot;
+	&quot;errors&quot;
+	&quot;fmt&quot;
+	&quot;reflect&quot;
+	&quot;sync&quot;
+	&quot;sync/atomic&quot;
+	&quot;testing&quot;
+	&quot;time&quot;
+
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/model&quot;
+	&quot;github.com/linko-zhao/mini-agent-runtime/internal/runstate&quot;
+)
+
+type source27 struct {
+	calls  atomic.Int32
+	lookup func(context.Context, runstate.ToolAttempt) (runstate.ToolOutcomeEvidence, error)
+}
+
+func (s *source27) Lookup(ctx context.Context, a runstate.ToolAttempt) (runstate.ToolOutcomeEvidence, error) {
+	s.calls.Add(1)
+	return s.lookup(ctx, a)
+}
+func known27(a runstate.ToolAttempt) runstate.ToolOutcomeEvidence {
+	call := a.Call
+	call.Arguments = append([]byte(nil), a.Call.Arguments...)
+	return runstate.ToolOutcomeEvidence{RunID: a.RunID, Step: a.Step, Evidence: runstate.ReplayEvidence{Call: call, Basis: runstate.BasisResultKnown, Result: &amp;model.Message{Role: &quot;tool&quot;, ToolCallID: call.ID, Content: &quot;body &quot; + call.ID}}}
+}
+func apply27(t *testing.T, g *runstate.PauseGate, e runstate.Event) runstate.State {
+	t.Helper()
+	s, err := g.Apply(e)
+	if err != nil {
+		t.Fatal(s, err)
+	}
+	return s
+}
+func batch27(t *testing.T, g *runstate.PauseGate, pauseID string) runstate.State {
+	t.Helper()
+	apply27(t, g, runstate.Event{Kind: runstate.StartModel})
+	response := model.Response{Message: model.Message{Role: &quot;assistant&quot;, ToolCalls: []model.ToolCall{{ID: &quot;call-1&quot;, Name: &quot;get_document&quot;, Arguments: []byte(`{&quot;id&quot;:&quot;doc-1&quot;}`)}, {ID: &quot;call-2&quot;, Name: &quot;get_document&quot;, Arguments: []byte(`{&quot;id&quot;:&quot;doc-2&quot;}`)}}}}
+	apply27(t, g, runstate.Event{Kind: runstate.ModelReturned, Response: &amp;response})
+	if _, e := g.Pause(pauseID, &quot;review&quot;); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := g.Decide(runstate.ApprovalDecision{RunID: &quot;r27&quot;, RequestID: pauseID, Actor: &quot;reviewer&quot;, Outcome: runstate.DecisionApprove, Reason: &quot;reviewed&quot;}); e != nil {
+		t.Fatal(e)
+	}
+	s, e := g.ResolveDecision(&quot;r27&quot;, pauseID)
+	if e != nil {
+		t.Fatal(s, e)
+	}
+	return s
+}
+func gate27(t *testing.T, ctx context.Context) (*runstate.PauseGate, runstate.State) {
+	t.Helper()
+	r, e := runstate.NewRun(ctx, &quot;r27&quot;, &quot;读取 doc-1 和 doc-2&quot;, 4)
+	if e != nil {
+		t.Fatal(e)
+	}
+	g, e := runstate.NewPauseGate(r)
+	if e != nil {
+		t.Fatal(e)
+	}
+	return g, batch27(t, g, &quot;pause-1&quot;)
+}
+
+type result27 struct {
+	state runstate.State
+	err   error
+}
+
+// A timeout is a deadlock guard only; channels determine ordering, not sleeps.
+func wait27[T any](t *testing.T, ch &lt;-chan T) T {
+	t.Helper()
+	timer := time.NewTimer(3 * time.Second)
+	defer timer.Stop()
+	select {
+	case v := &lt;-ch:
+		return v
+	case &lt;-timer.C:
+		t.Fatal(&quot;operation blocked while a lookup was pending&quot;)
+		var zero T
+		return zero
+	}
+}
+func TestDay27CommitAndContinue(t *testing.T) {
+	g, before := gate27(t, context.Background())
+	query := context.WithValue(context.Background(), struct{ scope string }{&quot;query&quot;}, &quot;host&quot;)
+	source := &amp;source27{lookup: func(ctx context.Context, a runstate.ToolAttempt) (runstate.ToolOutcomeEvidence, error) {
+		if ctx != query {
+			t.Fatal(&quot;query context replaced&quot;)
+		}
+		// These gate reads must remain usable while external queries run.
+		if _, ok := g.CurrentInterrupt(); ok {
+			t.Fatal(&quot;unexpected pause&quot;)
+		}
+		if _, ok := g.CurrentDecision(); ok {
+			t.Fatal(&quot;unexpected decision&quot;)
+		}
+		return known27(a), nil
+	}}
+	s, e := g.ReconcileToolResults(query, source)
+	if e != nil || s.Phase != runstate.Ready || s.Pending != nil || s.Step != before.Step || len(s.Messages) != len(before.Messages)+2 || source.calls.Load() != 2 {
+		t.Fatal(s, e, source.calls.Load())
+	}
+	if s.Messages[2].ToolCallID != &quot;call-1&quot; || s.Messages[3].ToolCallID != &quot;call-2&quot; {
+		t.Fatal(s)
+	}
+	s.Messages[0].Content = &quot;caller edit&quot;
+	s.Messages[1].ToolCalls[0].Arguments[0] = &#x27;x&#x27;
+	s.Messages[2].Content = &quot;caller edit&quot;
+	if g.Snapshot().Messages[0].Content != before.Messages[0].Content || g.Snapshot().Messages[1].ToolCalls[0].Arguments[0] != &#x27;{&#x27; || g.Snapshot().Messages[2].Content != &quot;body call-1&quot; {
+		t.Fatal(&quot;success result aliases run&quot;)
+	}
+	// A later call starts from Ready and fails validation without more queries.
+	s, e = g.ReconcileToolResults(query, source)
+	if !errors.Is(e, runstate.ErrOutcomeState) || s.Phase != runstate.Ready || source.calls.Load() != 2 {
+		t.Fatal(s, e)
+	}
+	apply27(t, g, runstate.Event{Kind: runstate.StartModel})
+	s = apply27(t, g, runstate.Event{Kind: runstate.ModelReturned, Response: &amp;model.Response{Message: model.Message{Role: &quot;assistant&quot;, Content: &quot;摘要&quot;}}})
+	if s.Phase != runstate.Completed || s.Result != &quot;摘要&quot; || s.Step != 2 {
+		t.Fatal(s)
+	}
+}
+func TestDay27IncompleteDoesNotCommit(t *testing.T) {
+	for _, basis := range []runstate.ReplayBasis{runstate.BasisUnknown, runstate.BasisNotStarted} {
+		t.Run(string(basis), func(t *testing.T) {
+			g, before := gate27(t, context.Background())
+			source := &amp;source27{lookup: func(_ context.Context, a runstate.ToolAttempt) (runstate.ToolOutcomeEvidence, error) {
+				e := known27(a)
+				if a.Call.ID == &quot;call-1&quot; {
+					e.Evidence.Basis = basis
+					e.Evidence.Result = nil
+				}
+				return e, nil
+			}}
+			s, e := g.ReconcileToolResults(context.Background(), source)
+			if !errors.Is(e, runstate.ErrOutcomeIncomplete) || !reflect.DeepEqual(s, before) || !reflect.DeepEqual(g.Snapshot(), before) || source.calls.Load() != 2 {
+				t.Fatal(s, e)
+			}
+		})
+	}
+}
+
+type outage27 struct{}
+
+func (*outage27) Error() string { return &quot;outcome source unavailable&quot; }
+func TestDay27DelegatedFailures(t *testing.T) {
+	g, before := gate27(t, context.Background())
+	if s, e := g.ReconcileToolResults(nil, nil); !errors.Is(e, runstate.ErrOutcomeState) || !reflect.DeepEqual(s, before) {
+		t.Fatal(s, e)
+	}
+	if s, e := g.ReconcileToolResults(context.Background(), nil); !errors.Is(e, runstate.ErrOutcomeSourceRequired) || !reflect.DeepEqual(s, before) {
+		t.Fatal(s, e)
+	}
+	cause := &amp;outage27{}
+	wrapped := fmt.Errorf(&quot;lookup: %w&quot;, cause)
+	source := &amp;source27{lookup: func(_ context.Context, a runstate.ToolAttempt) (runstate.ToolOutcomeEvidence, error) {
+		if a.Call.ID == &quot;call-2&quot; {
+			return known27(a), wrapped
+		}
+		return known27(a), nil
+	}}
+	s, e := g.ReconcileToolResults(context.Background(), source)
+	var typed *outage27
+	if !errors.Is(e, cause) || !errors.As(e, &amp;typed) || typed != cause || !reflect.DeepEqual(s, before) || source.calls.Load() != 2 {
+		t.Fatal(s, e)
+	}
+	source = &amp;source27{lookup: func(_ context.Context, a runstate.ToolAttempt) (runstate.ToolOutcomeEvidence, error) {
+		e := known27(a)
+		e.Step++
+		return e, nil
+	}}
+	s, e = g.ReconcileToolResults(context.Background(), source)
+	if !errors.Is(e, runstate.ErrReplayEvidence) || !reflect.DeepEqual(s, before) || source.calls.Load() != 1 {
+		t.Fatal(s, e)
+	}
+	s.Pending[0].Arguments[0] = &#x27;x&#x27;
+	if !reflect.DeepEqual(g.Snapshot(), before) {
+		t.Fatal(&quot;error state aliases run&quot;)
+	}
+}
+
+type deadline27 struct{ context.Context }
+
+func (d deadline27) Err() error {
+	if d.Context.Err() != nil {
+		return context.DeadlineExceeded
+	}
+	return nil
+}
+func TestDay27QueryCancellation(t *testing.T) {
+	for _, deadline := range []bool{false, true} {
+		t.Run(fmt.Sprint(deadline), func(t *testing.T) {
+			g, before := gate27(t, context.Background())
+			base, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			var query context.Context = base
+			want := error(context.Canceled)
+			if deadline {
+				query = deadline27{base}
+				want = context.DeadlineExceeded
+			}
+			source := &amp;source27{lookup: func(_ context.Context, a runstate.ToolAttempt) (runstate.ToolOutcomeEvidence, error) {
+				cancel()
+				return known27(a), &amp;outage27{}
+			}}
+			s, e := g.ReconcileToolResults(query, source)
+			if !errors.Is(e, want) || !reflect.DeepEqual(s, before) || !reflect.DeepEqual(g.Snapshot(), before) || source.calls.Load() != 1 {
+				t.Fatal(s, e)
+			}
+		})
+	}
+	// When the same context was already cancelled, no query/commit occurs.
+	ctx, cancel := context.WithCancel(context.Background())
+	g, before := gate27(t, ctx)
+	cancel()
+	source := &amp;source27{lookup: func(context.Context, runstate.ToolAttempt) (runstate.ToolOutcomeEvidence, error) {
+		t.Fatal(&quot;pre-cancelled query&quot;)
+		return runstate.ToolOutcomeEvidence{}, nil
+	}}
+	s, e := g.ReconcileToolResults(ctx, source)
+	if !errors.Is(e, context.Canceled) || !reflect.DeepEqual(s, before) || source.calls.Load() != 0 {
+		t.Fatal(s, e)
+	}
+}
+func TestDay27OriginalCancellationAtCommit(t *testing.T) {
+	for _, deadline := range []bool{false, true} {
+		t.Run(fmt.Sprint(deadline), func(t *testing.T) {
+			base, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			var original context.Context = base
+			want := error(context.Canceled)
+			if deadline {
+				original = deadline27{base}
+				want = context.DeadlineExceeded
+			}
+			g, before := gate27(t, original)
+			source := &amp;source27{lookup: func(_ context.Context, a runstate.ToolAttempt) (runstate.ToolOutcomeEvidence, error) {
+				cancel()
+				return known27(a), nil
+			}}
+			s, e := g.ReconcileToolResults(context.Background(), source)
+			if !errors.Is(e, want) || s.Phase != runstate.Cancelled || s.Failure != &quot;cancelled&quot; || len(s.Pending) != 2 || len(s.Messages) != len(before.Messages) || source.calls.Load() != 2 {
+				t.Fatal(s, e)
+			}
+			if _, ok := g.CurrentInterrupt(); ok {
+				t.Fatal(&quot;pause retained&quot;)
+			}
+			if _, ok := g.CurrentDecision(); ok {
+				t.Fatal(&quot;decision retained&quot;)
+			}
+		})
+	}
+}
+func TestDay27QueryOutsideGateLock(t *testing.T) {
+	g, before := gate27(t, context.Background())
+	entered := make(chan struct{}, 1)
+	release := make(chan struct{})
+	var once sync.Once
+	defer once.Do(func() { close(release) })
+	source := &amp;source27{lookup: func(_ context.Context, a runstate.ToolAttempt) (runstate.ToolOutcomeEvidence, error) {
+		if a.Call.ID == &quot;call-1&quot; {
+			entered &lt;- struct{}{}
+			&lt;-release
+		}
+		return known27(a), nil
+	}}
+	done := make(chan result27, 1)
+	go func() { s, e := g.ReconcileToolResults(context.Background(), source); done &lt;- result27{s, e} }()
+	wait27(t, entered)
+	cancelled := make(chan result27, 1)
+	go func() { s, e := g.Apply(runstate.Event{Kind: runstate.Cancel}); cancelled &lt;- result27{s, e} }()
+	stop := wait27(t, cancelled)
+	if stop.err != nil || stop.state.Phase != runstate.Cancelled {
+		t.Fatal(stop)
+	}
+	once.Do(func() { close(release) })
+	got := wait27(t, done)
+	if !errors.Is(got.err, runstate.ErrOutcomeConflict) || got.state.Phase != runstate.Cancelled || len(got.state.Messages) != len(before.Messages) || source.calls.Load() != 2 {
+		t.Fatal(got)
+	}
+}
+func TestDay27TwoCoordinatorsCommitOnce(t *testing.T) {
+	g, before := gate27(t, context.Background())
+	entered := make(chan struct{}, 2)
+	release := make(chan struct{})
+	var once sync.Once
+	defer once.Do(func() { close(release) })
+	source := &amp;source27{lookup: func(_ context.Context, a runstate.ToolAttempt) (runstate.ToolOutcomeEvidence, error) {
+		if a.Call.ID == &quot;call-1&quot; {
+			entered &lt;- struct{}{}
+			&lt;-release
+		}
+		return known27(a), nil
+	}}
+	done := make(chan result27, 2)
+	for i := 0; i &lt; 2; i++ {
+		go func() { s, e := g.ReconcileToolResults(context.Background(), source); done &lt;- result27{s, e} }()
+	}
+	wait27(t, entered)
+	wait27(t, entered)
+	once.Do(func() { close(release) })
+	results := []result27{wait27(t, done), wait27(t, done)}
+	wins, conflicts := 0, 0
+	for _, r := range results {
+		if r.err == nil {
+			wins++
+		} else if errors.Is(r.err, runstate.ErrOutcomeConflict) {
+			conflicts++
+		} else {
+			t.Fatal(r)
+		}
+		if r.state.Phase != runstate.Ready {
+			t.Fatal(r)
+		}
+	}
+	if wins != 1 || conflicts != 1 || source.calls.Load() != 4 || len(g.Snapshot().Messages) != len(before.Messages)+2 {
+		t.Fatal(wins, conflicts, source.calls.Load(), g.Snapshot())
+	}
+	for _, r := range results {
+		r.state.Messages[1].ToolCalls[0].Arguments[0] = &#x27;x&#x27;
+		r.state.Messages[2].Content = &quot;edit&quot;
+	}
+	if g.Snapshot().Messages[1].ToolCalls[0].Arguments[0] != &#x27;{&#x27; || g.Snapshot().Messages[2].Content != &quot;body call-1&quot; {
+		t.Fatal(&quot;concurrent returns alias run&quot;)
+	}
+}
+func TestDay27OldRoundCannotOverwriteNew(t *testing.T) {
+	g, _ := gate27(t, context.Background())
+	entered := make(chan struct{}, 1)
+	release := make(chan struct{})
+	var once sync.Once
+	defer once.Do(func() { close(release) })
+	source := &amp;source27{lookup: func(_ context.Context, a runstate.ToolAttempt) (runstate.ToolOutcomeEvidence, error) {
+		if a.Call.ID == &quot;call-1&quot; {
+			entered &lt;- struct{}{}
+			&lt;-release
+		}
+		return known27(a), nil
+	}}
+	done := make(chan result27, 1)
+	go func() { s, e := g.ReconcileToolResults(context.Background(), source); done &lt;- result27{s, e} }()
+	wait27(t, entered)
+	apply27(t, g, runstate.Event{Kind: runstate.ToolsReturned, Results: []model.Message{{Role: &quot;tool&quot;, ToolCallID: &quot;call-1&quot;, Content: &quot;original 1&quot;}, {Role: &quot;tool&quot;, ToolCallID: &quot;call-2&quot;, Content: &quot;original 2&quot;}}})
+	current := batch27(t, g, &quot;pause-2&quot;) // same call IDs/arguments, a different Step/history
+	if current.Step != 2 {
+		t.Fatal(current)
+	}
+	once.Do(func() { close(release) })
+	got := wait27(t, done)
+	if !errors.Is(got.err, runstate.ErrOutcomeConflict) || !reflect.DeepEqual(got.state, current) || !reflect.DeepEqual(g.Snapshot(), current) || source.calls.Load() != 2 {
+		t.Fatal(got)
+	}
+}
+</code></pre><button type="button" data-copy="day27-tests-internal-runstate-day27_contract_test-go-txt">复制本文件</button></details></section><section id="tasks"><h2>80分钟：四步收拢协调边界</h2><article class="step"><h3>1 · 15分钟：接通观察与只读核验</h3><p><strong>为什么：</strong>接通观察与只读核验，让观察和提交之间的竞争成为可验证行为。</p><p><strong>位置：</strong>新增reconcile.go的错误、入口与阶段一。</p><p><strong>输入 → 输出 / 动作：</strong>ToolsRunning观察 → Inspect；原核验错误原样返回当前副本；不完整报告 → ErrOutcomeIncomplete，不推进。</p><pre><code>go test ./internal/runstate -run '^(TestDay27IncompleteDoesNotCommit|TestDay27DelegatedFailures)$' -count=1 -v</code></pre><p><strong>完成证据：</strong>查询次数/错误原因准确，未知不变成重试，错误State独立。</p><details><summary>卡住时提示</summary><p>复用Inspect全部身份和形状规则，不在此重写它或伪造版本。</p></details></article><article class="step"><h3>2 · 25分钟：比较当前状态并提交一次</h3><p><strong>为什么：</strong>比较当前状态并提交一次，让观察和提交之间的竞争成为可验证行为。</p><p><strong>位置：</strong>新增同一g.mu中的读取、比较、Run.Apply。</p><p><strong>输入 → 输出 / 动作：</strong>完整结果 → 当前状态相同才提交ToolsReturned；Ready与完整工具历史接回下一轮模型。</p><pre><code>go test ./internal/runstate -run '^TestDay27CommitAndContinue$' -count=1 -v</code></pre><p><strong>完成证据：</strong>两条消息按原ID追加、Step不变、返回独立；后续普通重调从Ready被核验前提拒绝。</p><details><summary>卡住时提示</summary><p>查询不要放进临界区；持有g.mu时委托原Run.Apply，避免递归获取同一门禁锁。</p></details></article><article class="step"><h3>3 · 20分钟：区分两个ctx与失败出口</h3><p><strong>为什么：</strong>区分两个ctx与失败出口，让观察和提交之间的竞争成为可验证行为。</p><p><strong>位置：</strong>新增提交前queryCtx检查及终态清理。</p><p><strong>输入 → 输出 / 动作：</strong>查询取消不Apply；原执行ctx在提交边界取消会Cancelled；已有状态变化返回冲突，不覆盖终态。</p><pre><code>go test ./internal/runstate -run '^(TestDay27QueryCancellation|TestDay27OriginalCancellationAtCommit|TestDay27QueryOutsideGateLock)$' -count=1 -v</code></pre><p><strong>完成证据：</strong>原错误保留，Pending/历史按取消规则保留；阻塞Lookup时门禁操作仍完成。</p><details><summary>卡住时提示</summary><p>不要在成功提交后补一次ctx检查再返回取消错误，那会掩盖已完成写入。</p></details></article><article class="step"><h3>4 · 20分钟：证明竞争与旧轮次隔离</h3><p><strong>为什么：</strong>证明竞争与旧轮次隔离，让观察和提交之间的竞争成为可验证行为。</p><p><strong>位置：</strong>完整State比较、临界区与返回副本。</p><p><strong>输入 → 输出 / 动作：</strong>两个协调者同观察 → 一次提交；旧轮次迟到 → 冲突。全绿后重构，再跑同一矩阵与累计回归。</p><pre><code>go test ./internal/runstate -run '^(TestDay27TwoCoordinatorsCommitOnce|TestDay27OldRoundCannotOverwriteNew)$' -count=1 -v</code></pre><p><strong>完成证据：</strong>两位协调者4次查询，但历史只加2条；相同CallID不能绕过Step/历史变化，race通过。</p><details><summary>卡住时提示</summary><p>不要比较完就放锁，再在另一处Apply；两个动作必须经同一门禁协调。</p></details></article></section><section id="review"><h2>20分钟测试与复盘</h2><h3>12分钟 · 目标、race与累计回归</h3><pre><code># 练习副本根：建议命令
+go test ./internal/runstate -run '^TestDay27' -count=1 -v -timeout 20s
+go test -race ./internal/runstate -run '^TestDay27' -count=1 -timeout 30s
+go test ./internal/... -timeout 60s
+# 参考仓库根：建议命令
+go test ./examples/...
+go test -race ./examples/...</code></pre><p>这些是学习者建议验收命令，不声称你的实现已经执行或完成。全绿后再整理重复分支，保留错误顺序、所有权和锁外查询。</p><h3>8分钟 · 合上代码回答</h3><ol><li>从两个文档调用讲清观察、查询、比较、提交、Ready和下一轮模型的控制流。</li><li>为什么锁外查询安全，而锁外“比较后再Apply”不够？唯一门禁前提被绕过会失去什么保证？</li><li>queryCtx和原执行ctx分别取消时，有哪些返回状态/错误？为什么错误State也可能是Ready？</li><li>相同CallID/参数为什么不能证明报告仍适用于新轮次？本地State比较又为何不能证明来源真实或新鲜？</li><li>若要求进程重启恢复或多实例接管，还要在哪层加入持久确认、版本与执行归属？本日哪些接口能复用？</li></ol><h3>DoD / 完成定义</h3><p><strong>实作：</strong>R1–R8八组测试和子场景、目标/race及受影响累计回归真实通过；查询不持门禁锁，比较与提交同锁，记录实际输出和未验证范围。</p><p><strong>理解：</strong>能不看代码画两张图，解释只读报告与本次提交成功的区别、两个ctx的边界，以及为何本地一次回填不等于外部副作用exactly-once或持久恢复。</p><h3>本次材料验证</h3><p class="note" id="verification-status">Go1.22.2 linux/amd64：原样骨架编译通过，目标确实执行并因TODO失败；同一完整测试在隔离internal参考通过含race，兼容副本累计回归通过。仓库根 go test ./examples/... 与 go test -race ./examples/... 均退出码0，包含前序契约回归。学习者原实现、真实后端、来源真实性与新鲜度、持久恢复和分布式执行归属未验证。</p><p><a href="exercises/day27/verification.json">原始红绿与累计记录</a> · <a href="exercises/day27/browser-verification.json">离线浏览器记录</a></p><h3>学习清单</h3><div class="meta"><span>本浏览器自评进度</span><span id="count">0 / 8</span></div><div class="progress" id="bar" role="progressbar" aria-label="学习进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="fill" class="fill"></div></div><div id="checks"></div><noscript><p>关闭脚本仍可离线阅读，清单不会自动保存。</p></noscript></section><section id="answer"><h2>最后再看：兼容参考答案</h2><p>实际累计参考为examples/internal/runstate/reconcile.go；以下映射到练习internal路径。相同行为测试只映射import前缀，不改断言。</p><h3 class="file-label">参考 · internal/runstate/reconcile.go</h3><p><a href="exercises/day27/reference/internal/runstate/reconcile.go.txt" download>下载完整文件</a></p><details class="code-file" data-kind="reference" data-source="day27/reference/internal/runstate/reconcile.go.txt"><summary>展开完整文件（可复制）</summary><pre id="day27-reference-internal-runstate-reconcile-go-txt"><code>package runstate
+
+import (
+	&quot;context&quot;
+	&quot;errors&quot;
+	&quot;reflect&quot;
+)
+
+var (
+	ErrOutcomeIncomplete = errors.New(&quot;runstate: not all tool results are known&quot;)
+	ErrOutcomeConflict   = errors.New(&quot;runstate: run changed during outcome inspection&quot;)
+)
+
+// ReconcileToolResults repairs missing tool messages on THIS live Run only.
+// Queries occur outside the gate lock. The original observation is compared
+// and ToolsReturned committed under one gate lock, preventing duplicate commits
+// through this unique gate. It never executes/retries business tools or restores
+// a process. Every return includes an owned current State; callers must check err.
+func (g *PauseGate) ReconcileToolResults(queryCtx context.Context, source ToolOutcomeSource) (State, error) {
+	observed := g.Snapshot()
+	report, err := InspectToolOutcomes(queryCtx, source, observed)
+	if err != nil {
+		return g.Snapshot(), err
+	}
+	if !report.AllResultsKnown {
+		return g.Snapshot(), ErrOutcomeIncomplete
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	current := g.run.Snapshot()
+	if err := queryCtx.Err(); err != nil {
+		return current, err
+	}
+	if !reflect.DeepEqual(current, report.Observed) {
+		return current, ErrOutcomeConflict
+	}
+	// Run.Apply observes the ORIGINAL execution ctx. A fresh query ctx cannot
+	// revive a cancelled execution, and a late query cancellation cannot roll back
+	// a successful commit. Do not recursively call Gate.Apply while holding g.mu.
+	state, err := g.run.Apply(Event{Kind: ToolsReturned, Results: report.Results})
+	if terminal(state.Phase) {
+		g.request, g.decision = nil, nil
+	}
+	return state, err
+}
+</code></pre><button type="button" data-copy="day27-reference-internal-runstate-reconcile-go-txt">复制本文件</button></details><h3>次日衔接 · Day28</h3><p>今天已把故障核验报告与原Run的条件回填接通，并明确查询、状态冲突和取消边界。明天进行第四周集成复盘，串起暂停、决定、候选编解码、外部核验和一次回填，用场景矩阵检查组合与尚未实现的持久恢复层。</p></section><footer><nav class="page-navigation" aria-label="页面导航"><a class="page-nav-button" href="agent-runtime-day-26.html">上一项</a><a class="page-nav-button" href="../../index.html">返回主页</a><span class="page-nav-button is-disabled" aria-disabled="true">下一项</span></nav><p class="page-meta">Day27 / 56 · 第四周：中断、审批、人机协作与故障恢复 · 离线图解与完整练习</p></footer></main><script>
+const items=["用自己的话解释当天三个概念", "根据两张图讲清输入、职责和返回", "完成官方阅读并写下问题答案", "确认骨架可编译且目标出现预期红灯", "按任务卡逐步完成当天实现", "完整目标与 race 测试通过", "记录累计回归实际结果和未验证项", "合上代码完成需求变化与失败边界复盘"];const key="mini-agent-runtime-day-27-tdd-v1";
+let saved=[];try{const value=JSON.parse(localStorage.getItem(key)||"[]");if(Array.isArray(value))saved=value}catch(_){}
+const box=document.getElementById("checks");function refresh(){let n=0;[...box.children].forEach((r,i)=>{r.classList.toggle("done",!!saved[i]);if(saved[i])n++});const percent=Math.round(100*n/items.length);document.getElementById("count").textContent=n+" / "+items.length;document.getElementById("fill").style.width=percent+"%";document.getElementById("bar").setAttribute("aria-valuenow",String(percent))}
+items.forEach((s,i)=>{const row=document.createElement("div");row.className="check";const input=document.createElement("input");input.type="checkbox";input.id="task-"+i;input.checked=!!saved[i];const label=document.createElement("label");label.htmlFor=input.id;label.textContent=s;row.append(input,label);box.append(row);input.onchange=()=>{saved[i]=input.checked;try{localStorage.setItem(key,JSON.stringify(saved))}catch(_){}refresh()}});refresh();
+document.querySelectorAll("button[data-copy]").forEach(button=>button.addEventListener("click",async()=>{const target=document.getElementById(button.dataset.copy);try{await navigator.clipboard.writeText(target.textContent);button.textContent="已复制"}catch(_){const range=document.createRange();range.selectNodeContents(target);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);button.textContent="已选中，请手动复制"}}));
+</script></body></html>

@@ -1,0 +1,16 @@
+package runstate
+
+import (
+	"context"
+	"errors"
+)
+
+var (
+	ErrOutcomeIncomplete = errors.New("runstate: not all tool results are known")
+	ErrOutcomeConflict   = errors.New("runstate: run changed during outcome inspection")
+)
+
+// ReconcileToolResults queries outside the lock and conditionally commits once.
+func (g *PauseGate) ReconcileToolResults(queryCtx context.Context, source ToolOutcomeSource) (State, error) {
+	panic("TODO: implement ReconcileToolResults")
+}
