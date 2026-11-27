@@ -1,0 +1,3249 @@
+{
+  "reference_commit": "c2a87ce1593082555e7bf1ca4eee45bd26652c51",
+  "previous_commit": "9fd4463e27d27e3c8e992e03e88c4ccb793ff829",
+  "prior_nodes_preserved": 40,
+  "new_nodes": [
+    "week04",
+    "week04exec",
+    "week04report"
+  ],
+  "verified_source_excerpts": 101,
+  "source_urls_pinned": true,
+  "offline": true,
+  "script_errors": [],
+  "external_requests": 0,
+  "controls": [
+    "new entry checkbox",
+    "track selection",
+    "step",
+    "back",
+    "source inspector keyboard",
+    "zoom",
+    "fit",
+    "theme",
+    "mobile layout"
+  ],
+  "simulated_branches": {
+    "week04-normal": {
+      "phase": "completed",
+      "error": null,
+      "queries": 0,
+      "invocations": 2,
+      "messages": 5,
+      "report": {
+        "Pause": {
+          "SchemaVersion": 1,
+          "Request": {
+            "ID": "pause-1",
+            "Reason": "review",
+            "Checkpoint": {
+              "Boundary": "before_tools",
+              "State": {
+                "RunID": "r28",
+                "Phase": "tools_pending",
+                "Step": 1,
+                "MaxSteps": 4,
+                "Messages": [
+                  {
+                    "Role": "user",
+                    "Content": "读取 doc-1 和 doc-2"
+                  },
+                  {
+                    "Role": "assistant",
+                    "Content": "",
+                    "ToolCalls": [
+                      {
+                        "ID": "call-1",
+                        "Name": "get_document",
+                        "Arguments": "{\"id\":\"doc-1\"}"
+                      },
+                      {
+                        "ID": "call-2",
+                        "Name": "get_document",
+                        "Arguments": "{\"id\":\"doc-2\"}"
+                      }
+                    ]
+                  }
+                ],
+                "Pending": [
+                  {
+                    "ID": "call-1",
+                    "Name": "get_document",
+                    "Arguments": "{\"id\":\"doc-1\"}"
+                  },
+                  {
+                    "ID": "call-2",
+                    "Name": "get_document",
+                    "Arguments": "{\"id\":\"doc-2\"}"
+                  }
+                ],
+                "Result": "",
+                "Failure": ""
+              }
+            }
+          },
+          "Decision": {
+            "RunID": "r28",
+            "RequestID": "pause-1",
+            "Actor": "reviewer",
+            "Outcome": "approve",
+            "Reason": "reviewed"
+          }
+        },
+        "Payload": "<离线模拟Gob字节；未保存>",
+        "State": {
+          "RunID": "r28",
+          "Phase": "ready",
+          "Step": 1,
+          "MaxSteps": 4,
+          "Messages": [
+            {
+              "Role": "user",
+              "Content": "读取 doc-1 和 doc-2"
+            },
+            {
+              "Role": "assistant",
+              "Content": "",
+              "ToolCalls": [
+                {
+                  "ID": "call-1",
+                  "Name": "get_document",
+                  "Arguments": "{\"id\":\"doc-1\"}"
+                },
+                {
+                  "ID": "call-2",
+                  "Name": "get_document",
+                  "Arguments": "{\"id\":\"doc-2\"}"
+                }
+              ]
+            },
+            {
+              "Role": "tool",
+              "ToolCallID": "call-1",
+              "Content": "body call-1"
+            },
+            {
+              "Role": "tool",
+              "ToolCallID": "call-2",
+              "Content": "body call-2"
+            }
+          ],
+          "Pending": null,
+          "Result": "",
+          "Failure": ""
+        },
+        "ExecutionErr": null,
+        "Reconciled": false
+      },
+      "steps": [
+        {
+          "at": "h-week04-build",
+          "ref": "week04.build",
+          "phase": "idle",
+          "error": null
+        },
+        {
+          "at": "h-new",
+          "ref": "hnew.new",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-gate",
+          "ref": "hgate.new",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-start",
+          "ref": "hrun.apply",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-model",
+          "ref": "hmodel.gen",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-response",
+          "ref": "hresponse.branch",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-pause",
+          "ref": "pause.pause",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-wait",
+          "ref": "decision.decide",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-week04-continue",
+          "ref": "week04.continue",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-recorded",
+          "ref": "decision.decide",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-snapshot",
+          "ref": "snapshot.snap",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-codec",
+          "ref": "snapshot.codec",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-resolve",
+          "ref": "decision.resolve",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-io",
+          "ref": "week04exec.execute",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-write",
+          "ref": "hwrite.write",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-week04-report",
+          "ref": "week04report",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-start",
+          "ref": "hrun.apply",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-model",
+          "ref": "hmodel.gen",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-response",
+          "ref": "hresponse.branch",
+          "phase": "completed",
+          "error": null
+        },
+        {
+          "at": "done",
+          "ref": "hresult.result",
+          "phase": "completed",
+          "error": null
+        }
+      ]
+    },
+    "week04-known": {
+      "phase": "completed",
+      "error": null,
+      "queries": 2,
+      "invocations": 2,
+      "messages": 5,
+      "report": {
+        "Pause": {
+          "SchemaVersion": 1,
+          "Request": {
+            "ID": "pause-1",
+            "Reason": "review",
+            "Checkpoint": {
+              "Boundary": "before_tools",
+              "State": {
+                "RunID": "r28",
+                "Phase": "tools_pending",
+                "Step": 1,
+                "MaxSteps": 4,
+                "Messages": [
+                  {
+                    "Role": "user",
+                    "Content": "读取 doc-1 和 doc-2"
+                  },
+                  {
+                    "Role": "assistant",
+                    "Content": "",
+                    "ToolCalls": [
+                      {
+                        "ID": "call-1",
+                        "Name": "get_document",
+                        "Arguments": "{\"id\":\"doc-1\"}"
+                      },
+                      {
+                        "ID": "call-2",
+                        "Name": "get_document",
+                        "Arguments": "{\"id\":\"doc-2\"}"
+                      }
+                    ]
+                  }
+                ],
+                "Pending": [
+                  {
+                    "ID": "call-1",
+                    "Name": "get_document",
+                    "Arguments": "{\"id\":\"doc-1\"}"
+                  },
+                  {
+                    "ID": "call-2",
+                    "Name": "get_document",
+                    "Arguments": "{\"id\":\"doc-2\"}"
+                  }
+                ],
+                "Result": "",
+                "Failure": ""
+              }
+            }
+          },
+          "Decision": {
+            "RunID": "r28",
+            "RequestID": "pause-1",
+            "Actor": "reviewer",
+            "Outcome": "approve",
+            "Reason": "reviewed"
+          }
+        },
+        "Payload": "<离线模拟Gob字节；未保存>",
+        "State": {
+          "RunID": "r28",
+          "Phase": "ready",
+          "Step": 1,
+          "MaxSteps": 4,
+          "Messages": [
+            {
+              "Role": "user",
+              "Content": "读取 doc-1 和 doc-2"
+            },
+            {
+              "Role": "assistant",
+              "Content": "",
+              "ToolCalls": [
+                {
+                  "ID": "call-1",
+                  "Name": "get_document",
+                  "Arguments": "{\"id\":\"doc-1\"}"
+                },
+                {
+                  "ID": "call-2",
+                  "Name": "get_document",
+                  "Arguments": "{\"id\":\"doc-2\"}"
+                }
+              ]
+            },
+            {
+              "Role": "tool",
+              "ToolCallID": "call-1",
+              "Content": "body call-1"
+            },
+            {
+              "Role": "tool",
+              "ToolCallID": "call-2",
+              "Content": "body call-2"
+            }
+          ],
+          "Pending": null,
+          "Result": "",
+          "Failure": ""
+        },
+        "ExecutionErr": "response missing",
+        "Reconciled": true
+      },
+      "steps": [
+        {
+          "at": "h-week04-build",
+          "ref": "week04.build",
+          "phase": "idle",
+          "error": null
+        },
+        {
+          "at": "h-new",
+          "ref": "hnew.new",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-gate",
+          "ref": "hgate.new",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-start",
+          "ref": "hrun.apply",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-model",
+          "ref": "hmodel.gen",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-response",
+          "ref": "hresponse.branch",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-pause",
+          "ref": "pause.pause",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-wait",
+          "ref": "decision.decide",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-week04-continue",
+          "ref": "week04.continue",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-recorded",
+          "ref": "decision.decide",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-snapshot",
+          "ref": "snapshot.snap",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-codec",
+          "ref": "snapshot.codec",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-resolve",
+          "ref": "decision.resolve",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-io",
+          "ref": "week04exec.execute",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-query",
+          "ref": "recon.query",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-lookup",
+          "ref": "source.lookup",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-lookup",
+          "ref": "source.lookup",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-report",
+          "ref": "inspect.inspect",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-compare",
+          "ref": "recon.commit",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-write",
+          "ref": "hwrite.write",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-week04-report",
+          "ref": "week04report",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-start",
+          "ref": "hrun.apply",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-model",
+          "ref": "hmodel.gen",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-response",
+          "ref": "hresponse.branch",
+          "phase": "completed",
+          "error": null
+        },
+        {
+          "at": "done",
+          "ref": "hresult.result",
+          "phase": "completed",
+          "error": null
+        }
+      ]
+    },
+    "week04-unknown": {
+      "phase": "tools_running",
+      "error": "runstate.ErrOutcomeIncomplete",
+      "queries": 2,
+      "invocations": 2,
+      "messages": 2,
+      "report": null,
+      "steps": [
+        {
+          "at": "h-week04-build",
+          "ref": "week04.build",
+          "phase": "idle",
+          "error": null
+        },
+        {
+          "at": "h-new",
+          "ref": "hnew.new",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-gate",
+          "ref": "hgate.new",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-start",
+          "ref": "hrun.apply",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-model",
+          "ref": "hmodel.gen",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-response",
+          "ref": "hresponse.branch",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-pause",
+          "ref": "pause.pause",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-wait",
+          "ref": "decision.decide",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-week04-continue",
+          "ref": "week04.continue",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-recorded",
+          "ref": "decision.decide",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-snapshot",
+          "ref": "snapshot.snap",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-codec",
+          "ref": "snapshot.codec",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-resolve",
+          "ref": "decision.resolve",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-io",
+          "ref": "week04exec.execute",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-query",
+          "ref": "recon.query",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-lookup",
+          "ref": "source.lookup",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-lookup",
+          "ref": "source.lookup",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-report",
+          "ref": "inspect.inspect",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "done",
+          "ref": "week04report",
+          "phase": "tools_running",
+          "error": "runstate.ErrOutcomeIncomplete"
+        }
+      ]
+    },
+    "week04-not-started": {
+      "phase": "tools_running",
+      "error": "runstate.ErrOutcomeIncomplete",
+      "queries": 2,
+      "invocations": 2,
+      "messages": 2,
+      "report": null,
+      "steps": [
+        {
+          "at": "h-week04-build",
+          "ref": "week04.build",
+          "phase": "idle",
+          "error": null
+        },
+        {
+          "at": "h-new",
+          "ref": "hnew.new",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-gate",
+          "ref": "hgate.new",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-start",
+          "ref": "hrun.apply",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-model",
+          "ref": "hmodel.gen",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-response",
+          "ref": "hresponse.branch",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-pause",
+          "ref": "pause.pause",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-wait",
+          "ref": "decision.decide",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-week04-continue",
+          "ref": "week04.continue",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-recorded",
+          "ref": "decision.decide",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-snapshot",
+          "ref": "snapshot.snap",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-codec",
+          "ref": "snapshot.codec",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-resolve",
+          "ref": "decision.resolve",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-io",
+          "ref": "week04exec.execute",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-query",
+          "ref": "recon.query",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-lookup",
+          "ref": "source.lookup",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-lookup",
+          "ref": "source.lookup",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-report",
+          "ref": "inspect.inspect",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "done",
+          "ref": "week04report",
+          "phase": "tools_running",
+          "error": "runstate.ErrOutcomeIncomplete"
+        }
+      ]
+    },
+    "week04-source-error": {
+      "phase": "tools_running",
+      "error": "outcome source unavailable",
+      "queries": 1,
+      "invocations": 2,
+      "messages": 2,
+      "report": null,
+      "steps": [
+        {
+          "at": "h-week04-build",
+          "ref": "week04.build",
+          "phase": "idle",
+          "error": null
+        },
+        {
+          "at": "h-new",
+          "ref": "hnew.new",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-gate",
+          "ref": "hgate.new",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-start",
+          "ref": "hrun.apply",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-model",
+          "ref": "hmodel.gen",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-response",
+          "ref": "hresponse.branch",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-pause",
+          "ref": "pause.pause",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-wait",
+          "ref": "decision.decide",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-week04-continue",
+          "ref": "week04.continue",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-recorded",
+          "ref": "decision.decide",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-snapshot",
+          "ref": "snapshot.snap",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-codec",
+          "ref": "snapshot.codec",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-resolve",
+          "ref": "decision.resolve",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-io",
+          "ref": "week04exec.execute",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-query",
+          "ref": "recon.query",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-lookup",
+          "ref": "source.lookup",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "done",
+          "ref": "week04report",
+          "phase": "tools_running",
+          "error": "outcome source unavailable"
+        }
+      ]
+    },
+    "week04-query-cancel": {
+      "phase": "tools_running",
+      "error": "context.Canceled (queryCtx)",
+      "queries": 1,
+      "invocations": 2,
+      "messages": 2,
+      "report": null,
+      "steps": [
+        {
+          "at": "h-week04-build",
+          "ref": "week04.build",
+          "phase": "idle",
+          "error": null
+        },
+        {
+          "at": "h-new",
+          "ref": "hnew.new",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-gate",
+          "ref": "hgate.new",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-start",
+          "ref": "hrun.apply",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-model",
+          "ref": "hmodel.gen",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-response",
+          "ref": "hresponse.branch",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-pause",
+          "ref": "pause.pause",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-wait",
+          "ref": "decision.decide",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-week04-continue",
+          "ref": "week04.continue",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-recorded",
+          "ref": "decision.decide",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-snapshot",
+          "ref": "snapshot.snap",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-codec",
+          "ref": "snapshot.codec",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-resolve",
+          "ref": "decision.resolve",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-io",
+          "ref": "week04exec.execute",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-query",
+          "ref": "recon.query",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-lookup",
+          "ref": "source.lookup",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "done",
+          "ref": "week04report",
+          "phase": "tools_running",
+          "error": "context.Canceled (queryCtx)"
+        }
+      ]
+    },
+    "week04-reject": {
+      "phase": "failed",
+      "error": null,
+      "queries": 0,
+      "invocations": 0,
+      "messages": 2,
+      "report": null,
+      "steps": [
+        {
+          "at": "h-week04-build",
+          "ref": "week04.build",
+          "phase": "idle",
+          "error": null
+        },
+        {
+          "at": "h-new",
+          "ref": "hnew.new",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-gate",
+          "ref": "hgate.new",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-start",
+          "ref": "hrun.apply",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-model",
+          "ref": "hmodel.gen",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-response",
+          "ref": "hresponse.branch",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-pause",
+          "ref": "pause.pause",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-wait",
+          "ref": "decision.decide",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-week04-continue",
+          "ref": "week04.continue",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-recorded",
+          "ref": "decision.decide",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-snapshot",
+          "ref": "snapshot.snap",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-codec",
+          "ref": "snapshot.codec",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-resolve",
+          "ref": "decision.resolve",
+          "phase": "failed",
+          "error": null
+        },
+        {
+          "at": "done",
+          "ref": "week04report",
+          "phase": "failed",
+          "error": null
+        }
+      ]
+    },
+    "week04-direct": {
+      "phase": "completed",
+      "error": null,
+      "queries": 0,
+      "invocations": 0,
+      "messages": 2,
+      "report": null,
+      "steps": [
+        {
+          "at": "h-week04-build",
+          "ref": "week04.build",
+          "phase": "idle",
+          "error": null
+        },
+        {
+          "at": "h-new",
+          "ref": "hnew.new",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-gate",
+          "ref": "hgate.new",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-start",
+          "ref": "hrun.apply",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-model",
+          "ref": "hmodel.gen",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-response",
+          "ref": "hresponse.branch",
+          "phase": "completed",
+          "error": null
+        },
+        {
+          "at": "done",
+          "ref": "hresult.result",
+          "phase": "completed",
+          "error": null
+        }
+      ]
+    },
+    "host-conflict": {
+      "phase": "ready",
+      "error": "runstate.ErrOutcomeConflict",
+      "queries": 2,
+      "invocations": 0,
+      "messages": 4,
+      "report": null,
+      "steps": [
+        {
+          "at": "h-new",
+          "ref": "hnew.new",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-gate",
+          "ref": "hgate.new",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-start",
+          "ref": "hrun.apply",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-model",
+          "ref": "hmodel.gen",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-response",
+          "ref": "hresponse.branch",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-pause",
+          "ref": "pause.pause",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-wait",
+          "ref": "decision.decide",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-recorded",
+          "ref": "decision.decide",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-resolve-wait",
+          "ref": "decision.resolve",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-resolve",
+          "ref": "decision.resolve",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-io",
+          "ref": "hostio.io",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-query",
+          "ref": "recon.query",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-lookup",
+          "ref": "source.lookup",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-lookup",
+          "ref": "source.lookup",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-report",
+          "ref": "inspect.inspect",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-other-commit",
+          "ref": "hwrite.write",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-compare",
+          "ref": "recon.commit",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "done",
+          "ref": "hresult.result",
+          "phase": "ready",
+          "error": "runstate.ErrOutcomeConflict"
+        }
+      ]
+    },
+    "host-old-known": {
+      "phase": "completed",
+      "error": null,
+      "queries": 2,
+      "invocations": 0,
+      "messages": 5,
+      "report": null,
+      "steps": [
+        {
+          "at": "h-new",
+          "ref": "hnew.new",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-gate",
+          "ref": "hgate.new",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-start",
+          "ref": "hrun.apply",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-model",
+          "ref": "hmodel.gen",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-response",
+          "ref": "hresponse.branch",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-pause",
+          "ref": "pause.pause",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-save",
+          "ref": "hstore.save",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-review",
+          "ref": "review.review",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-recovery",
+          "ref": "recovery.plan",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-replay",
+          "ref": "replay.plan",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-wait",
+          "ref": "decision.decide",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-recorded",
+          "ref": "decision.decide",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-snapshot",
+          "ref": "snapshot.snap",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-codec",
+          "ref": "snapshot.codec",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-resolve-wait",
+          "ref": "decision.resolve",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-resolve",
+          "ref": "decision.resolve",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-io",
+          "ref": "hostio.io",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-query",
+          "ref": "recon.query",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-lookup",
+          "ref": "source.lookup",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-lookup",
+          "ref": "source.lookup",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-report",
+          "ref": "inspect.inspect",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-compare",
+          "ref": "recon.commit",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-write",
+          "ref": "hwrite.write",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-start",
+          "ref": "hrun.apply",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-model",
+          "ref": "hmodel.gen",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-response",
+          "ref": "hresponse.branch",
+          "phase": "completed",
+          "error": null
+        },
+        {
+          "at": "done",
+          "ref": "hresult.result",
+          "phase": "completed",
+          "error": null
+        }
+      ]
+    },
+    "agent-tool": {
+      "phase": "completed",
+      "error": null,
+      "queries": 0,
+      "invocations": 2,
+      "messages": 5,
+      "report": null,
+      "steps": [
+        {
+          "at": "a-build",
+          "ref": "build.build",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-init",
+          "ref": "build.initialize",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-discover",
+          "ref": "discover.discover",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-register",
+          "ref": "registry.register",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-tools",
+          "ref": "registry.tools",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-new",
+          "ref": "new.new",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-bind",
+          "ref": "binder.with",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-input",
+          "ref": "input.input",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-run",
+          "ref": "agent.run",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-record",
+          "ref": "record.create",
+          "phase": "created",
+          "error": null
+        },
+        {
+          "at": "a-ready",
+          "ref": "agent.state",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-generate",
+          "ref": "model.generate",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-response",
+          "ref": "response.branch",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-batch",
+          "ref": "batch.batch",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pre",
+          "ref": "grant.check",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-auth",
+          "ref": "auth.authorize",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pre",
+          "ref": "grant.check",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-auth",
+          "ref": "auth.authorize",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-allowed",
+          "ref": "grant.check",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-policy",
+          "ref": "policy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-adapt",
+          "ref": "legacy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-local",
+          "ref": "doc.invoke",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pack",
+          "ref": "history.pack",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-policy",
+          "ref": "policy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-adapt",
+          "ref": "legacy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-remote",
+          "ref": "remote.invoke",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-client",
+          "ref": "client.tool",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-transport",
+          "ref": "client.send",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-rpc-result",
+          "ref": "remote.invoke",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pack",
+          "ref": "history.pack",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-history",
+          "ref": "history.update",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-generate",
+          "ref": "model.generate",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-response",
+          "ref": "response.branch",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-finish",
+          "ref": "record.finish",
+          "phase": "completed",
+          "error": null
+        },
+        {
+          "at": "done",
+          "ref": "result.result",
+          "phase": "completed",
+          "error": null
+        }
+      ]
+    },
+    "agent-direct": {
+      "phase": "completed",
+      "error": null,
+      "queries": 0,
+      "invocations": 0,
+      "messages": 2,
+      "report": null,
+      "steps": [
+        {
+          "at": "a-build",
+          "ref": "build.build",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-init",
+          "ref": "build.initialize",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-discover",
+          "ref": "discover.discover",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-register",
+          "ref": "registry.register",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-tools",
+          "ref": "registry.tools",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-new",
+          "ref": "new.new",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-bind",
+          "ref": "binder.with",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-input",
+          "ref": "input.input",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-run",
+          "ref": "agent.run",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-record",
+          "ref": "record.create",
+          "phase": "created",
+          "error": null
+        },
+        {
+          "at": "a-ready",
+          "ref": "agent.state",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-generate",
+          "ref": "model.generate",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-response",
+          "ref": "response.branch",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-finish",
+          "ref": "record.finish",
+          "phase": "completed",
+          "error": null
+        },
+        {
+          "at": "done",
+          "ref": "result.result",
+          "phase": "completed",
+          "error": null
+        }
+      ]
+    },
+    "agent-budget": {
+      "phase": "failed",
+      "error": "agent.ErrMaxSteps",
+      "queries": 0,
+      "invocations": 2,
+      "messages": 4,
+      "report": null,
+      "steps": [
+        {
+          "at": "a-build",
+          "ref": "build.build",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-init",
+          "ref": "build.initialize",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-discover",
+          "ref": "discover.discover",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-register",
+          "ref": "registry.register",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-tools",
+          "ref": "registry.tools",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-new",
+          "ref": "new.new",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-bind",
+          "ref": "binder.with",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-input",
+          "ref": "input.input",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-run",
+          "ref": "agent.run",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-record",
+          "ref": "record.create",
+          "phase": "created",
+          "error": null
+        },
+        {
+          "at": "a-ready",
+          "ref": "agent.state",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-generate",
+          "ref": "model.generate",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-response",
+          "ref": "response.branch",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-batch",
+          "ref": "batch.batch",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pre",
+          "ref": "grant.check",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-auth",
+          "ref": "auth.authorize",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pre",
+          "ref": "grant.check",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-auth",
+          "ref": "auth.authorize",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-allowed",
+          "ref": "grant.check",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-policy",
+          "ref": "policy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-adapt",
+          "ref": "legacy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-local",
+          "ref": "doc.invoke",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pack",
+          "ref": "history.pack",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-policy",
+          "ref": "policy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-adapt",
+          "ref": "legacy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-remote",
+          "ref": "remote.invoke",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-client",
+          "ref": "client.tool",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-transport",
+          "ref": "client.send",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-rpc-result",
+          "ref": "remote.invoke",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pack",
+          "ref": "history.pack",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-history",
+          "ref": "history.update",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-finish",
+          "ref": "record.finish",
+          "phase": "failed",
+          "error": "agent.ErrMaxSteps"
+        },
+        {
+          "at": "done",
+          "ref": "result.result",
+          "phase": "failed",
+          "error": "agent.ErrMaxSteps"
+        }
+      ]
+    },
+    "agent-duplicate": {
+      "phase": "failed",
+      "error": "agent: missing or duplicate tool call ID",
+      "queries": 0,
+      "invocations": 0,
+      "messages": 2,
+      "report": null,
+      "steps": [
+        {
+          "at": "a-build",
+          "ref": "build.build",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-init",
+          "ref": "build.initialize",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-discover",
+          "ref": "discover.discover",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-register",
+          "ref": "registry.register",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-tools",
+          "ref": "registry.tools",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-new",
+          "ref": "new.new",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-bind",
+          "ref": "binder.with",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-input",
+          "ref": "input.input",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-run",
+          "ref": "agent.run",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-record",
+          "ref": "record.create",
+          "phase": "created",
+          "error": null
+        },
+        {
+          "at": "a-ready",
+          "ref": "agent.state",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-generate",
+          "ref": "model.generate",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-response",
+          "ref": "response.branch",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-batch",
+          "ref": "batch.batch",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-finish",
+          "ref": "record.finish",
+          "phase": "failed",
+          "error": "agent: missing or duplicate tool call ID"
+        },
+        {
+          "at": "done",
+          "ref": "result.result",
+          "phase": "failed",
+          "error": "agent: missing or duplicate tool call ID"
+        }
+      ]
+    },
+    "agent-model-error": {
+      "phase": "failed",
+      "error": "mock: exhausted responses",
+      "queries": 0,
+      "invocations": 0,
+      "messages": 1,
+      "report": null,
+      "steps": [
+        {
+          "at": "a-build",
+          "ref": "build.build",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-init",
+          "ref": "build.initialize",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-discover",
+          "ref": "discover.discover",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-register",
+          "ref": "registry.register",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-tools",
+          "ref": "registry.tools",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-new",
+          "ref": "new.new",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-input",
+          "ref": "input.input",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-run",
+          "ref": "agent.run",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-record",
+          "ref": "record.create",
+          "phase": "created",
+          "error": null
+        },
+        {
+          "at": "a-ready",
+          "ref": "agent.state",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-generate",
+          "ref": "model.generate",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-finish",
+          "ref": "record.finish",
+          "phase": "failed",
+          "error": "mock: exhausted responses"
+        },
+        {
+          "at": "done",
+          "ref": "result.result",
+          "phase": "failed",
+          "error": "mock: exhausted responses"
+        }
+      ]
+    },
+    "agent-deny": {
+      "phase": "failed",
+      "error": "agent: authorization failed: tool.ErrForbidden",
+      "queries": 0,
+      "invocations": 0,
+      "messages": 2,
+      "report": null,
+      "steps": [
+        {
+          "at": "a-build",
+          "ref": "build.build",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-init",
+          "ref": "build.initialize",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-discover",
+          "ref": "discover.discover",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-register",
+          "ref": "registry.register",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-tools",
+          "ref": "registry.tools",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-new",
+          "ref": "new.new",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-bind",
+          "ref": "binder.with",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-input",
+          "ref": "input.input",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-run",
+          "ref": "agent.run",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-record",
+          "ref": "record.create",
+          "phase": "created",
+          "error": null
+        },
+        {
+          "at": "a-ready",
+          "ref": "agent.state",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-generate",
+          "ref": "model.generate",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-response",
+          "ref": "response.branch",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-batch",
+          "ref": "batch.batch",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pre",
+          "ref": "grant.check",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-auth",
+          "ref": "auth.authorize",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pre",
+          "ref": "grant.check",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-auth",
+          "ref": "auth.authorize",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-finish",
+          "ref": "record.finish",
+          "phase": "failed",
+          "error": "agent: authorization failed: tool.ErrForbidden"
+        },
+        {
+          "at": "done",
+          "ref": "result.result",
+          "phase": "failed",
+          "error": "agent: authorization failed: tool.ErrForbidden"
+        }
+      ]
+    },
+    "agent-effect-business": {
+      "phase": "completed",
+      "error": null,
+      "queries": 0,
+      "invocations": 2,
+      "messages": 5,
+      "report": null,
+      "steps": [
+        {
+          "at": "a-build",
+          "ref": "build.build",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-init",
+          "ref": "build.initialize",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-discover",
+          "ref": "discover.discover",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-register",
+          "ref": "registry.register",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-tools",
+          "ref": "registry.tools",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-new",
+          "ref": "new.new",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-bind",
+          "ref": "binder.with",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-input",
+          "ref": "input.input",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-run",
+          "ref": "agent.run",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-record",
+          "ref": "record.create",
+          "phase": "created",
+          "error": null
+        },
+        {
+          "at": "a-ready",
+          "ref": "agent.state",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-generate",
+          "ref": "model.generate",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-response",
+          "ref": "response.branch",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-batch",
+          "ref": "batch.batch",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pre",
+          "ref": "grant.check",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-auth",
+          "ref": "auth.authorize",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pre",
+          "ref": "grant.check",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-auth",
+          "ref": "auth.authorize",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-allowed",
+          "ref": "grant.check",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-policy",
+          "ref": "policy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-adapt",
+          "ref": "legacy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-local",
+          "ref": "doc.invoke",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pack",
+          "ref": "history.pack",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-policy",
+          "ref": "policy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-adapt",
+          "ref": "legacy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-remote",
+          "ref": "remote.invoke",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-client",
+          "ref": "client.tool",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-transport",
+          "ref": "client.send",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-rpc-result",
+          "ref": "remote.invoke",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pack",
+          "ref": "history.pack",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-history",
+          "ref": "history.update",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-generate",
+          "ref": "model.generate",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-response",
+          "ref": "response.branch",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-finish",
+          "ref": "record.finish",
+          "phase": "completed",
+          "error": null
+        },
+        {
+          "at": "done",
+          "ref": "result.result",
+          "phase": "completed",
+          "error": null
+        }
+      ]
+    },
+    "agent-effect-timeout": {
+      "phase": "cancelled",
+      "error": "context.DeadlineExceeded",
+      "queries": 0,
+      "invocations": 2,
+      "messages": 2,
+      "report": null,
+      "steps": [
+        {
+          "at": "a-build",
+          "ref": "build.build",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-init",
+          "ref": "build.initialize",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-discover",
+          "ref": "discover.discover",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-register",
+          "ref": "registry.register",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-tools",
+          "ref": "registry.tools",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-new",
+          "ref": "new.new",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-bind",
+          "ref": "binder.with",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-input",
+          "ref": "input.input",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-run",
+          "ref": "agent.run",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-record",
+          "ref": "record.create",
+          "phase": "created",
+          "error": null
+        },
+        {
+          "at": "a-ready",
+          "ref": "agent.state",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-generate",
+          "ref": "model.generate",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-response",
+          "ref": "response.branch",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-batch",
+          "ref": "batch.batch",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pre",
+          "ref": "grant.check",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-auth",
+          "ref": "auth.authorize",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pre",
+          "ref": "grant.check",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-auth",
+          "ref": "auth.authorize",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-allowed",
+          "ref": "grant.check",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-policy",
+          "ref": "policy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-adapt",
+          "ref": "legacy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-local",
+          "ref": "doc.invoke",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pack",
+          "ref": "history.pack",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-policy",
+          "ref": "policy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-adapt",
+          "ref": "legacy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-remote",
+          "ref": "remote.invoke",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-client",
+          "ref": "client.tool",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-transport",
+          "ref": "client.send",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-toolstop",
+          "ref": "history.pack",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-finish",
+          "ref": "record.finish",
+          "phase": "cancelled",
+          "error": "context.DeadlineExceeded"
+        },
+        {
+          "at": "done",
+          "ref": "result.result",
+          "phase": "cancelled",
+          "error": "context.DeadlineExceeded"
+        }
+      ]
+    },
+    "agent-effect-corrupt": {
+      "phase": "completed",
+      "error": null,
+      "queries": 0,
+      "invocations": 2,
+      "messages": 5,
+      "report": null,
+      "steps": [
+        {
+          "at": "a-build",
+          "ref": "build.build",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-init",
+          "ref": "build.initialize",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-discover",
+          "ref": "discover.discover",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-register",
+          "ref": "registry.register",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-tools",
+          "ref": "registry.tools",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-new",
+          "ref": "new.new",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-bind",
+          "ref": "binder.with",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-input",
+          "ref": "input.input",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-run",
+          "ref": "agent.run",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-record",
+          "ref": "record.create",
+          "phase": "created",
+          "error": null
+        },
+        {
+          "at": "a-ready",
+          "ref": "agent.state",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-generate",
+          "ref": "model.generate",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-response",
+          "ref": "response.branch",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-batch",
+          "ref": "batch.batch",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pre",
+          "ref": "grant.check",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-auth",
+          "ref": "auth.authorize",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pre",
+          "ref": "grant.check",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-auth",
+          "ref": "auth.authorize",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-allowed",
+          "ref": "grant.check",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-policy",
+          "ref": "policy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-adapt",
+          "ref": "legacy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-local",
+          "ref": "doc.invoke",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pack",
+          "ref": "history.pack",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-policy",
+          "ref": "policy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-adapt",
+          "ref": "legacy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-remote",
+          "ref": "remote.invoke",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-client",
+          "ref": "client.tool",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-transport",
+          "ref": "client.send",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-rpc-result",
+          "ref": "remote.invoke",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pack",
+          "ref": "history.pack",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-history",
+          "ref": "history.update",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-generate",
+          "ref": "model.generate",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-response",
+          "ref": "response.branch",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-finish",
+          "ref": "record.finish",
+          "phase": "completed",
+          "error": null
+        },
+        {
+          "at": "done",
+          "ref": "result.result",
+          "phase": "completed",
+          "error": null
+        }
+      ]
+    },
+    "agent-effect-budget": {
+      "phase": "completed",
+      "error": null,
+      "queries": 0,
+      "invocations": 2,
+      "messages": 5,
+      "report": null,
+      "steps": [
+        {
+          "at": "a-build",
+          "ref": "build.build",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-init",
+          "ref": "build.initialize",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-discover",
+          "ref": "discover.discover",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-register",
+          "ref": "registry.register",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-tools",
+          "ref": "registry.tools",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-new",
+          "ref": "new.new",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-bind",
+          "ref": "binder.with",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-input",
+          "ref": "input.input",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-run",
+          "ref": "agent.run",
+          "phase": "assembly",
+          "error": null
+        },
+        {
+          "at": "a-record",
+          "ref": "record.create",
+          "phase": "created",
+          "error": null
+        },
+        {
+          "at": "a-ready",
+          "ref": "agent.state",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-generate",
+          "ref": "model.generate",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-response",
+          "ref": "response.branch",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-batch",
+          "ref": "batch.batch",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pre",
+          "ref": "grant.check",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-auth",
+          "ref": "auth.authorize",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pre",
+          "ref": "grant.check",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-auth",
+          "ref": "auth.authorize",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-allowed",
+          "ref": "grant.check",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-policy",
+          "ref": "policy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-adapt",
+          "ref": "legacy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-local",
+          "ref": "doc.invoke",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pack",
+          "ref": "history.pack",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-policy",
+          "ref": "policy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-adapt",
+          "ref": "legacy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-remote",
+          "ref": "remote.invoke",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-client",
+          "ref": "client.tool",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-transport",
+          "ref": "client.send",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-rpc-result",
+          "ref": "remote.invoke",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-budget-result",
+          "ref": "policy.execute",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-pack",
+          "ref": "history.pack",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-history",
+          "ref": "history.update",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-generate",
+          "ref": "model.generate",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-response",
+          "ref": "response.branch",
+          "phase": "running",
+          "error": null
+        },
+        {
+          "at": "a-finish",
+          "ref": "record.finish",
+          "phase": "completed",
+          "error": null
+        },
+        {
+          "at": "done",
+          "ref": "result.result",
+          "phase": "completed",
+          "error": null
+        }
+      ]
+    },
+    "week04-cancel": {
+      "phase": "cancelled",
+      "error": "context.Canceled",
+      "queries": 0,
+      "invocations": 0,
+      "messages": 2,
+      "report": null,
+      "steps": [
+        {
+          "at": "h-week04-build",
+          "ref": "week04.build",
+          "phase": "idle",
+          "error": null
+        },
+        {
+          "at": "h-new",
+          "ref": "hnew.new",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-gate",
+          "ref": "hgate.new",
+          "phase": "ready",
+          "error": null
+        },
+        {
+          "at": "h-start",
+          "ref": "hrun.apply",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-model",
+          "ref": "hmodel.gen",
+          "phase": "model_running",
+          "error": null
+        },
+        {
+          "at": "h-response",
+          "ref": "hresponse.branch",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-pause",
+          "ref": "pause.pause",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-wait",
+          "ref": "decision.decide",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-week04-continue",
+          "ref": "week04.continue",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-recorded",
+          "ref": "decision.decide",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-snapshot",
+          "ref": "snapshot.snap",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-codec",
+          "ref": "snapshot.codec",
+          "phase": "tools_pending",
+          "error": null
+        },
+        {
+          "at": "h-resolve",
+          "ref": "decision.resolve",
+          "phase": "tools_running",
+          "error": null
+        },
+        {
+          "at": "h-end",
+          "ref": "hrun.apply",
+          "phase": "cancelled",
+          "error": "context.Canceled"
+        },
+        {
+          "at": "done",
+          "ref": "week04report",
+          "phase": "cancelled",
+          "error": "context.Canceled"
+        }
+      ]
+    }
+  },
+  "note": "Offline teaching simulation, not execution of Go or deployed Pages verification."
+}

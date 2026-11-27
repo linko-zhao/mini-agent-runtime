@@ -1,6 +1,6 @@
 # Agent Runtime 累计示例
 
-这是依据 Day 01–27 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
+这是依据 Day 01–28 学习计划持续演进的可运行参考基线。后续课程在这里逐步扩展同一套 Runtime。它不代表学习者已完成对应练习。
 
 共享仓库根目录的 `go.mod`（Go 1.22.2），无需新建 Module，也不导入根目录 `internal` 中的练习实现。所有命令在仓库根目录运行：
 
@@ -230,3 +230,9 @@ Ready、预算耗尽与终态只返回Recovery，Replay=nil且不查询Source；
 新增internal/runstate/reconcile.go、reconcile_test.go。Gate.ReconcileToolResults在锁外复用Day26核验，整批结果明确后在同一门禁锁内比较当前State并委托ToolsReturned，防止旧观察重复回填。新增Incomplete/Conflict错误，保留queryCtx与原执行ctx的不同边界。没有持久加载或新Run恢复，不改旧接口。详见CONTRACTS.md与[Day27页面](../docs/learning/agent-runtime-day-27.html)。
 
 仓库根运行go test ./examples/...与go test -race ./examples/...；材料真实记录见docs/learning/exercises/day27/verification.json。来源为离线fake，未验证学习者原实现、真实后端、持久恢复、真实性/新鲜度或分布式执行归属。
+
+## Day28：第四周集成复盘
+
+新增internal/assembly/week04.go、week04_test.go。BuildWeek04配对原Run、唯一Gate和ToolBatchExecutor，Continue组合记录/候选Gob/消费/一次执行及错误后的Reconcile。模型仍由外部宿主推进，与Agent.RunWithState独立；不Save或自动重试。完整契约见CONTRACTS.md及[Day28](../docs/learning/agent-runtime-day-28.html)。
+
+仓库根运行go test ./examples/...与go test -race ./examples/...；真实材料记录见docs/learning/exercises/day28/verification.json。九场景矩阵为离线fixture，未验证真实工具/模型、持久恢复、权限或学习者原实现。

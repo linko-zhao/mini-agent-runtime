@@ -825,5 +825,72 @@
         "file": "day27/support/internal/runstate/outcome.go.txt"
       }
     ]
+  },
+  "28": {
+    "package": "./internal/assembly",
+    "pattern": "^TestDay28",
+    "targets": [
+      {
+        "path": "internal/assembly/week04.go",
+        "reference": "day28/reference/internal/assembly/week04.go.txt",
+        "skeleton": "day28/skeleton/internal/assembly/week04.go.txt"
+      }
+    ],
+    "tests": [
+      {
+        "path": "internal/assembly/day28_contract_test.go",
+        "file": "day28/tests/internal/assembly/day28_contract_test.go.txt"
+      }
+    ],
+    "support": [
+      {
+        "path": "internal/runstate/state.go",
+        "file": "day28/support/internal/runstate/state.go.txt"
+      },
+      {
+        "path": "internal/runstate/run.go",
+        "file": "day28/support/internal/runstate/run.go.txt"
+      },
+      {
+        "path": "internal/runstate/checkpoint.go",
+        "file": "day28/support/internal/runstate/checkpoint.go.txt"
+      },
+      {
+        "path": "internal/runstate/store.go",
+        "file": "day28/support/internal/runstate/store.go.txt"
+      },
+      {
+        "path": "internal/runstate/recovery.go",
+        "file": "day28/support/internal/runstate/recovery.go.txt"
+      },
+      {
+        "path": "internal/runstate/replay.go",
+        "file": "day28/support/internal/runstate/replay.go.txt"
+      },
+      {
+        "path": "internal/runstate/pause.go",
+        "file": "day28/support/internal/runstate/pause.go.txt"
+      },
+      {
+        "path": "internal/runstate/approval.go",
+        "file": "day28/support/internal/runstate/approval.go.txt"
+      },
+      {
+        "path": "internal/runstate/resolve.go",
+        "file": "day28/support/internal/runstate/resolve.go.txt"
+      },
+      {
+        "path": "internal/runstate/pause_snapshot.go",
+        "file": "day28/support/internal/runstate/pause_snapshot.go.txt"
+      },
+      {
+        "path": "internal/runstate/outcome.go",
+        "file": "day28/support/internal/runstate/outcome.go.txt"
+      },
+      {
+        "path": "internal/runstate/reconcile.go",
+        "file": "day28/support/internal/runstate/reconcile.go.txt"
+      }
+    ]
   }
 }

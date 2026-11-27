@@ -196,6 +196,7 @@ a {color:var(--blue);text-underline-offset:3px}
     <label class="field" id="access-field"><span>宿主授权规则</span><select id="access"><option value="allow">允许本地与远端</option><option value="deny">远端未授权</option></select></label>
     <label class="field" id="effect-field"><span>远端工具返回</span><select id="effect"><option value="success">成功</option><option value="business">业务失败</option><option value="timeout">超时</option><option value="budget">超出结果大小</option><option value="corrupt">执行后响应损坏</option></select></label>
     <label class="check" id="checkpoint-field" hidden><input id="checkpoint" type="checkbox">查看 Checkpoint 与暂停快照</label>
+    <label class="check" id="week04-field" hidden><input id="week04" type="checkbox">第四周组合入口（Day 28）</label>
     <div id="decision-box" hidden><span id="decision-label"></span><div id="choices"></div></div>
     <button type="button" id="cancel-request" hidden><span data-icon="stop"></span>取消原始请求</button>
     <p class="utility">基于 <span class="key">examples/</span> 的教学模拟。模型与工具使用离线夹具。</p>
@@ -227,8 +228,8 @@ a {color:var(--blue);text-underline-offset:3px}
 <!-- Reference data and source excerpts pinned to the commit below. -->
 <script type="application/json" id="reference-data">
 {
-  "commit": "9fd4463e27d27e3c8e992e03e88c4ccb793ff829",
-  "version": "Day 27",
+  "commit": "c2a87ce1593082555e7bf1ca4eee45bd26652c51",
+  "version": "Day 28",
   "nodes": {
     "build": {
       "x": 24,
@@ -1106,6 +1107,79 @@ a {color:var(--blue);text-underline-offset:3px}
       ],
       "source": "resolve-10-13",
       "kind": "boundary"
+    },
+    "week04": {
+      "x": 24,
+      "y": 840,
+      "namespace": "assembly · host",
+      "title": "Week04Host",
+      "desc": "第四周宿主组合入口",
+      "fields": [
+        "run *runstate.Run",
+        "gate *PauseGate",
+        "execute ToolBatchExecutor"
+      ],
+      "methods": [
+        {
+          "id": "build",
+          "short": "BuildWeek04(ctx, …)",
+          "full": "func BuildWeek04(ctx context.Context, runID, input string, maxSteps int, execute ToolBatchExecutor) (*Week04Host, error)",
+          "desc": "原ctx创建Run和唯一Gate；缺执行回调返回ErrWeek04ExecutorRequired。",
+          "source": "w4-build"
+        },
+        {
+          "id": "gate",
+          "short": "Gate() *PauseGate",
+          "full": "func (h *Week04Host) Gate() *runstate.PauseGate",
+          "desc": "同一门禁供外部宿主推进模型与Pause；Continue期间普通推进由Continue独占。",
+          "source": "w4-gate"
+        },
+        {
+          "id": "continue",
+          "short": "Continue(decision, queryCtx, source)",
+          "full": "func (h *Week04Host) Continue(decision runstate.ApprovalDecision, queryCtx context.Context, source runstate.ToolOutcomeSource) (report Week04Report, err error)",
+          "desc": "Decide→候选Gob→Resolve；批准才执行一次，执行错误才Reconcile。不调用Agent.RunWithState，不Save。",
+          "source": "w4-continue"
+        }
+      ],
+      "source": "w4-type",
+      "kind": "function"
+    },
+    "week04exec": {
+      "x": 254,
+      "y": 840,
+      "namespace": "assembly · callback",
+      "title": "ToolBatchExecutor",
+      "desc": "原ctx下的一次业务I/O",
+      "fields": [],
+      "methods": [
+        {
+          "id": "execute",
+          "short": "execute(ctx, calls)",
+          "full": "type ToolBatchExecutor func(context.Context, []model.ToolCall) ([]model.Message, error)",
+          "desc": "原Run.Context及owned Pending，正常整批回填；错误时忽略部分results，保留ExecutionErr。",
+          "source": "w4-execute"
+        }
+      ],
+      "source": "w4-type",
+      "kind": "interface"
+    },
+    "week04report": {
+      "x": 484,
+      "y": 840,
+      "namespace": "assembly · value",
+      "title": "Week04Report",
+      "desc": "保留已完成阶段与执行原因",
+      "fields": [
+        "Pause PauseSnapshot",
+        "Payload []byte",
+        "State State",
+        "ExecutionErr error",
+        "Reconciled bool"
+      ],
+      "methods": [],
+      "source": "w4-report",
+      "kind": "value"
     }
   },
   "edges": {
@@ -2132,6 +2206,123 @@ a {color:var(--blue);text-underline-offset:3px}
         700,
         634
       ]
+    },
+    "w4-new": {
+      "a": "week04.build",
+      "b": "hnew.new",
+      "ports": "tl",
+      "kind": "call",
+      "label": "创建原Run",
+      "via": [
+        [
+          125,
+          818
+        ],
+        [
+          8,
+          818
+        ],
+        [
+          8,
+          83
+        ]
+      ]
+    },
+    "w4-decision": {
+      "a": "week04.continue",
+      "b": "decision.decide",
+      "ports": "tl",
+      "kind": "call",
+      "label": "记录/消费",
+      "via": [
+        [
+          125,
+          818
+        ],
+        [
+          704,
+          818
+        ],
+        [
+          704,
+          318
+        ]
+      ]
+    },
+    "w4-snapshot": {
+      "a": "week04.continue",
+      "b": "snapshot.snap",
+      "ports": "tl",
+      "kind": "call",
+      "label": "候选往返",
+      "via": [
+        [
+          125,
+          818
+        ],
+        [
+          934,
+          818
+        ],
+        [
+          934,
+          318
+        ]
+      ]
+    },
+    "w4-execute": {
+      "a": "week04.continue",
+      "b": "week04exec.execute",
+      "ports": "rl",
+      "kind": "dep",
+      "label": "批准后执行一次",
+      "via": []
+    },
+    "w4-reconcile": {
+      "a": "week04.continue",
+      "b": "recon.query",
+      "ports": "tl",
+      "kind": "call",
+      "label": "仅执行error时",
+      "via": [
+        [
+          125,
+          818
+        ],
+        [
+          474,
+          818
+        ],
+        [
+          474,
+          520
+        ]
+      ]
+    },
+    "w4-report": {
+      "a": "week04.continue",
+      "b": "week04report",
+      "ports": "rl",
+      "kind": "data",
+      "label": "组合报告",
+      "via": [
+        [
+          236,
+          1007
+        ],
+        [
+          236,
+          1044
+        ],
+        [
+          474,
+          1044
+        ],
+        [
+          474,
+          874
+        ]
+      ]
     }
   },
   "sources": {
@@ -2139,7 +2330,7 @@ a {color:var(--blue);text-underline-offset:3px}
       "path": "examples/internal/assembly/week02.go",
       "start": 34,
       "end": 53,
-      "code": "// Build initializes/discovers capabilities but does not invoke business tools.\n// The caller owns transport cleanup; a failed/ambiguous session is not replayed.\nfunc Build(ctx context.Context, c Config) (*Runtime, error) {\n\tif err := ctx.Err(); err != nil {\n\t\treturn nil, err\n\t}\n\tif c.Model == nil || c.Local == nil || c.Transport == nil || c.MaxPages \u003c= 0 || c.MaxSteps \u003c= 0 || c.ToolTimeout \u003c 0 {\n\t\treturn nil, fmt.Errorf(\"assembly: invalid config\")\n\t}\n\tclient, err := mcp.NewClient(c.Transport)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tif _, err = client.Initialize(ctx); err != nil {\n\t\treturn nil, err\n\t}\n\tcandidates, err := mcptool.Discover(ctx, client, c.Prefix, c.MaxPages)\n\tif err != nil {\n\t\treturn nil, err\n\t}"
+      "code": "// Build initializes/discovers capabilities but does not invoke business tools.\n// The caller owns transport cleanup; a failed/ambiguous session is not replayed.\nfunc Build(ctx context.Context, c Config) (*Runtime, error) {\n\tif err := ctx.Err(); err != nil {\n\t\treturn nil, err\n\t}\n\tif c.Model == nil || c.Local == nil || c.Transport == nil || c.MaxPages <= 0 || c.MaxSteps <= 0 || c.ToolTimeout < 0 {\n\t\treturn nil, fmt.Errorf(\"assembly: invalid config\")\n\t}\n\tclient, err := mcp.NewClient(c.Transport)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tif _, err = client.Initialize(ctx); err != nil {\n\t\treturn nil, err\n\t}\n\tcandidates, err := mcptool.Discover(ctx, client, c.Prefix, c.MaxPages)\n\tif err != nil {\n\t\treturn nil, err\n\t}"
     },
     "mcp-106-142": {
       "path": "examples/internal/mcp/client.go",
@@ -2157,7 +2348,7 @@ a {color:var(--blue);text-underline-offset:3px}
       "path": "examples/internal/tool/mcptool/discovery.go",
       "start": 12,
       "end": 33,
-      "code": "func Discover(ctx context.Context, caller Caller, prefix string, maxPages int) ([]tool.Invokable, error) {\n\tif caller == nil || !prefixPattern.MatchString(prefix) || maxPages \u003c= 0 {\n\t\treturn nil, fmt.Errorf(\"%w: invalid discovery configuration\", ErrDiscovery)\n\t}\n\ttools := make([]tool.Invokable, 0)\n\tseenNames := make(map[string]bool)\n\tseenCursors := map[string]bool{\"\": true}\n\tcursor := \"\"\n\tfor pageNumber := 0; pageNumber \u003c maxPages; pageNumber++ {\n\t\tif err := ctx.Err(); err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tpage, err := caller.ListTools(ctx, cursor)\n\t\tif ctx.Err() != nil {\n\t\t\treturn nil, ctx.Err()\n\t\t}\n\t\tif err != nil {\n\t\t\treturn nil, fmt.Errorf(\"mcptool: listing tools: %w\", err)\n\t\t}\n\t\tif page.Tools == nil {\n\t\t\treturn nil, fmt.Errorf(\"%w: tools array required\", ErrDiscovery)\n\t\t}"
+      "code": "func Discover(ctx context.Context, caller Caller, prefix string, maxPages int) ([]tool.Invokable, error) {\n\tif caller == nil || !prefixPattern.MatchString(prefix) || maxPages <= 0 {\n\t\treturn nil, fmt.Errorf(\"%w: invalid discovery configuration\", ErrDiscovery)\n\t}\n\ttools := make([]tool.Invokable, 0)\n\tseenNames := make(map[string]bool)\n\tseenCursors := map[string]bool{\"\": true}\n\tcursor := \"\"\n\tfor pageNumber := 0; pageNumber < maxPages; pageNumber++ {\n\t\tif err := ctx.Err(); err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tpage, err := caller.ListTools(ctx, cursor)\n\t\tif ctx.Err() != nil {\n\t\t\treturn nil, ctx.Err()\n\t\t}\n\t\tif err != nil {\n\t\t\treturn nil, fmt.Errorf(\"mcptool: listing tools: %w\", err)\n\t\t}\n\t\tif page.Tools == nil {\n\t\t\treturn nil, fmt.Errorf(\"%w: tools array required\", ErrDiscovery)\n\t\t}"
     },
     "remote-44-51": {
       "path": "examples/internal/tool/mcptool/adapter.go",
@@ -2187,7 +2378,7 @@ a {color:var(--blue);text-underline-offset:3px}
       "path": "examples/internal/agent/agent.go",
       "start": 29,
       "end": 51,
-      "code": "func New(m model.Model, tools map[string]tool.Tool, maxSteps int, opts ...Option) (*Agent, error) {\n\tif m == nil || maxSteps \u003c= 0 {\n\t\treturn nil, fmt.Errorf(\"agent: model and positive maxSteps required\")\n\t}\n\ta := &Agent{model: m, tools: make(map[string]tool.Tool), maxSteps: maxSteps}\n\tfor _, opt := range opts {\n\t\tif opt != nil {\n\t\t\topt(a)\n\t\t}\n\t}\n\tif a.authorizationSet && a.authorizer == nil {\n\t\treturn nil, fmt.Errorf(\"agent: nil authorizer\")\n\t}\n\tif a.toolTimeout \u003c 0 {\n\t\treturn nil, fmt.Errorf(\"agent: negative timeout\")\n\t}\n\tnames := make([]string, 0, len(tools))\n\tfor name, t := range tools {\n\t\tif t == nil || name == \"\" || name != t.Name() {\n\t\t\treturn nil, fmt.Errorf(\"agent: invalid tool registration %q\", name)\n\t\t}\n\t\ta.tools[name] = t\n\t\tnames = append(names, name)"
+      "code": "func New(m model.Model, tools map[string]tool.Tool, maxSteps int, opts ...Option) (*Agent, error) {\n\tif m == nil || maxSteps <= 0 {\n\t\treturn nil, fmt.Errorf(\"agent: model and positive maxSteps required\")\n\t}\n\ta := &Agent{model: m, tools: make(map[string]tool.Tool), maxSteps: maxSteps}\n\tfor _, opt := range opts {\n\t\tif opt != nil {\n\t\t\topt(a)\n\t\t}\n\t}\n\tif a.authorizationSet && a.authorizer == nil {\n\t\treturn nil, fmt.Errorf(\"agent: nil authorizer\")\n\t}\n\tif a.toolTimeout < 0 {\n\t\treturn nil, fmt.Errorf(\"agent: negative timeout\")\n\t}\n\tnames := make([]string, 0, len(tools))\n\tfor name, t := range tools {\n\t\tif t == nil || name == \"\" || name != t.Name() {\n\t\t\treturn nil, fmt.Errorf(\"agent: invalid tool registration %q\", name)\n\t\t}\n\t\ta.tools[name] = t\n\t\tnames = append(names, name)"
     },
     "build-63-88": {
       "path": "examples/internal/assembly/week02.go",
@@ -2247,7 +2438,7 @@ a {color:var(--blue);text-underline-offset:3px}
       "path": "examples/internal/agent/agent.go",
       "start": 133,
       "end": 161,
-      "code": "\tfor record.data.Step = 1; record.data.Step \u003c= a.maxSteps; record.data.Step++ {\n\t\tif err := ctx.Err(); err != nil {\n\t\t\treturn RunResult{}, err\n\t\t}\n\t\ta.emit(ctx, Event{Type: EventStepStarted, Step: record.data.Step, Status: \"ok\"})\n\t\tstart := time.Now()\n\t\tr, err := a.model.Generate(ctx, record.data.Messages)\n\t\tif ctx.Err() != nil {\n\t\t\terr = ctx.Err()\n\t\t}\n\t\tif err == nil && r == nil {\n\t\t\terr = fmt.Errorf(\"agent: nil model response\")\n\t\t}\n\t\ta.emit(ctx, Event{Type: EventModelCompleted, Step: record.data.Step, Duration: time.Since(start), Status: status(err)})\n\t\tif err != nil {\n\t\t\treturn RunResult{}, err\n\t\t}\n\t\tif r.Message.Role != \"assistant\" {\n\t\t\treturn RunResult{}, fmt.Errorf(\"agent: expected assistant message\")\n\t\t}\n\t\trecord.data.Messages = append(record.data.Messages, r.Message)\n\t\tif len(r.Message.ToolCalls) == 0 {\n\t\t\treturn RunResult{Output: r.Message.Content}, nil\n\t\t}\n\t\tresults, err := a.executeBatchWithState(ctx, r.Message.ToolCalls, record.data.Step, record)\n\t\tif err != nil {\n\t\t\treturn RunResult{}, err\n\t\t}\n\t\trecord.data.Messages = append(record.data.Messages, results...)"
+      "code": "\tfor record.data.Step = 1; record.data.Step <= a.maxSteps; record.data.Step++ {\n\t\tif err := ctx.Err(); err != nil {\n\t\t\treturn RunResult{}, err\n\t\t}\n\t\ta.emit(ctx, Event{Type: EventStepStarted, Step: record.data.Step, Status: \"ok\"})\n\t\tstart := time.Now()\n\t\tr, err := a.model.Generate(ctx, record.data.Messages)\n\t\tif ctx.Err() != nil {\n\t\t\terr = ctx.Err()\n\t\t}\n\t\tif err == nil && r == nil {\n\t\t\terr = fmt.Errorf(\"agent: nil model response\")\n\t\t}\n\t\ta.emit(ctx, Event{Type: EventModelCompleted, Step: record.data.Step, Duration: time.Since(start), Status: status(err)})\n\t\tif err != nil {\n\t\t\treturn RunResult{}, err\n\t\t}\n\t\tif r.Message.Role != \"assistant\" {\n\t\t\treturn RunResult{}, fmt.Errorf(\"agent: expected assistant message\")\n\t\t}\n\t\trecord.data.Messages = append(record.data.Messages, r.Message)\n\t\tif len(r.Message.ToolCalls) == 0 {\n\t\t\treturn RunResult{Output: r.Message.Content}, nil\n\t\t}\n\t\tresults, err := a.executeBatchWithState(ctx, r.Message.ToolCalls, record.data.Step, record)\n\t\tif err != nil {\n\t\t\treturn RunResult{}, err\n\t\t}\n\t\trecord.data.Messages = append(record.data.Messages, results...)"
     },
     "model-8-19": {
       "path": "examples/internal/model/model.go",
@@ -2295,7 +2486,7 @@ a {color:var(--blue);text-underline-offset:3px}
       "path": "examples/internal/agent/state.go",
       "start": 133,
       "end": 152,
-      "code": "func (r *runRecord) completeCall(index int, result *model.Message, err error) error {\n\tif r.data.Status != RunRunning || index \u003c 0 || index >= len(r.data.Calls) || r.data.Calls[index].Status != CallRunning {\n\t\treturn ErrInvalidTransition\n\t}\n\tcall := &r.data.Calls[index]\n\tif errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {\n\t\tcall.Status = CallUnconfirmed\n\t\treturn nil\n\t}\n\tif result == nil || result.Role != \"tool\" || result.ToolCallID != call.CallID {\n\t\treturn ErrInvalidTransition\n\t}\n\tm := cloneMessage(*result)\n\tcall.Result = &m\n\tcall.Status = CallReturned\n\tif err != nil {\n\t\tcall.Status = CallErrored\n\t}\n\treturn nil\n}"
+      "code": "func (r *runRecord) completeCall(index int, result *model.Message, err error) error {\n\tif r.data.Status != RunRunning || index < 0 || index >= len(r.data.Calls) || r.data.Calls[index].Status != CallRunning {\n\t\treturn ErrInvalidTransition\n\t}\n\tcall := &r.data.Calls[index]\n\tif errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {\n\t\tcall.Status = CallUnconfirmed\n\t\treturn nil\n\t}\n\tif result == nil || result.Role != \"tool\" || result.ToolCallID != call.CallID {\n\t\treturn ErrInvalidTransition\n\t}\n\tm := cloneMessage(*result)\n\tcall.Result = &m\n\tcall.Status = CallReturned\n\tif err != nil {\n\t\tcall.Status = CallErrored\n\t}\n\treturn nil\n}"
     },
     "batch-69-95": {
       "path": "examples/internal/agent/executor.go",
@@ -2367,13 +2558,13 @@ a {color:var(--blue);text-underline-offset:3px}
       "path": "examples/internal/tool/policy.go",
       "start": 46,
       "end": 84,
-      "code": "func (t *policyTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {\n\tif err := ctx.Err(); err != nil {\n\t\treturn \"\", err\n\t}\n\tif t.policy.Timeout > 0 {\n\t\tvar cancel context.CancelFunc\n\t\tctx, cancel = context.WithTimeout(ctx, t.policy.Timeout)\n\t\tdefer cancel()\n\t}\n\tfor attempt := 1; attempt \u003c= t.policy.MaxAttempts; attempt++ {\n\t\tif err := ctx.Err(); err != nil {\n\t\t\treturn \"\", err\n\t\t}\n\t\tresult, err := t.target.Execute(ctx, append(json.RawMessage(nil), args...))\n\t\tif ctx.Err() != nil {\n\t\t\treturn \"\", ctx.Err()\n\t\t}\n\t\tif err == nil {\n\t\t\tif t.policy.MaxResultBytes > 0 && len(result) > t.policy.MaxResultBytes {\n\t\t\t\treturn \"\", &Error{Kind: ExecutionError, Message: \"tool result exceeds byte budget\"}\n\t\t\t}\n\t\t\treturn result, nil\n\t\t}\n\t\tif errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {\n\t\t\treturn \"\", err\n\t\t}\n\t\tvar controlled *Error\n\t\tif errors.As(err, &controlled) || attempt == t.policy.MaxAttempts || t.policy.Retryable == nil || !t.policy.Retryable(err) {\n\t\t\treturn \"\", err\n\t\t}\n\t\tif t.policy.RetryDelay > 0 {\n\t\t\ttimer := time.NewTimer(t.policy.RetryDelay)\n\t\t\tselect {\n\t\t\tcase \u003c-ctx.Done():\n\t\t\t\ttimer.Stop()\n\t\t\t\treturn \"\", ctx.Err()\n\t\t\tcase \u003c-timer.C:\n\t\t\t}\n\t\t}"
+      "code": "func (t *policyTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {\n\tif err := ctx.Err(); err != nil {\n\t\treturn \"\", err\n\t}\n\tif t.policy.Timeout > 0 {\n\t\tvar cancel context.CancelFunc\n\t\tctx, cancel = context.WithTimeout(ctx, t.policy.Timeout)\n\t\tdefer cancel()\n\t}\n\tfor attempt := 1; attempt <= t.policy.MaxAttempts; attempt++ {\n\t\tif err := ctx.Err(); err != nil {\n\t\t\treturn \"\", err\n\t\t}\n\t\tresult, err := t.target.Execute(ctx, append(json.RawMessage(nil), args...))\n\t\tif ctx.Err() != nil {\n\t\t\treturn \"\", ctx.Err()\n\t\t}\n\t\tif err == nil {\n\t\t\tif t.policy.MaxResultBytes > 0 && len(result) > t.policy.MaxResultBytes {\n\t\t\t\treturn \"\", &Error{Kind: ExecutionError, Message: \"tool result exceeds byte budget\"}\n\t\t\t}\n\t\t\treturn result, nil\n\t\t}\n\t\tif errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {\n\t\t\treturn \"\", err\n\t\t}\n\t\tvar controlled *Error\n\t\tif errors.As(err, &controlled) || attempt == t.policy.MaxAttempts || t.policy.Retryable == nil || !t.policy.Retryable(err) {\n\t\t\treturn \"\", err\n\t\t}\n\t\tif t.policy.RetryDelay > 0 {\n\t\t\ttimer := time.NewTimer(t.policy.RetryDelay)\n\t\t\tselect {\n\t\t\tcase <-ctx.Done():\n\t\t\t\ttimer.Stop()\n\t\t\t\treturn \"\", ctx.Err()\n\t\t\tcase <-timer.C:\n\t\t\t}\n\t\t}"
     },
     "policy-13-42": {
       "path": "examples/internal/tool/policy.go",
       "start": 13,
       "end": 42,
-      "code": "// Policy applies to the whole logical call, including all retries and waits.\n// ReadOnly is an explicit application assertion, never inferred from a model.\ntype Policy struct {\n\tTimeout        time.Duration\n\tMaxAttempts    int\n\tReadOnly       bool\n\tRetryable      func(error) bool\n\tRetryDelay     time.Duration\n\tMaxResultBytes int\n}\n\n// WithPolicy preserves the legacy described-tool boundary used by Agent.\n// No automatic retry occurs unless both ReadOnly and Retryable permit it.\nfunc WithPolicy(t DescribedTool, p Policy) (DescribedTool, error) {\n\tif t == nil || p.Timeout \u003c 0 || p.MaxAttempts \u003c 0 || p.RetryDelay \u003c 0 || p.MaxResultBytes \u003c 0 {\n\t\treturn nil, fmt.Errorf(\"tool: invalid policy\")\n\t}\n\tif p.MaxAttempts == 0 {\n\t\tp.MaxAttempts = 1\n\t}\n\tif p.MaxAttempts > 1 && (!p.ReadOnly || p.Retryable == nil) {\n\t\treturn nil, fmt.Errorf(\"tool: retries require explicit read-only and retryable policy\")\n\t}\n\treturn &policyTool{target: t, policy: p}, nil\n}\n\ntype policyTool struct {\n\ttarget DescribedTool\n\tpolicy Policy\n}"
+      "code": "// Policy applies to the whole logical call, including all retries and waits.\n// ReadOnly is an explicit application assertion, never inferred from a model.\ntype Policy struct {\n\tTimeout        time.Duration\n\tMaxAttempts    int\n\tReadOnly       bool\n\tRetryable      func(error) bool\n\tRetryDelay     time.Duration\n\tMaxResultBytes int\n}\n\n// WithPolicy preserves the legacy described-tool boundary used by Agent.\n// No automatic retry occurs unless both ReadOnly and Retryable permit it.\nfunc WithPolicy(t DescribedTool, p Policy) (DescribedTool, error) {\n\tif t == nil || p.Timeout < 0 || p.MaxAttempts < 0 || p.RetryDelay < 0 || p.MaxResultBytes < 0 {\n\t\treturn nil, fmt.Errorf(\"tool: invalid policy\")\n\t}\n\tif p.MaxAttempts == 0 {\n\t\tp.MaxAttempts = 1\n\t}\n\tif p.MaxAttempts > 1 && (!p.ReadOnly || p.Retryable == nil) {\n\t\treturn nil, fmt.Errorf(\"tool: retries require explicit read-only and retryable policy\")\n\t}\n\treturn &policyTool{target: t, policy: p}, nil\n}\n\ntype policyTool struct {\n\ttarget DescribedTool\n\tpolicy Policy\n}"
     },
     "run-16-30": {
       "path": "examples/internal/runstate/run.go",
@@ -2385,7 +2576,7 @@ a {color:var(--blue);text-underline-offset:3px}
       "path": "examples/internal/runstate/state.go",
       "start": 54,
       "end": 59,
-      "code": "func New(runID, input string, maxSteps int) (State, error) {\n\tif strings.TrimSpace(runID) == \"\" || maxSteps \u003c= 0 {\n\t\treturn State{}, ErrTransition\n\t}\n\treturn State{RunID: runID, Phase: Ready, MaxSteps: maxSteps, Messages: []model.Message{{Role: \"user\", Content: input}}}, nil\n}"
+      "code": "func New(runID, input string, maxSteps int) (State, error) {\n\tif strings.TrimSpace(runID) == \"\" || maxSteps <= 0 {\n\t\treturn State{}, ErrTransition\n\t}\n\treturn State{RunID: runID, Phase: Ready, MaxSteps: maxSteps, Messages: []model.Message{{Role: \"user\", Content: input}}}, nil\n}"
     },
     "pause-23-38": {
       "path": "examples/internal/runstate/pause.go",
@@ -2493,7 +2684,7 @@ a {color:var(--blue);text-underline-offset:3px}
       "path": "examples/internal/runstate/pause_snapshot.go",
       "start": 10,
       "end": 23,
-      "code": "const (\n\tPauseSnapshotSchema   = 1\n\tMaxPauseSnapshotBytes = 1 \u003c\u003c 20\n)\n\nvar ErrInvalidPauseSnapshot = errors.New(\"runstate: invalid pause snapshot\")\n\n// PauseSnapshot is a versioned host-owned candidate, not a saved receipt,\n// restored Gate, fresh-state proof, approval credential or execution lease.\ntype PauseSnapshot struct {\n\tSchemaVersion int\n\tRequest       PauseRequest\n\tDecision      *ApprovalDecision\n}"
+      "code": "const (\n\tPauseSnapshotSchema   = 1\n\tMaxPauseSnapshotBytes = 1 << 20\n)\n\nvar ErrInvalidPauseSnapshot = errors.New(\"runstate: invalid pause snapshot\")\n\n// PauseSnapshot is a versioned host-owned candidate, not a saved receipt,\n// restored Gate, fresh-state proof, approval credential or execution lease.\ntype PauseSnapshot struct {\n\tSchemaVersion int\n\tRequest       PauseRequest\n\tDecision      *ApprovalDecision\n}"
     },
     "pause-40-40": {
       "path": "examples/internal/runstate/pause.go",
@@ -2619,7 +2810,7 @@ a {color:var(--blue);text-underline-offset:3px}
       "path": "examples/internal/agent/agent.go",
       "start": 133,
       "end": 149,
-      "code": "\tfor record.data.Step = 1; record.data.Step \u003c= a.maxSteps; record.data.Step++ {\n\t\tif err := ctx.Err(); err != nil {\n\t\t\treturn RunResult{}, err\n\t\t}\n\t\ta.emit(ctx, Event{Type: EventStepStarted, Step: record.data.Step, Status: \"ok\"})\n\t\tstart := time.Now()\n\t\tr, err := a.model.Generate(ctx, record.data.Messages)\n\t\tif ctx.Err() != nil {\n\t\t\terr = ctx.Err()\n\t\t}\n\t\tif err == nil && r == nil {\n\t\t\terr = fmt.Errorf(\"agent: nil model response\")\n\t\t}\n\t\ta.emit(ctx, Event{Type: EventModelCompleted, Step: record.data.Step, Duration: time.Since(start), Status: status(err)})\n\t\tif err != nil {\n\t\t\treturn RunResult{}, err\n\t\t}"
+      "code": "\tfor record.data.Step = 1; record.data.Step <= a.maxSteps; record.data.Step++ {\n\t\tif err := ctx.Err(); err != nil {\n\t\t\treturn RunResult{}, err\n\t\t}\n\t\ta.emit(ctx, Event{Type: EventStepStarted, Step: record.data.Step, Status: \"ok\"})\n\t\tstart := time.Now()\n\t\tr, err := a.model.Generate(ctx, record.data.Messages)\n\t\tif ctx.Err() != nil {\n\t\t\terr = ctx.Err()\n\t\t}\n\t\tif err == nil && r == nil {\n\t\t\terr = fmt.Errorf(\"agent: nil model response\")\n\t\t}\n\t\ta.emit(ctx, Event{Type: EventModelCompleted, Step: record.data.Step, Duration: time.Since(start), Status: status(err)})\n\t\tif err != nil {\n\t\t\treturn RunResult{}, err\n\t\t}"
     },
     "a-150-161": {
       "path": "examples/internal/agent/agent.go",
@@ -2698,6 +2889,48 @@ a {color:var(--blue);text-underline-offset:3px}
       "start": 97,
       "end": 128,
       "code": "\t\tv := e.Evidence\n\t\tif e.RunID != observed.RunID || e.Step != observed.Step || v.Call.ID != call.ID || v.Call.Name != call.Name ||\n\t\t\t!bytes.Equal(v.Call.Arguments, call.Arguments) || v.IdempotencyKey != \"\" {\n\t\t\treturn ToolOutcomeReport{}, ErrReplayEvidence\n\t\t}\n\t\tswitch v.Basis {\n\t\tcase BasisUnknown, BasisNotStarted:\n\t\t\tif v.Result != nil {\n\t\t\t\treturn ToolOutcomeReport{}, ErrReplayEvidence\n\t\t\t}\n\t\t\tout.AllResultsKnown = false\n\t\tcase BasisResultKnown:\n\t\t\tif v.Result == nil || v.Result.Role != \"tool\" || v.Result.ToolCallID != call.ID || len(v.Result.ToolCalls) != 0 {\n\t\t\t\treturn ToolOutcomeReport{}, ErrReplayEvidence\n\t\t\t}\n\t\t\tresults[i] = cloneMessages([]model.Message{*v.Result})[0]\n\t\t\tmsg := cloneMessages([]model.Message{*v.Result})[0]\n\t\t\tv.Result = &msg\n\t\tdefault: // BackendDedup is a retry policy assertion, not a known outcome.\n\t\t\treturn ToolOutcomeReport{}, ErrReplayEvidence\n\t\t}\n\t\tv.Call = cloneCalls([]model.ToolCall{call})[0]\n\t\tout.Evidence[i] = ToolOutcomeEvidence{RunID: e.RunID, Step: e.Step, Evidence: v}\n\t}\n\tif err := ctx.Err(); err != nil {\n\t\treturn ToolOutcomeReport{}, err\n\t}\n\tif out.AllResultsKnown {\n\t\tout.Results = results\n\t}\n\treturn out, nil\n}"
+    },
+    "w4-type": {
+      "path": "examples/internal/assembly/week04.go",
+      "start": 13,
+      "end": 21,
+      "code": "// ToolBatchExecutor is the host's actual I/O boundary, not an outcome lookup.\n// It must cooperate with ctx and return results in original call order.\ntype ToolBatchExecutor func(context.Context, []model.ToolCall) ([]model.Message, error)\n\ntype Week04Host struct {\n\trun     *runstate.Run\n\tgate    *runstate.PauseGate\n\texecute ToolBatchExecutor\n}"
+    },
+    "w4-report": {
+      "path": "examples/internal/assembly/week04.go",
+      "start": 23,
+      "end": 31,
+      "code": "// Week04Report retains the completed teaching stages even on error. Payload is\n// encoded data, NOT a saved receipt. ExecutionErr is retained after reconciliation.\ntype Week04Report struct {\n\tPause        runstate.PauseSnapshot\n\tPayload      []byte\n\tState        runstate.State\n\tExecutionErr error\n\tReconciled   bool\n}"
+    },
+    "w4-build": {
+      "path": "examples/internal/assembly/week04.go",
+      "start": 33,
+      "end": 46,
+      "code": "func BuildWeek04(ctx context.Context, runID, input string, maxSteps int, execute ToolBatchExecutor) (*Week04Host, error) {\n\tr, err := runstate.NewRun(ctx, runID, input, maxSteps)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tif execute == nil {\n\t\treturn nil, ErrWeek04ExecutorRequired\n\t}\n\tg, err := runstate.NewPauseGate(r)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\treturn &Week04Host{run: r, gate: g, execute: execute}, nil\n}"
+    },
+    "w4-gate": {
+      "path": "examples/internal/assembly/week04.go",
+      "start": 48,
+      "end": 51,
+      "code": "// Gate returns the SAME gate for host-driven model events and pause requests.\n// Continue owns normal advancement while it runs; other host writes are limited\n// to cancellation. Do not concurrently run Continue or bypass this gate.\nfunc (h *Week04Host) Gate() *runstate.PauseGate { return h.gate }"
+    },
+    "w4-continue": {
+      "path": "examples/internal/assembly/week04.go",
+      "start": 53,
+      "end": 80,
+      "code": "// Continue composes recording, codec, resolution, execution and optional outcome\n// reconciliation. It starts from a held pause, never retries tools and never saves\n// or recreates a Run. A valid queryCtx/source is needed only after execution error.\nfunc (h *Week04Host) Continue(decision runstate.ApprovalDecision, queryCtx context.Context, source runstate.ToolOutcomeSource) (report Week04Report, err error) {\n\tdefer func() { report.State = h.gate.Snapshot() }()\n\tif _, err = h.gate.Decide(decision); err != nil {\n\t\treturn\n\t}\n\treport.Pause, err = h.gate.PauseSnapshot()\n\tif err != nil {\n\t\treturn\n\t}\n\treport.Payload, err = runstate.EncodePauseSnapshot(report.Pause)\n\tif err != nil {\n\t\treturn\n\t}\n\treport.Pause, err = runstate.DecodePauseSnapshot(report.Payload)\n\tif err != nil {\n\t\treturn\n\t}\n\tstate, resolveErr := h.gate.ResolveDecision(decision.RunID, decision.RequestID)\n\tif resolveErr != nil {\n\t\terr = resolveErr\n\t\treturn\n\t}\n\tif state.Phase == runstate.Failed { // a host rejection is successful handling\n\t\treturn\n\t}"
+    },
+    "w4-execute": {
+      "path": "examples/internal/assembly/week04.go",
+      "start": 81,
+      "end": 95,
+      "code": "\tif h.run.Context().Err() != nil {\n\t\t_, err = h.gate.Apply(runstate.Event{Kind: runstate.Cancel})\n\t\treturn\n\t}\n\t// state is an owned copy; the execution port may modify its input buffers.\n\tresults, executionErr := h.execute(h.run.Context(), state.Pending)\n\treport.ExecutionErr = executionErr\n\tif h.run.Context().Err() != nil {\n\t\t_, err = h.gate.Apply(runstate.Event{Kind: runstate.Cancel})\n\t\treturn\n\t}\n\tif executionErr == nil {\n\t\t_, err = h.gate.Apply(runstate.Event{Kind: runstate.ToolsReturned, Results: results})\n\t\treturn\n\t}"
+    },
+    "w4-reconcile": {
+      "path": "examples/internal/assembly/week04.go",
+      "start": 96,
+      "end": 99,
+      "code": "\t_, err = h.gate.ReconcileToolResults(queryCtx, source)\n\treport.Reconciled = err == nil\n\treturn\n}"
     }
   },
   "extra": {
@@ -2761,8 +2994,21 @@ a {color:var(--blue);text-underline-offset:3px}
       "review",
       "recovery",
       "replay",
-      "hostio"
+      "hostio",
+      "week04",
+      "week04exec",
+      "week04report"
     ]
+  },
+  "analysis": {
+    "previousCommit": "9fd4463e27d27e3c8e992e03e88c4ccb793ff829",
+    "referenceCommit": "c2a87ce1593082555e7bf1ca4eee45bd26652c51",
+    "changedReferencePaths": [
+      "examples/internal/assembly/week04.go",
+      "examples/internal/assembly/week04_test.go"
+    ],
+    "scope": "examples only; root internal/cmd excluded",
+    "note": "Prior examples source blobs unchanged. Preserve all old node/method IDs, coordinates and existing reducers. Day28 adds an opt-in host composition simulation; no live backend execution."
   }
 }
 </script>
@@ -3057,7 +3303,7 @@ const agentTransitions = {
 
 function hostState(s) {
   return structuredClone({
-    RunID:'r27',Phase:s.phase,Step:s.round,MaxSteps:s.maxSteps,Messages:s.messages,
+    RunID:(s.config.week04?'r28':'r27'),Phase:s.phase,Step:s.round,MaxSteps:s.maxSteps,Messages:s.messages,
     Pending:s.pending.length ? s.pending : null,Result:s.output,Failure:s.hostFailure || ''
   });
 }
@@ -3138,7 +3384,7 @@ const hostTransitions={
   start(s) {
     s.phase='ready';
     s.messages=[description('user', s.config.prompt)];
-    return step(s,'h-new','hnew.new','创建独立 Run',{from:'测试式宿主驱动',input:{ctx:'原始执行 context',runID:'r27',input:s.config.prompt,maxSteps:s.maxSteps},output:hostState(s)});
+    return step(s,'h-new','hnew.new','创建独立 Run',{from:'测试式宿主驱动',input:{ctx:'原始执行 context',runID:(s.config.week04?'r28':'r27'),input:s.config.prompt,maxSteps:s.maxSteps},output:hostState(s)});
   },
   'h-new'(s) { return step(s,'h-gate','hgate.new','装配唯一的暂停门禁',{edges:['h-init'],from:'宿主',input:'*Run',output:'(*PauseGate, nil)',cancel:true}); },
   'h-gate'(s, action) { return action === 'cancel' ? hostCancel(s) : hostStartModel(s); },
@@ -3149,7 +3395,7 @@ const hostTransitions={
     s.modelResponse={Message:assistant(needTools ? '' : '摘要',calls)};
     return step(s,'h-model','hmodel.gen','宿主取得模型响应',{
       edges:['h-start'],from:'宿主 · 锁外 I/O 边界',
-      input:{ctx:'原始执行 context', messages:s.messages},output:s.modelResponse,reason:'Day 27 测试直接提供脚本响应，运行时模型实现由宿主选择。',cancel:true
+      input:{ctx:'原始执行 context', messages:s.messages},output:s.modelResponse,reason:'宿主测试直接提供脚本响应，运行时模型实现由宿主选择。',cancel:true
     });
   },
   'h-model'(s, action) {
@@ -3184,20 +3430,20 @@ const hostTransitions={
   },
   'h-save'(s, action) {
     if (action === 'cancel') return hostCancel(s);
-    return step(s,'h-review','review.review','请求只读恢复审查',{edges:['h-review','h-plan'],from:'宿主 → assembly.ReviewWeek03',input:{runID:'r27',store:'MemoryCheckpointStore',source:'宿主证据夹具'},reason:'读取保存的运行位置，按需生成重放建议。',cancel:true});
+    return step(s,'h-review','review.review','请求只读恢复审查',{edges:['h-review','h-plan'],from:'宿主 → assembly.ReviewWeek03',input:{runID:(s.config.week04?'r28':'r27'),store:'MemoryCheckpointStore',source:'宿主证据夹具'},reason:'读取保存的运行位置，按需生成重放建议。',cancel:true});
   },
   'h-review'(s, action) {
     if (action === 'cancel') return hostCancel(s);
-    return step(s,'h-recovery','recovery.plan','分类 Checkpoint',{edges:['h-load'],from:'ReviewWeek03 → PlanRecovery → CheckpointStore.Load',input:{RunID:'r27'},output:{Position:'review_pending',Record:s.stored},reason:'ToolsPending 存档需要宿主提供证据。',cancel:true});
+    return step(s,'h-recovery','recovery.plan','分类 Checkpoint',{edges:['h-load'],from:'ReviewWeek03 → PlanRecovery → CheckpointStore.Load',input:{RunID:(s.config.week04?'r28':'r27')},output:{Position:'review_pending',Record:s.stored},reason:'ToolsPending 存档需要宿主提供证据。',cancel:true});
   },
   'h-recovery'(s, action) {
     if (action === 'cancel') return hostCancel(s);
-    return step(s,'h-replay','replay.plan','生成只读重放建议',{edges:['h-replay'],from:'ReviewWeek03 → ReplayEvidenceSource → PlanReplay',input:{RunID:'r27',Version:1,Evidence:'每项 Unknown'},output:{Blocked:true,Steps:s.pending.map(Call=>({Call,Action:'hold'}))},reason:'Unknown 阻塞整批。此报告只描述保存记录，不改变当前 Run。',cancel:true});
+    return step(s,'h-replay','replay.plan','生成只读重放建议',{edges:['h-replay'],from:'ReviewWeek03 → ReplayEvidenceSource → PlanReplay',input:{RunID:(s.config.week04?'r28':'r27'),Version:1,Evidence:'每项 Unknown'},output:{Blocked:true,Steps:s.pending.map(Call=>({Call,Action:'hold'}))},reason:'Unknown 阻塞整批。此报告只描述保存记录，不改变当前 Run。',cancel:true});
   },
   'h-replay'(s, action) { return action === 'cancel' ? hostCancel(s) : hostWaitApproval(s); },
   'h-wait'(s, action) {
     if (action === 'cancel') return hostCancel(s);
-    s.decision={RunID:'r27',RequestID:'pause-1',Actor:'reviewer',Outcome:action,Reason:action==='approve'?'reviewed':'review rejected'};
+    s.decision={RunID:(s.config.week04?'r28':'r27'),RequestID:'pause-1',Actor:'reviewer',Outcome:action,Reason:action==='approve'?'reviewed':'review rejected'};
     return step(s,'h-recorded','decision.decide','记录首份审批决定',{
       edges:['h-decide'],from:'宿主 → PauseGate.Decide',input:s.decision,output:{Decision:s.decision,err:null},
       reason:'RunID 与 RequestID 都匹配；Decide 完成后仍是 ToolsPending，门禁仍暂停。',cancel:true
@@ -3205,7 +3451,7 @@ const hostTransitions={
   },
   'h-recorded'(s, action) {
     if (action === 'cancel') return hostCancel(s);
-    if (s.config.checkpoint) return step(s,'h-snapshot','snapshot.snap','捕获独立 PauseSnapshot',{
+    if (s.config.checkpoint || s.config.week04) return step(s,'h-snapshot','snapshot.snap','捕获独立 PauseSnapshot',{
       edges:['h-snap'],from:'宿主 → PauseGate.PauseSnapshot',
       input:{request:'pause-1',decision:s.decision.Outcome},output:{SchemaVersion:1,Request:s.pauseRequest,Decision:s.decision},
       reason:'在同一门禁锁内复制请求和决定。PauseSnapshot 与 CheckpointStore 的 CAS 版本各自独立。',cancel:true
@@ -3216,7 +3462,7 @@ const hostTransitions={
     if (action === 'cancel') return hostCancel(s);
     return step(s,'h-codec','snapshot.codec','模拟 Gob 往返',{from:'宿主 → EncodePauseSnapshot → DecodePauseSnapshot',input:{SchemaVersion:1},output:{SchemaVersion:1,Arguments:s.pending.map(c=>c.Arguments)},reason:'教学模拟保留候选字段和原参数字节。源码执行 Gob 编解码，捕获和编码不会写入 Store。',cancel:true});
   },
-  'h-codec'(s, action) { return action === 'cancel' ? hostCancel(s) : hostWaitResolve(s,['h-snapret']); },
+  'h-codec'(s, action) { return action === 'cancel' ? hostCancel(s) : s.config.week04 ? hostTransitions['h-resolve-wait'](s,'resolve') : hostWaitResolve(s,['h-snapret']); },
   'h-resolve-wait'(s, action) {
     if (action === 'cancel') return hostCancel(s);
     const approval=s.decision.Outcome==='approve';
@@ -3224,7 +3470,7 @@ const hostTransitions={
     s.err=hostApply(s,event);
     s.pauseRequest=null; s.decision=null;
     return step(s,'h-resolve','decision.resolve',approval?'批准，进入工具阶段':'拒绝，提交 Failed',{
-      edges:['h-advance','h-state'],from:'PauseGate.ResolveDecision → Run.Apply',input:{runID:'r27',requestID:'pause-1',event},
+      edges:['h-advance','h-state'],from:'PauseGate.ResolveDecision → Run.Apply',input:{runID:(s.config.week04?'r28':'r27'),requestID:'pause-1',event},
       output:{Phase:s.phase,Failure:s.hostFailure || '',err:null},
       reason:approval?'消费已记录决定并提交 StartTools。宿主在 nil error 且 ToolsRunning 时才有机会调用工具。':'宿主拒绝被转换为 Abort，返回 Failed 状态和 nil error。没有执行工具。',
       cancel:approval
@@ -3236,7 +3482,7 @@ const hostTransitions={
     return step(s,'h-io','hostio.io','宿主接管工具 I/O',{
       edges:['h-io'],from:'宿主 · 原始执行 context',
       input:{Pending:s.pending}, output:'选择宿主收到的结果或只读核验情形',
-      reason:'Day 27 的测试夹具提供工具回执。',wait:'outcome',choices:outcomeChoices,cancel:true
+      reason:'宿主在锁外执行I/O，当前页面使用离线夹具模拟回执。',wait:'outcome',choices:outcomeChoices,cancel:true
     });
   },
   'h-io'(s, action) {
@@ -3301,9 +3547,47 @@ const hostTransitions={
   'h-write'(s, action) { return action === 'cancel' ? hostCancel(s) : hostStartModel(s); },
   'h-end'(s) { return hostStepResult(s,'原始运行已结束，Pending 如实保留供观察。',['h-stop']); }
 };
+
+// Day28 opt-in composition: default reducers and stable refs remain intact.
+const baseHostStart28=hostTransitions.start;
+hostTransitions.start=function(s){
+  if(!s.config.week04) return baseHostStart28(s);
+  return step(s,'h-week04-build','week04.build','BuildWeek04配对宿主依赖',{from:'外部宿主',input:{ctx:'原执行context',runID:'r28',maxSteps:4,execute:'ToolBatchExecutor'},output:'Week04Host',reason:'创建同一Run与唯一Gate，不调用Agent.RunWithState。',source:'w4-build'});
+};
+hostTransitions['h-week04-build']=function(s){const out=baseHostStart28(s);out.view.from='BuildWeek04 → NewRun';out.view.edges=['w4-new'];return out;};
+const baseWait28=hostTransitions['h-wait'];
+hostTransitions['h-wait']=function(s,choice){
+  if(!s.config.week04||choice==='cancel')return baseWait28(s,choice);
+  s.week04Approval=choice;
+  return step(s,'h-week04-continue','week04.continue','进入Continue组合入口',{from:'可信宿主',input:{decision:choice,queryCtx:'独立查询context',source:'可信只读端口'},reason:'Continue独占普通推进，依次记录、捕获与消费；拒绝不访问两个端口。',source:'w4-continue'});
+};
+hostTransitions['h-week04-continue']=function(s){const out=baseWait28(s,s.week04Approval);out.view.from='Week04Host.Continue → PauseGate.Decide';out.view.edges.push('w4-decision');return out;};
+const baseRecorded28=hostTransitions['h-recorded'];
+hostTransitions['h-recorded']=function(s,choice){const out=baseRecorded28(s,choice);if(s.config.week04&&out.at==='h-snapshot'){s.week04Snapshot=structuredClone({SchemaVersion:1,Request:s.pauseRequest,Decision:s.decision});out.view.from='Week04Host.Continue → PauseSnapshot';out.view.edges.push('w4-snapshot');}return out;};
+const baseIO28=hostTransitions['h-io'];
+hostTransitions['h-io']=function(s,choice){
+  if(s.config.week04&&choice!=='cancel'){
+    s.invoked.push(...s.pending.map(c=>c.Name));
+    s.executionErr=choice==='normal'?null:'response missing';
+  }
+  const out=baseIO28(s,choice);
+  if(s.config.week04&&choice!=='cancel'){out.view.from=choice==='normal'?'Week04Host.Continue → Gate.Apply(ToolsReturned)':'Week04Host.Continue → ReconcileToolResults';out.view.edges.push(choice==='normal'?'w4-execute':'w4-reconcile');out.view.reason+=' Execute恰一次；部分results在error时丢弃，ExecutionErr保留。';}
+  return out;
+};
+const baseResolve28=hostTransitions['h-resolve'];
+hostTransitions['h-resolve']=function(s,choice){const out=baseResolve28(s,choice);if(s.config.week04&&out.at==='h-io'){out.view.ref='week04exec.execute';out.view.source='w4-execute';out.view.from='Week04Host.Continue → execute(originalCtx, owned Pending)';out.view.reason='选择执行端口正常返回或响应缺失后的核验情形；这里是离线教学模拟。';out.view.choices=outcomeChoices.filter(([id])=>id!=='conflict');}return out;};
+const baseCompare28=hostTransitions['h-compare'];
+hostTransitions['h-compare']=function(s,choice){const out=baseCompare28(s,choice);if(s.config.week04&&out.at==='h-write'&&!out.err)s.week04Reconciled=true;return out;};
+function week04Report28(s){return {Pause:s.week04Snapshot||null,Payload:s.week04Snapshot?'<离线模拟Gob字节；未保存>':null,State:hostState(s),ExecutionErr:s.executionErr||null,Reconciled:!!s.week04Reconciled};}
+const baseWrite28=hostTransitions['h-write'];
+hostTransitions['h-write']=function(s,choice){if(!s.config.week04||choice==='cancel')return baseWrite28(s,choice);s.week04Report=week04Report28(s);return step(s,'h-week04-report','week04report','Continue返回组合报告',{edges:['w4-report'],from:'Week04Host.Continue · defer Snapshot',output:s.week04Report,reason:'正常成功Reconciled=false；核验成功保留ExecutionErr且Reconciled=true。接下来由外部宿主推进模型。',source:'w4-report',cancel:true});};
+hostTransitions['h-week04-report']=function(s,choice){return choice==='cancel'?hostCancel(s):hostStartModel(s);};
+const baseResult28=hostStepResult;
+hostStepResult=function(s,reason,edges=[]){if(!s.config.week04||!s.week04Approval||s.week04Report)return baseResult28(s,reason,edges);return step(s,'done','week04report',s.err?'组合入口返回当前报告与错误':'宿主读取当前状态',{edges:[...edges,'w4-report'],from:'Week04Host / 外部宿主',output:week04Report28(s),reason,source:'w4-report'});};
+
 function hostWaitApproval(s) {
   return step(s,'h-wait','decision.decide','等待宿主审批',{
-    edges:['h-decide'],from:'PauseGate 暂停期间', input:{RunID:'r27',RequestID:'pause-1'},
+    edges:['h-decide'],from:'PauseGate 暂停期间', input:{RunID:(s.config.week04?'r28':'r27'),RequestID:'pause-1'},
     reason:'审批动作提交一份与持有请求匹配的 ApprovalDecision。',wait:'approval',choices:approvalChoices,cancel:true
   });
 }
@@ -3316,7 +3600,7 @@ function hostWaitResolve(s, edges=[]) {
 function hostLookup(s) {
   s.queries++;
   return step(s,'h-lookup','source.lookup','查询第 '+(s.lookupIndex+1)+' 项工具结果',{
-    edges:['h-lookup'],from:'InspectToolOutcomes',input:{queryCtx:'独立查询 context',ToolAttempt:{RunID:'r27',Step:s.round,Call:s.pending[s.lookupIndex]}},
+    edges:['h-lookup'],from:'InspectToolOutcomes',input:{queryCtx:'独立查询 context',ToolAttempt:{RunID:(s.config.week04?'r28':'r27'),Step:s.round,Call:s.pending[s.lookupIndex]}},
     reason:'只读查询该逻辑调用，按 Pending 的原顺序逐项处理。',cancel:!s.hostCancelled
   });
 }
@@ -3505,6 +3789,7 @@ function drawGraph(track) {
     const title=makeText(guides,'graph-title',24,y,label);
     guides.append(svg('path',{class:'graph-divider',d:'M'+(36+title.getComputedTextLength())+' '+(y-4)+'H1146'}));
   }
+  if(track==='host') makeText(guides,'graph-title',24,820,'第四周宿主组合 · 可选教学路径');
   const ids=new Set(architecture.tracks[track]);
   for (const [id,edge] of Object.entries(edges)) {
     if (ids.has(refParts(edge.a).id) && ids.has(refParts(edge.b).id)) drawLink(id,edge);
@@ -3524,7 +3809,7 @@ function fit() {
   const right=w-(narrow ? 11 : w<=1100 ? 240 : 319);
   const top=narrow ? 90 : 18;
   const bottom=h-(narrow ? 75 : 77);
-  const world={x:1,y:7,w:1171,h:803};
+  const world={x:1,y:7,w:1171,h:$('track').value==='host'?1055:803};
   view.scale=Math.max(.13,Math.min(1.22,(right-left)/world.w,(bottom-top)/world.h));
   view.x=left+(right-left-world.w*view.scale)/2-world.x*view.scale;
   view.y=top+(bottom-top-world.h*view.scale)/2-world.y*view.scale;
@@ -3637,7 +3922,7 @@ $('theme').onclick=()=>changeTheme(document.documentElement.dataset.theme==='dar
 function readConfig() {
   return {
     track:$('track').value, prompt:$('prompt').value, mode:$('model-mode').value,
-    access:$('access').value, effect:$('effect').value, checkpoint:$('checkpoint').checked
+    access:$('access').value, effect:$('effect').value, checkpoint:$('checkpoint').checked, week04:$('week04').checked
   };
 }
 function setModes(track) {
@@ -3655,7 +3940,7 @@ function configureTrack() {
   fit();
 }
 $('track').onchange=configureTrack;
-for (const id of ['prompt','model-mode','access','effect','checkpoint']) {
+for (const id of ['prompt','model-mode','access','effect','checkpoint','week04']) {
   $(id).addEventListener('change',()=>reset(index?'配置已更新，已回到起点':undefined));
 }
 function reset(message) {
@@ -3762,6 +4047,7 @@ function renderChoices(s) {
   $('access-field').hidden=!agent || !prechecked;
   $('effect-field').hidden=!agent || !prechecked || $('access').value==='deny';
   $('checkpoint-field').hidden=agent || !tools;
+  $('week04-field').hidden=agent;
   $('cancel-request').hidden=!s.view?.cancel;
   const view=s.view;
   const choiceBox=$('choices');

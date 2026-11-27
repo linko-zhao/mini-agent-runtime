@@ -1,0 +1,19 @@
+{
+  "embedded_files_match_attachments": 15,
+  "viewports": [
+    {
+      "width": 1280,
+      "scroll": 1280
+    },
+    {
+      "width": 390,
+      "scroll": 390
+    }
+  ],
+  "offline": true,
+  "keyboard_details": true,
+  "copy_action": true,
+  "checkbox_persists": true,
+  "relative_routes": true,
+  "script_errors": []
+}

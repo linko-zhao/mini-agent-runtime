@@ -1,0 +1,41 @@
+package assembly
+
+import (
+	"context"
+	"errors"
+
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+	"github.com/linko-zhao/mini-agent-runtime/internal/runstate"
+)
+
+var ErrWeek04ExecutorRequired = errors.New("assembly: week04 executor required")
+
+// ToolBatchExecutor is the host's actual I/O boundary, not an outcome lookup.
+// It must cooperate with ctx and return results in original call order.
+type ToolBatchExecutor func(context.Context, []model.ToolCall) ([]model.Message, error)
+
+type Week04Host struct {
+	run     *runstate.Run
+	gate    *runstate.PauseGate
+	execute ToolBatchExecutor
+}
+
+// Week04Report retains the completed teaching stages even on error. Payload is
+// encoded data, NOT a saved receipt. ExecutionErr is retained after reconciliation.
+type Week04Report struct {
+	Pause        runstate.PauseSnapshot
+	Payload      []byte
+	State        runstate.State
+	ExecutionErr error
+	Reconciled   bool
+}
+
+func BuildWeek04(ctx context.Context, runID, input string, maxSteps int, execute ToolBatchExecutor) (*Week04Host, error) {
+	panic("TODO: implement BuildWeek04")
+}
+func (h *Week04Host) Gate() *runstate.PauseGate {
+	panic("TODO: implement Gate")
+}
+func (h *Week04Host) Continue(decision runstate.ApprovalDecision, queryCtx context.Context, source runstate.ToolOutcomeSource) (Week04Report, error) {
+	panic("TODO: implement Continue")
+}

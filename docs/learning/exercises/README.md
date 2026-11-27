@@ -186,3 +186,9 @@ main 在本批讲义准备期间新增了 agent.RunWithState、RunSnapshot 与�
 原仓库根执行 `python3 docs/learning/exercises/prepare.py 27`，进入打印的仓库外副本，再运行 `go test ./internal/runstate -run '^$'` 与 `go test ./internal/runstate -run '^TestDay27' -count=1 -v`。材料不覆盖或验证原internal/cmd，测试import只映射examples/internal→internal。
 
 重跑 `python3 docs/learning/exercises/verify.py --go /你的Go/bin/go --days 27 --report /tmp/day27-verification.json`。见[原始红绿/累计记录](day27/verification.json)、[离线浏览器记录](day27/browser-verification.json)。channel确定竞争顺序，3秒timer只作死锁防护；本地一次提交不代表跨进程恢复或外部副作用exactly-once。
+
+## Day28：第四周集成复盘
+
+[Day28页面](../agent-runtime-day-28.html)内嵌week04.go完整装配TODO、九场景矩阵及额外边界测试、十二份runstate支持文件和末尾参考。共享根go.mod，练习internal/assembly、参考examples/internal/assembly，不修改旧接口或学习者代码。
+
+原仓库根运行 `python3 docs/learning/exercises/prepare.py 28`，进入打印的仓库外副本，再执行 `go test ./internal/assembly -run '^$'`、`go test ./internal/assembly -run '^TestDay28' -count=1 -v`。重跑材料验证：`python3 docs/learning/exercises/verify.py --go /你的Go/bin/go --days 28 --report /tmp/day28-verification.json`。见[原始红绿/累计记录](day28/verification.json)、[离线浏览器记录](day28/browser-verification.json)。

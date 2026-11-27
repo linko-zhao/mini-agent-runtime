@@ -462,3 +462,17 @@ EvidenceSource是可信宿主端口，应遵守只读核验约定；适配器自
 - 不自动重查/重试、不调用工具/模型、不Load/Save、不创建恢复Run。当前State不变只说明本地条件匹配，不证明来源真实/新鲜或授权、后端幂等、全局租约。新轮次即使相同调用ID/参数，Step/历史变化也使旧报告冲突。
 
 迁移只新增文件；宿主原Snapshot→Inspect→Apply故障分支可改为Gate.ReconcileToolResults，并同时检查本次error。成功后不再次手动ToolsReturned；原Inspect仍用于独立诊断。共享根go.mod，练习internal/runstate/reconcile.go，十份support为state/run/checkpoint/store/recovery/replay/pause/approval/resolve/outcome，前序依赖原样提供；reference import只examples/internal→internal映射，不改断言。原始红绿/race/累计记录见docs/learning/exercises/day27；学习者原实现、真实来源/工具/模型后端、持久恢复和分布式执行归属未验证。
+
+## Day28：第四周宿主集成
+
+新增examples/internal/assembly/week04.go、week04_test.go。ToolBatchExecutor func(context.Context,[]model.ToolCall)([]model.Message,error)为真实I/O端口，要求原ctx合作取消、原序结果、输入可改副本和owned输出；不是Lookup，也不绕过宿主授权/策略。Week04Host私有持有原Run、唯一Gate和执行回调，零值不可用、不复制。
+
+BuildWeek04(ctx,runID,input,maxSteps,execute)(*Week04Host,error)先NewRun，保留其ctx/输入错误，再检查execute非nil否则ErrWeek04ExecutorRequired，再NewPauseGate。Gate()稳定返回同一指针供宿主推进模型事件与Pause。Continue期间由它独占普通推进，其他写入仅限取消，不并发Continue或推进其它模型轮次；不同Host可在端口支持时独立并发。
+
+Week04Report{Pause PauseSnapshot; Payload []byte; State State; ExecutionErr error; Reconciled bool}保留已完成阶段，不是零报告错误契约。State每次返回前独立快照；Pause/编码字节/State分别拥有数据。Payload只是候选，不是保存确认；ExecutionErr保留执行回调原错误，即使核验成功；Reconciled仅在执行error后Reconcile成功才true，正常成功为false。
+
+Continue(decision,queryCtx,source)(Week04Report,error)：Decide→PauseSnapshot→Encode→Decode→ResolveDecision；任何失败立即返回，已记录决定不回滚。reject→Failed/nil，零执行零查询。批准ToolsRunning后先查原ctx再执行恰一次，传原Run.Context及owned Pending；执行后再观察原ctx，取消优先委托Gate.Apply记录取消，丢弃迟到值/错误，不查询。ExecutionErr保留。无执行error时Gate.Apply(ToolsReturned)；错误形状返回原转换错误，不自动改查询。执行有error且原ctx有效才ReconcileToolResults(queryCtx,source)，同次部分results不使用，核验错误原样返回，成功Reconciled=true。queryCtx/source只在该错误分支必需，正常或拒绝可nil。
+
+旧runstate/Agent/assembly.Build/ReviewWeek03接口不变，不新建module、不改根internal/cmd。模型阶段由宿主用Gate驱动，未自动调用Agent.RunWithState。无Save/Load、自动工具重试、持久加载/恢复或分布式归属；ctx边界采样，不强杀协程/回滚副作用；来源真实性/新鲜度与权限仍由宿主负责。编码过大失败仍保留暂停/已记录决定，不自动重发决定。
+
+迁移：新增本组合文件；宿主用Build配对Run/Gate，模型响应后Pause，再Continue，不在其成功后重复ToolsReturned。十二份runstate支持文件原样提供，练习internal/assembly/week04.go，reference仅examples/internal→internal映射且不改断言。九场景矩阵及构造/编码失败/取消/所有权和8个独立Host见docs/learning/exercises/day28/verification.json；真实后端/模型、权限、持久恢复与学习者原实现未验证。

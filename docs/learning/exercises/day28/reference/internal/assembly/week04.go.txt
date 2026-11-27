@@ -1,0 +1,99 @@
+package assembly
+
+import (
+	"context"
+	"errors"
+
+	"github.com/linko-zhao/mini-agent-runtime/internal/model"
+	"github.com/linko-zhao/mini-agent-runtime/internal/runstate"
+)
+
+var ErrWeek04ExecutorRequired = errors.New("assembly: week04 executor required")
+
+// ToolBatchExecutor is the host's actual I/O boundary, not an outcome lookup.
+// It must cooperate with ctx and return results in original call order.
+type ToolBatchExecutor func(context.Context, []model.ToolCall) ([]model.Message, error)
+
+type Week04Host struct {
+	run     *runstate.Run
+	gate    *runstate.PauseGate
+	execute ToolBatchExecutor
+}
+
+// Week04Report retains the completed teaching stages even on error. Payload is
+// encoded data, NOT a saved receipt. ExecutionErr is retained after reconciliation.
+type Week04Report struct {
+	Pause        runstate.PauseSnapshot
+	Payload      []byte
+	State        runstate.State
+	ExecutionErr error
+	Reconciled   bool
+}
+
+func BuildWeek04(ctx context.Context, runID, input string, maxSteps int, execute ToolBatchExecutor) (*Week04Host, error) {
+	r, err := runstate.NewRun(ctx, runID, input, maxSteps)
+	if err != nil {
+		return nil, err
+	}
+	if execute == nil {
+		return nil, ErrWeek04ExecutorRequired
+	}
+	g, err := runstate.NewPauseGate(r)
+	if err != nil {
+		return nil, err
+	}
+	return &Week04Host{run: r, gate: g, execute: execute}, nil
+}
+
+// Gate returns the SAME gate for host-driven model events and pause requests.
+// Continue owns normal advancement while it runs; other host writes are limited
+// to cancellation. Do not concurrently run Continue or bypass this gate.
+func (h *Week04Host) Gate() *runstate.PauseGate { return h.gate }
+
+// Continue composes recording, codec, resolution, execution and optional outcome
+// reconciliation. It starts from a held pause, never retries tools and never saves
+// or recreates a Run. A valid queryCtx/source is needed only after execution error.
+func (h *Week04Host) Continue(decision runstate.ApprovalDecision, queryCtx context.Context, source runstate.ToolOutcomeSource) (report Week04Report, err error) {
+	defer func() { report.State = h.gate.Snapshot() }()
+	if _, err = h.gate.Decide(decision); err != nil {
+		return
+	}
+	report.Pause, err = h.gate.PauseSnapshot()
+	if err != nil {
+		return
+	}
+	report.Payload, err = runstate.EncodePauseSnapshot(report.Pause)
+	if err != nil {
+		return
+	}
+	report.Pause, err = runstate.DecodePauseSnapshot(report.Payload)
+	if err != nil {
+		return
+	}
+	state, resolveErr := h.gate.ResolveDecision(decision.RunID, decision.RequestID)
+	if resolveErr != nil {
+		err = resolveErr
+		return
+	}
+	if state.Phase == runstate.Failed { // a host rejection is successful handling
+		return
+	}
+	if h.run.Context().Err() != nil {
+		_, err = h.gate.Apply(runstate.Event{Kind: runstate.Cancel})
+		return
+	}
+	// state is an owned copy; the execution port may modify its input buffers.
+	results, executionErr := h.execute(h.run.Context(), state.Pending)
+	report.ExecutionErr = executionErr
+	if h.run.Context().Err() != nil {
+		_, err = h.gate.Apply(runstate.Event{Kind: runstate.Cancel})
+		return
+	}
+	if executionErr == nil {
+		_, err = h.gate.Apply(runstate.Event{Kind: runstate.ToolsReturned, Results: results})
+		return
+	}
+	_, err = h.gate.ReconcileToolResults(queryCtx, source)
+	report.Reconciled = err == nil
+	return
+}
