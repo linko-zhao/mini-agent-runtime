@@ -44,6 +44,25 @@ type ToolOutcomeReport struct {
 	Results         []model.Message
 }
 
+func validateEvidence(e ReplayEvidence, c model.ToolCall) bool {
+	if e.Call.ID != c.ID || e.Call.Name != c.Name || !bytes.Equal(e.Call.Arguments, c.Arguments) || e.IdempotencyKey != "" {
+		return false
+	}
+	switch e.Basis {
+	case BasisUnknown, BasisNotStarted:
+		if e.Result != nil {
+			return false
+		}
+	case BasisResultKnown:
+		if e.Result == nil || e.Result.Role != "tool" || e.Result.ToolCallID != e.Call.ID || len(e.Result.ToolCalls) != 0 {
+			return false
+		}
+	default:
+		return false
+	}
+	return true
+}
+
 // InspectToolOutcomes only reads evidence; it never executes business calls.
 func InspectToolOutcomes(ctx context.Context, source ToolOutcomeSource, observed State) (ToolOutcomeReport, error) {
 	if ctx == nil {
@@ -57,7 +76,7 @@ func InspectToolOutcomes(ctx context.Context, source ToolOutcomeSource, observed
 	}
 	msgs := observed.Messages
 	first := msgs[0]
-	last := msgs[len(msgs) - 1]
+	last := msgs[len(msgs)-1]
 	if first.Role != "user" || last.Role != "assistant" || len(last.ToolCalls) != len(observed.Pending) {
 		return ToolOutcomeReport{}, ErrOutcomeState
 	}
@@ -72,21 +91,34 @@ func InspectToolOutcomes(ctx context.Context, source ToolOutcomeSource, observed
 	if source == nil {
 		return ToolOutcomeReport{}, ErrOutcomeSourceRequired
 	}
-	report := ToolOutcomeReport{Observed: observed, Results: msgs}
+	report := ToolOutcomeReport{Observed: cloneState(observed), AllResultsKnown: true}
 	for _, c := range observed.Pending {
 		if ctx.Err() != nil {
 			return ToolOutcomeReport{}, ctx.Err()
 		}
-		e, err := source.Lookup(ctx, ToolAttempt{RunID: observed.RunID, Step: observed.Step, Call: c})
+		e, err := source.Lookup(ctx, ToolAttempt{RunID: observed.RunID, Step: observed.Step, Call: cloneCalls([]model.ToolCall{c})[0]})
 		if ctx.Err() != nil {
 			return ToolOutcomeReport{}, ctx.Err()
 		}
 		if err != nil {
 			return ToolOutcomeReport{}, err
 		}
-		if e.RunID != observed.RunID || e.Step != observed.Step {
+		if e.RunID != observed.RunID || e.Step != observed.Step || !validateEvidence(e.Evidence, c) {
 			return ToolOutcomeReport{}, ErrReplayEvidence
 		}
+		if e.Evidence.Basis != BasisResultKnown {
+			report.AllResultsKnown = false
+		}
+		if report.AllResultsKnown {
+			report.Results = append(report.Results, cloneMessages([]model.Message{*e.Evidence.Result})[0])
+		} else {
+			report.Results = nil
+		}
+		if e.Evidence.Result != nil {
+			msg := cloneMessages([]model.Message{*e.Evidence.Result})[0]
+			e.Evidence.Result = &msg
+		}
+		e.Evidence.Call = cloneCalls([]model.ToolCall{c})[0]
 		report.Evidence = append(report.Evidence, e)
 	}
 	if ctx.Err() != nil {
