@@ -1,0 +1,3910 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Agent Runtime · 请求生命周期</title>
+<style>
+:root {
+  color-scheme: light;
+  --canvas:#f4f6f9; --dot:#d2d9e4; --panel:#fff; --sub:#f7f9fc;
+  --ink:#1b2434; --muted:#526177; --line:#dbe2eb; --edge:#8796ac;
+  --blue:#225bec; --blue-soft:#edf3ff; --blue-line:#a9c1ff;
+  --success:#14734f; --success-bg:#e8f7ee; --danger:#a83539; --danger-bg:#ffeff0;
+  --wait:#855900; --wait-bg:#fff5da; --shadow: 0 3px 8px #1d2e4610,0 16px 34px #2539540b;
+  --sans:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
+}
+:root[data-theme=dark] {
+  color-scheme:dark;
+  --canvas:#141923; --dot:#303b4e; --panel:#1d2533; --sub:#202b3b;
+  --ink:#eaf0fa; --muted:#a6b5c9; --line:#384559; --edge:#778aa5;
+  --blue:#88adff; --blue-soft:#263b61; --blue-line:#537bcf;
+  --success:#93e1b8; --success-bg:#203e33; --danger:#ffacae; --danger-bg:#44292e;
+  --wait:#f6cf82; --wait-bg:#443924; --shadow:0 8px 26px #080a1180;
+}
+* {box-sizing:border-box}
+html,body {height:100%;margin:0;overflow:hidden}
+body {font:13px/1.5 var(--sans);color:var(--ink);background:var(--canvas)}
+button,select,textarea {font:inherit;color:inherit}
+button,select,textarea {border:1px solid var(--line);background:var(--panel);border-radius:7px}
+button {cursor:pointer;padding:6px 10px}
+button:hover:not(:disabled) {background:var(--sub);border-color:var(--edge)}
+button:disabled {opacity:.42;cursor:default}
+button:focus-visible,textarea:focus-visible,select:focus-visible,a:focus-visible,summary:focus-visible {outline:2px solid var(--blue);outline-offset:2px}
+a {color:var(--blue);text-underline-offset:3px}
+[hidden] {display:none!important}
+.panel,.brand,.toolbar,.canvasbar,.legend {position:absolute;background:var(--panel);border:1px solid var(--line);box-shadow:var(--shadow);border-radius:11px}
+.brand {top:18px;left:18px;min-width:224px;padding:11px 13px;display:flex;gap:10px;align-items:center}
+.brand-mark {width:34px;height:34px;border-radius:8px;background:var(--blue-soft);color:var(--blue);display:grid;place-items:center}
+.brand h1 {margin:0;font-size:15px;font-weight:690;line-height:1.3;letter-spacing:-.025em}
+.brand-meta {display:flex;gap:7px;align-items:center;margin-top:3px;color:var(--muted);font:11px var(--mono)}
+.brand a {color:var(--muted)}
+.panel {overflow:hidden}
+#controls {left:18px;top:98px;width:224px;max-height:calc(100% - 170px)}
+#inspector {right:18px;top:18px;width:280px;max-height:calc(100% - 93px);display:flex;flex-direction:column}
+.panel-head {height:44px;padding:0 11px 0 13px;display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--panel);flex:none}
+.panel-head h2 {margin:0;font-size:12px;font-weight:720;display:flex;gap:7px;align-items:center}
+.panel-head h2 svg {color:var(--muted)}
+.panel-body {border-top:1px solid var(--line);padding:12px;overflow:auto;overscroll-behavior:contain;min-height:0}
+#controls .panel-body {max-height:calc(100vh - 215px)}
+.panel.collapsed .panel-body {display:none}
+.iconbutton {display:grid;place-items:center;width:28px;height:28px;padding:0;color:var(--muted);background:transparent;border-color:transparent}
+.icon,button svg {width:16px;height:16px;flex:none}
+.field {display:block;margin:0 0 12px}
+.field span,.field-label {display:block;font-weight:650;font-size:11px;margin-bottom:5px;color:var(--muted)}
+.field select,.field textarea {display:block;width:100%;padding:7px 8px}
+.field select {height:34px}
+.field textarea {resize:vertical;min-height:56px;max-height:135px;line-height:1.45;background:var(--sub)}
+.field:last-child {margin-bottom:0}
+.check {display:flex;align-items:center;gap:6px;margin:0 0 10px;font-size:11px;color:var(--muted)}
+.check input {accent-color:var(--blue)}
+.utility {color:var(--muted);font-size:11px;margin:0;padding:10px 1px 1px;border-top:1px solid var(--line)}
+#decision-box {border-top:1px solid var(--line);margin-top:10px;padding-top:9px}
+#decision-label {display:block;font-size:11px;color:var(--wait);font-weight:700;margin-bottom:7px}
+#choices {display:flex;gap:5px;flex-wrap:wrap}
+#choices button,#choices select {padding:5px 8px;font-size:11px}
+#choices select {width:100%}
+#choices button:first-child {color:var(--blue);border-color:var(--blue-line);background:var(--blue-soft)}
+#cancel-request {display:flex;gap:6px;align-items:center;margin:9px 0 11px;width:100%;justify-content:center;font-size:11px;color:var(--danger)}
+.ins-status {margin-bottom:10px}
+.status {display:inline-flex;gap:6px;align-items:center;max-width:100%;border-radius:5px;padding:3px 7px;background:var(--sub);color:var(--muted);font-size:11px;font-weight:680}
+.status::before {content:"○";font-size:10px}
+.status.active {background:var(--blue-soft);color:var(--blue)}
+.status.active::before {content:"▶"}
+.status.success {background:var(--success-bg);color:var(--success)}
+.status.success::before {content:"✓"}
+.status.error {background:var(--danger-bg);color:var(--danger)}
+.status.error::before {content:"×"}
+.status.wait {background:var(--wait-bg);color:var(--wait)}
+.status.wait::before {content:"ǁ"}
+.metrics {display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:12px 0}
+.metric {background:var(--sub);padding:7px 9px;border-radius:6px}
+.metric b {display:block;font:600 14px var(--mono)}
+.metric span {font-size:10px;color:var(--muted)}
+.detail-kicker {font:10px var(--mono);color:var(--muted);margin-top:9px}
+.detail-title {margin:3px 0 7px;font-size:16px;line-height:1.34;word-break:break-word;letter-spacing:-.02em}
+.detail-text {color:var(--muted);font-size:12px;margin:6px 0 9px}
+.from {font-size:11px;margin:7px 0 9px;color:var(--muted);overflow-wrap:anywhere}
+.from b {color:var(--ink);font-weight:650}
+.signature,.value,.source-code {font:11px/1.55 var(--mono);margin:7px 0 10px;border:1px solid var(--line);border-radius:6px;padding:7px;background:var(--sub);white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink)}
+.signature {color:var(--blue);font-size:10.5px}
+.value {max-height:177px;overflow:auto;overscroll-behavior:contain}
+.source-code {max-height:235px;overflow:auto;white-space:pre;tab-size:4}
+.details {margin-top:6px;border-top:1px solid var(--line);padding-top:6px}
+.details summary {cursor:pointer;font-weight:650;font-size:11px}
+.details p {margin:6px 0;color:var(--muted);font-size:11px}
+.source-link {display:block;margin:6px 0;word-break:break-all;font:10px/1.45 var(--mono)}
+.preview-link {padding:0;font-size:10px;border:0;color:var(--blue);margin-left:auto;background:transparent}
+.field-row {display:flex;gap:8px;align-items:center}
+.key {font-family:var(--mono)}
+.toolbar {bottom:18px;left:50%;transform:translateX(-50%);display:flex;gap:3px;align-items:center;padding:5px;white-space:nowrap}
+.action {border-color:transparent;display:flex;align-items:center;gap:6px;min-height:31px;font-size:11px}
+.action.primary {color:white;background:#225bec;border-color:#225bec}
+.action.primary:hover:not(:disabled) {background:#184ad2;border-color:#184ad2}
+.toolbar .indicator {border-left:1px solid var(--line);padding:0 9px 0 10px;margin-left:3px;font:11px var(--mono);color:var(--muted)}
+.canvasbar {bottom:18px;right:18px;padding:4px;display:flex;align-items:center;gap:2px}
+.canvasbar button {display:grid;place-items:center;min-width:28px;height:29px;padding:0 6px;background:transparent;border-color:transparent;color:var(--muted);font-size:11px}
+.canvasbar output {min-width:40px;text-align:center;font:11px var(--mono);color:var(--muted)}
+.legend {left:18px;bottom:18px;padding:7px 9px;display:flex;align-items:center;gap:8px;font-size:10px;color:var(--muted)}
+.legend span {display:flex;align-items:center;gap:4px}
+.legend i {width:15px;border-top:1px solid var(--edge)}
+.legend .data {border-top-style:dashed}
+.legend .dep {border-top:2px dotted var(--edge)}
+.canvas {position:absolute;inset:0;display:block;width:100%;height:100%;touch-action:none;cursor:grab;background-color:var(--canvas);background-image:radial-gradient(var(--dot) 1px,transparent 1px);background-size:19px 19px}
+.canvas.drag {cursor:grabbing}
+.graph-title {font:700 14px var(--sans);fill:var(--ink)}
+.graph-divider {stroke:var(--line);stroke-width:1}
+.node {cursor:pointer;outline:none}
+.node-frame {fill:var(--panel);stroke:var(--line);stroke-width:1.35;filter:url(#node-shadow)}
+.node:hover .node-frame,.node:focus .node-frame,.node.selected .node-frame {stroke:var(--blue-line);stroke-width:2}
+.node.active .node-frame {fill:var(--blue-soft);stroke:var(--blue);stroke-width:2}
+.node.waiting .node-frame {fill:var(--wait-bg);stroke:var(--wait);stroke-width:2}
+.node.completed .node-frame {fill:var(--success-bg);stroke:var(--success);stroke-width:2}
+.node.ended-error .node-frame {fill:var(--danger-bg);stroke:var(--danger);stroke-width:2}
+.node-tag {font:10.5px var(--mono);fill:var(--muted)}
+.node-title {font:700 16px var(--mono);fill:var(--ink)}
+.node[data-kind=decision] .node-title,.node[data-kind=boundary] .node-title {font:700 15px var(--sans)}
+.node-desc {font:11px var(--sans);fill:var(--muted)}
+.node-field {font:10.5px var(--mono);fill:var(--muted)}
+.node-method {outline:none}
+.node-method rect {fill:transparent}
+.node-method:hover rect,.node-method:focus rect,.node-method.method-selected rect {fill:var(--blue-soft)}
+.node-method.method-live rect {fill:var(--blue-line);fill-opacity:.33}
+.node-method text {font:10.5px var(--mono);fill:var(--ink)}
+.node-method.method-live text {fill:var(--blue);font-weight:700}
+.node-rule {stroke:var(--line);stroke-width:1}
+.node-flag {font:800 11px var(--sans);fill:var(--blue)}
+.node.waiting .node-flag {fill:var(--wait)}
+.node.completed .node-flag {fill:var(--success)}
+.node.ended-error .node-flag {fill:var(--danger)}
+.edge {fill:none;stroke:var(--edge);stroke-width:1.35;marker-end:url(#arrow);opacity:.82}
+.edge.data {stroke-dasharray:5 4}
+.edge.dep {stroke-dasharray:1 3.6;stroke-linecap:round;stroke-width:1.8;marker-end:url(#open-arrow)}
+.edge.visited {stroke:var(--blue);marker-end:url(#arrow-blue);opacity:1;stroke-width:2.2}
+.edge.dep.visited {marker-end:url(#open-arrow-blue)}
+.edge-note {font:10.5px var(--sans);fill:var(--muted);paint-order:stroke;stroke:var(--canvas);stroke-width:5;stroke-linejoin:round;pointer-events:none}
+.edge-note.visited {fill:var(--blue);font-weight:700}
+@media (max-width:1100px) {
+  #controls,.brand {left:10px}
+  #inspector,.canvasbar {right:10px}
+  #controls {width:185px}
+  #inspector {width:218px}
+  .legend {display:none}
+  .brand {min-width:185px}
+  .action span {display:none}
+  .toolbar .action {padding-inline:8px}
+}
+@media (max-width:680px) {
+  .brand {top:9px;min-width:0;padding:7px 9px}
+  .brand-mark {width:27px;height:27px}
+  .brand h1 {font-size:13px}
+  #controls {top:67px;width:min(210px,54vw);max-height:calc(100% - 150px)}
+  #inspector {top:9px;width:min(215px,45vw);max-height:calc(100% - 155px)}
+  #controls .panel-body {max-height:calc(100vh - 195px)}
+  .toolbar {bottom:10px;left:10px;transform:none}
+  .canvasbar {bottom:10px}
+  .canvasbar button {min-width:24px;padding-inline:3px}
+
+}
+@media (max-width:390px) { .canvasbar {bottom:57px} }
+@media (prefers-reduced-motion: reduce) { * {scroll-behavior:auto!important} }
+</style>
+</head>
+<body>
+<svg id="canvas" class="canvas" xmlns="http://www.w3.org/2000/svg" aria-label="可平移缩放的请求生命周期画布">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--edge)"/></marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--blue)"/></marker>
+    <marker id="open-arrow" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1L11 6L1 11" fill="none" stroke="var(--edge)" stroke-width="1.5"/></marker>
+    <marker id="open-arrow-blue" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1L11 6L1 11" fill="none" stroke="var(--blue)" stroke-width="1.5"/></marker>
+    <filter id="node-shadow" x="-10%" y="-10%" width="120%" height="125%"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#13253e" flood-opacity=".09"/></filter>
+  </defs>
+  <g id="viewport"><g id="guides"></g><g id="connections"></g><g id="cards"></g></g>
+</svg>
+<header class="brand">
+  <div class="brand-mark" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3.5" y="3.5" width="6" height="6" rx="1"/><rect x="14.5" y="14.5" width="6" height="6" rx="1"/><path d="M9.5 6.5h5a3 3 0 0 1 3 3v5m-3-3 3 3 3-3"/></svg></div>
+  <div><h1>Agent Runtime</h1><div class="brand-meta"><span id="version"></span><span aria-hidden="true">/</span><a id="commit" target="_blank" rel="noreferrer"></a></div></div>
+</header>
+<aside id="controls" class="panel" aria-label="运行配置">
+  <div class="panel-head"><h2><span data-icon="sliders"></span>运行配置</h2><button class="iconbutton collapse" type="button" data-panel="controls" aria-expanded="true" aria-controls="controls-body" title="折叠运行配置" aria-label="折叠运行配置"></button></div>
+  <div class="panel-body" id="controls-body">
+    <label class="field"><span>参考场景</span><select id="track"><option value="agent">Agent · 文档对比（MCP）</option><option value="host">Runstate · 审批与结果核验</option></select></label>
+    <label class="field"><span>用户请求</span><textarea id="prompt" rows="2" maxlength="500"></textarea></label>
+    <label class="field"><span>脚本模型响应</span><select id="model-mode"></select></label>
+    <label class="field" id="access-field"><span>宿主授权规则</span><select id="access"><option value="allow">允许本地与远端</option><option value="deny">远端未授权</option></select></label>
+    <label class="field" id="effect-field"><span>远端工具返回</span><select id="effect"><option value="success">成功</option><option value="business">业务失败</option><option value="timeout">超时</option><option value="budget">超出结果大小</option><option value="corrupt">执行后响应损坏</option></select></label>
+    <label class="check" id="checkpoint-field" hidden><input id="checkpoint" type="checkbox">查看 Checkpoint 与暂停快照</label>
+    <div id="decision-box" hidden><span id="decision-label"></span><div id="choices"></div></div>
+    <button type="button" id="cancel-request" hidden><span data-icon="stop"></span>取消原始请求</button>
+    <p class="utility">基于 <span class="key">examples/</span> 的教学模拟。模型与工具使用离线夹具。</p>
+  </div>
+</aside>
+<aside id="inspector" class="panel" aria-label="执行详情">
+  <div class="panel-head"><h2><span data-icon="inspect"></span>执行详情</h2><button class="iconbutton collapse" type="button" data-panel="inspector" aria-expanded="true" aria-controls="inspector-body" title="折叠执行详情" aria-label="折叠执行详情"></button></div>
+  <div id="inspector-body" class="panel-body"><div class="field-row ins-status"><span class="status" id="run-status" role="status" aria-live="polite"></span><button id="follow" class="preview-link" type="button" hidden>跟随执行</button></div><div id="detail"></div></div>
+</aside>
+<div class="legend" aria-label="连线图例"><span><i></i>调用</span><span><i class="data"></i>数据</span><span><i class="dep"></i>接口分派</span></div>
+<div class="toolbar" role="group" aria-label="执行控制">
+  <button class="action primary" id="play" type="button" data-icon="play" title="运行" aria-label="运行"><span>运行</span></button>
+  <button class="action" id="pause-run" type="button" data-icon="pause" title="暂停播放" aria-label="暂停播放"><span>暂停</span></button>
+  <button class="action" id="prev" type="button" data-icon="prev" title="上一步" aria-label="上一步"><span>上一步</span></button>
+  <button class="action" id="next" type="button" data-icon="next" title="下一步" aria-label="下一步"><span>下一步</span></button>
+  <button class="action" id="rerun" type="button" data-icon="reset" title="重新运行" aria-label="重新运行"><span>重新运行</span></button>
+  <output id="step-index" class="indicator" aria-label="当前步骤">步骤 0</output>
+</div>
+<div class="canvasbar" role="group" aria-label="画布控制">
+  <button id="theme" type="button" data-icon="theme" title="切换主题" aria-label="切换主题"></button>
+  <button id="zoom-out" type="button" data-icon="minus" title="缩小" aria-label="缩小"></button>
+  <output id="zoom-value" aria-label="缩放比例">100%</output>
+  <button id="zoom-in" type="button" data-icon="plus" title="放大" aria-label="放大"></button>
+  <button id="fit" type="button" data-icon="fit" title="适应画布" aria-label="适应画布"></button>
+  <button id="reset-view" type="button" data-icon="reset" title="重置视图" aria-label="重置视图"></button>
+</div>
+<noscript>启用 JavaScript 后可查看和操作离线画布。</noscript>
+
+<!-- Reference data and source excerpts pinned to the commit below. -->
+<script type="application/json" id="reference-data">
+{
+  "commit": "9fd4463e27d27e3c8e992e03e88c4ccb793ff829",
+  "version": "Day 27",
+  "nodes": {
+    "build": {
+      "x": 24,
+      "y": 50,
+      "namespace": "assembly · func",
+      "title": "Build",
+      "desc": "初始化 MCP 并装配 Runtime",
+      "fields": [],
+      "methods": [
+        {
+          "id": "build",
+          "short": "Build(ctx, c) (*Runtime, error)",
+          "full": "func Build(ctx context.Context, c Config) (*Runtime, error)",
+          "desc": "宿主选择模型、MCP Transport、可见工具、授权和执行策略。",
+          "source": "build-34-53"
+        },
+        {
+          "id": "initialize",
+          "short": "Client.Initialize(ctx)",
+          "full": "func (c *Client) Initialize(ctx context.Context) (InitializeResult, error)",
+          "desc": "握手并发送 initialized 通知，准备 MCP 会话。",
+          "source": "mcp-106-142"
+        }
+      ],
+      "source": "build-16-32",
+      "kind": "function"
+    },
+    "discover": {
+      "x": 254,
+      "y": 50,
+      "namespace": "mcptool · func",
+      "title": "Discover",
+      "desc": "枚举远端工具并生成本地别名",
+      "fields": [],
+      "methods": [
+        {
+          "id": "discover",
+          "short": "Discover(ctx, caller, …)",
+          "full": "func Discover(ctx context.Context, caller Caller, prefix string, maxPages int) ([]tool.Invokable, error)",
+          "desc": "调用 ListTools 并限制页数，生成 Invokable 候选。初始化阶段只读能力。",
+          "source": "discover-12-33"
+        }
+      ],
+      "source": "remote-44-51",
+      "kind": "function"
+    },
+    "registry": {
+      "x": 484,
+      "y": 50,
+      "namespace": "tool · struct",
+      "title": "Registry",
+      "desc": "登记能力并创建执行集合",
+      "fields": [
+        "entries map[string]registration"
+      ],
+      "methods": [
+        {
+          "id": "register",
+          "short": "Register(ctx, t) error",
+          "full": "func (r *Registry) Register(ctx context.Context, t Invokable) error",
+          "desc": "读取 Meta，校验 schema，拒绝重复名称。",
+          "source": "reg-37-61"
+        },
+        {
+          "id": "tools",
+          "short": "Tools() map[string]Tool",
+          "full": "func (r *Registry) Tools() map[string]Tool",
+          "desc": "将每项注册包装为 legacyAdapter，再由 Build 装上策略。",
+          "source": "reg-98-106"
+        }
+      ],
+      "source": "reg-14-25",
+      "kind": "type"
+    },
+    "new": {
+      "x": 714,
+      "y": 50,
+      "namespace": "agent · func",
+      "title": "New",
+      "desc": "创建 Agent 并绑定可见定义",
+      "fields": [],
+      "methods": [
+        {
+          "id": "new",
+          "short": "New(m, tools, maxSteps, …)",
+          "full": "func New(m model.Model, tools map[string]tool.Tool, maxSteps int, opts ...Option) (*Agent, error)",
+          "desc": "复制工具 map 并校验注册，按可见名单构造模型定义。",
+          "source": "a-29-51"
+        }
+      ],
+      "source": "build-63-88",
+      "kind": "function"
+    },
+    "binder": {
+      "x": 944,
+      "y": 50,
+      "namespace": "model · interface",
+      "title": "ToolBinder",
+      "desc": "按能力绑定工具定义",
+      "fields": [],
+      "methods": [
+        {
+          "id": "with",
+          "short": "WithTools(defs) (Model, error)",
+          "full": "WithTools(defs []ToolDefinition) (Model, error)",
+          "desc": "Agent.New 仅在模型实现此接口时调用。具体实现由宿主注入，默认模拟使用测试夹具 weekModel。",
+          "source": "a-83-94"
+        }
+      ],
+      "source": "model-62-70",
+      "kind": "type"
+    },
+    "input": {
+      "x": 24,
+      "y": 234,
+      "namespace": "宿主 · 预设请求",
+      "title": "用户输入",
+      "desc": "比较本地与远端文档",
+      "fields": [],
+      "methods": [
+        {
+          "id": "input",
+          "short": "Runtime.Agent.Run(ctx, input)",
+          "full": "func (a *Agent) Run(ctx context.Context, input string) (string, error)",
+          "desc": "宿主在 context 附加 reader 身份并发起请求。",
+          "source": "fixture-152-165"
+        }
+      ],
+      "source": "build-16-32",
+      "kind": "boundary"
+    },
+    "agent": {
+      "x": 254,
+      "y": 234,
+      "namespace": "agent · struct",
+      "title": "Agent",
+      "desc": "管理推理轮次与批量工具调用",
+      "fields": [
+        "model model.Model",
+        "tools map[string]tool.Tool",
+        "authorizer tool.Authorizer",
+        "maxSteps int"
+      ],
+      "methods": [
+        {
+          "id": "run",
+          "short": "Run(ctx, input) (string, error)",
+          "full": "func (a *Agent) Run(ctx context.Context, input string) (string, error)",
+          "desc": "委托 RunWithState，只向调用者返回 Output 和 error。",
+          "source": "a-104-107"
+        },
+        {
+          "id": "state",
+          "short": "RunWithState(ctx, input)",
+          "full": "func (a *Agent) RunWithState(ctx context.Context, input string) (result RunResult, runErr error)",
+          "desc": "创建观测记录，每轮检查原始 context，调用模型并维护消息。",
+          "source": "a-109-132"
+        }
+      ],
+      "source": "a-15-25",
+      "kind": "type"
+    },
+    "model": {
+      "x": 484,
+      "y": 234,
+      "namespace": "model · interface",
+      "title": "Model",
+      "desc": "从当前历史生成 assistant 消息",
+      "fields": [],
+      "methods": [
+        {
+          "id": "generate",
+          "short": "Generate(ctx, messages)",
+          "full": "Generate(ctx context.Context, messages []Message) (*Response, error)",
+          "desc": "Agent 按接口动态调用，默认由 weekModel 返回脚本文本或 ToolCalls。",
+          "source": "fixture-69-90"
+        }
+      ],
+      "source": "model-58-60",
+      "kind": "type"
+    },
+    "response": {
+      "x": 714,
+      "y": 234,
+      "namespace": "Agent.RunWithState · 判断",
+      "title": "有 ToolCalls？",
+      "desc": "先验证 assistant，再追加消息",
+      "fields": [],
+      "methods": [
+        {
+          "id": "branch",
+          "short": "len(r.Message.ToolCalls) == 0",
+          "full": "func (a *Agent) RunWithState(ctx context.Context, input string) (result RunResult, runErr error)",
+          "desc": "判断实际 ToolCalls 数量。无调用直接返回 Content，有调用则提交整批预检。",
+          "source": "a-133-161"
+        }
+      ],
+      "source": "model-8-19",
+      "kind": "decision"
+    },
+    "batch": {
+      "x": 944,
+      "y": 234,
+      "namespace": "Agent · private method",
+      "title": "executeBatchWithState",
+      "desc": "记录并预检整批工具调用",
+      "fields": [],
+      "methods": [
+        {
+          "id": "batch",
+          "short": "executeBatchWithState(ctx, …)",
+          "full": "func (a *Agent) executeBatchWithState(ctx context.Context, calls []model.ToolCall, step int, record *runRecord) ([]model.Message, error)",
+          "desc": "先记录 planned，再检查每个 CallID 与工具注册，然后整批授权。",
+          "source": "batch-19-42"
+        }
+      ],
+      "source": "batch-19-42",
+      "kind": "function"
+    },
+    "result": {
+      "x": 24,
+      "y": 438,
+      "namespace": "agent · struct",
+      "title": "RunResult",
+      "desc": "返回文本与独立观测快照",
+      "fields": [
+        "Output string",
+        "Snapshot RunSnapshot"
+      ],
+      "methods": [
+        {
+          "id": "result",
+          "short": "Run → (Output, error)",
+          "full": "func (a *Agent) Run(ctx context.Context, input string) (string, error)",
+          "desc": "RunWithState 返回快照和错误，Run 投影为文本和错误。",
+          "source": "a-104-107"
+        }
+      ],
+      "source": "rec-44-55",
+      "kind": "type"
+    },
+    "record": {
+      "x": 254,
+      "y": 438,
+      "namespace": "agent · struct",
+      "title": "runRecord",
+      "desc": "管理 RunSnapshot 的观测状态",
+      "fields": [
+        "data RunSnapshot"
+      ],
+      "methods": [
+        {
+          "id": "create",
+          "short": "newRunRecord(input)",
+          "full": "func newRunRecord(input string) (*runRecord, error)",
+          "desc": "生成随机 RunID，记录用户消息，进入 created。",
+          "source": "rec-100-114"
+        },
+        {
+          "id": "finish",
+          "short": "finish(runErr) error",
+          "full": "func (r *runRecord) finish(runErr error) error",
+          "desc": "确定终态，清理遗留 planned / running 调用并记录 FailureClass。",
+          "source": "rec-169-199"
+        }
+      ],
+      "source": "rec-36-55",
+      "kind": "type"
+    },
+    "history": {
+      "x": 484,
+      "y": 438,
+      "namespace": "Agent.RunWithState · 回填",
+      "title": "追加 tool 消息",
+      "desc": "按序回填并更新下一轮历史",
+      "fields": [],
+      "methods": [
+        {
+          "id": "update",
+          "short": "append(Messages, results…)",
+          "full": "func (a *Agent) RunWithState(ctx context.Context, input string) (result RunResult, runErr error)",
+          "desc": "普通工具错误也会成为 tool 消息。整批返回 nil error 才会提交这些消息。",
+          "source": "a-157-165"
+        },
+        {
+          "id": "pack",
+          "short": "completeCall(index, &msg, err)",
+          "full": "func (r *runRecord) completeCall(index int, result *model.Message, err error) error",
+          "desc": "校验状态及 CallID，记录 returned / errored；取消或超时记 unconfirmed。",
+          "source": "rec-133-152"
+        }
+      ],
+      "source": "batch-69-95",
+      "kind": "boundary"
+    },
+    "grant": {
+      "x": 714,
+      "y": 438,
+      "namespace": "Agent.authorizeBatch · 判断",
+      "title": "整批授权通过？",
+      "desc": "任一项拒绝即结束请求",
+      "fields": [],
+      "methods": [
+        {
+          "id": "check",
+          "short": "authorizeBatch(ctx, calls, step)",
+          "full": "func (a *Agent) authorizeBatch(ctx context.Context, calls []model.ToolCall, step int) error",
+          "desc": "传入参数副本，逐项授权，包装第一个错误。",
+          "source": "pre-11-40"
+        }
+      ],
+      "source": "pre-11-40",
+      "kind": "decision"
+    },
+    "auth": {
+      "x": 944,
+      "y": 438,
+      "namespace": "tool · interface / struct",
+      "title": "Authorizer",
+      "desc": "依宿主身份与能力规则授权",
+      "fields": [],
+      "methods": [
+        {
+          "id": "authorize",
+          "short": "Authorize(ctx, call) error",
+          "full": "Authorize(context.Context, Call) error",
+          "desc": "此场景的具体实现是 CapabilityAuthorizer。未分类工具或无对应授权均返回 ErrForbidden。",
+          "source": "auth-68-81"
+        }
+      ],
+      "source": "auth-31-40",
+      "kind": "type"
+    },
+    "doc": {
+      "x": 24,
+      "y": 624,
+      "namespace": "knowledge · struct",
+      "title": "GetDocument",
+      "desc": "从文档 Store 读取数据",
+      "fields": [
+        "Store Store"
+      ],
+      "methods": [
+        {
+          "id": "invoke",
+          "short": "Invoke(ctx, args) (string, error)",
+          "full": "func (t *GetDocument) Invoke(ctx context.Context, args json.RawMessage) (string, error)",
+          "desc": "本地能力解析 id，并返回文档 JSON 字符串。",
+          "source": "doc-60-88"
+        }
+      ],
+      "source": "doc-60-88",
+      "kind": "type"
+    },
+    "legacy": {
+      "x": 254,
+      "y": 624,
+      "namespace": "tool · struct",
+      "title": "legacyAdapter",
+      "desc": "将 Execute 委托给 Invokable",
+      "fields": [
+        "target Invokable"
+      ],
+      "methods": [
+        {
+          "id": "execute",
+          "short": "Execute(ctx, args) (string, error)",
+          "full": "func (t *legacyAdapter) Execute(ctx context.Context, args json.RawMessage) (string, error)",
+          "desc": "由 Registry.Tools 创建。具体 Invoke 目标取决于工具名。",
+          "source": "legacy-45-56"
+        }
+      ],
+      "source": "legacy-45-56",
+      "kind": "type"
+    },
+    "remote": {
+      "x": 484,
+      "y": 624,
+      "namespace": "mcptool · struct",
+      "title": "remoteTool",
+      "desc": "转换名称并投影 MCP 结果",
+      "fields": [
+        "caller Caller",
+        "remoteName string"
+      ],
+      "methods": [
+        {
+          "id": "invoke",
+          "short": "Invoke(ctx, args) (string, error)",
+          "full": "func (t *remoteTool) Invoke(ctx context.Context, args json.RawMessage) (string, error)",
+          "desc": "按原远端名调用 CallTool，投影文本结果，转换受控错误。",
+          "source": "remote-79-102"
+        }
+      ],
+      "source": "remote-24-42",
+      "kind": "type"
+    },
+    "client": {
+      "x": 714,
+      "y": 624,
+      "namespace": "mcp · struct",
+      "title": "Client",
+      "desc": "串行发送 JSON-RPC 请求",
+      "fields": [
+        "transport Transport",
+        "state string · nextID uint64"
+      ],
+      "methods": [
+        {
+          "id": "tool",
+          "short": "CallTool(ctx, name, args)",
+          "full": "func (c *Client) CallTool(ctx context.Context, name string, args json.RawMessage) (ToolResult, error)",
+          "desc": "要求会话 ready 和可用的工具能力，发送 tools/call 并检查内容协议。",
+          "source": "mcp-176-204"
+        },
+        {
+          "id": "send",
+          "short": "Transport.Send(ctx, payload)",
+          "full": "Send(context.Context, []byte) ([]byte, error)",
+          "desc": "实际 Transport 在 Build 注入。本场景由 wireProbe 转发给内存 DemoServer。JSON-RPC ID 由 Client 单独维护。",
+          "source": "mcp-49-82"
+        }
+      ],
+      "source": "mcp-12-25",
+      "kind": "type"
+    },
+    "policy": {
+      "x": 944,
+      "y": 624,
+      "namespace": "tool · struct",
+      "title": "policyTool",
+      "desc": "约束工具期限、结果与重试",
+      "fields": [
+        "target DescribedTool",
+        "policy Policy"
+      ],
+      "methods": [
+        {
+          "id": "execute",
+          "short": "Execute(ctx, args) (string, error)",
+          "full": "func (t *policyTool) Execute(ctx context.Context, args json.RawMessage) (string, error)",
+          "desc": "实现 tool.Tool。此场景 MaxAttempts 默认为 1。只有显式只读且可重试的非受控错误才可能重试。",
+          "source": "policy-46-84"
+        }
+      ],
+      "source": "policy-13-42",
+      "kind": "type"
+    },
+    "hnew": {
+      "x": 24,
+      "y": 50,
+      "namespace": "runstate · func",
+      "title": "NewRun",
+      "desc": "创建独立的请求状态",
+      "fields": [],
+      "methods": [
+        {
+          "id": "new",
+          "short": "NewRun(ctx, runID, input, max)",
+          "full": "func NewRun(ctx context.Context, runID, input string, maxSteps int) (*Run, error)",
+          "desc": "保留原始执行 context，创建 ready 状态与用户消息。",
+          "source": "run-16-30"
+        }
+      ],
+      "source": "state-54-59",
+      "kind": "function"
+    },
+    "hgate": {
+      "x": 254,
+      "y": 50,
+      "namespace": "runstate · struct",
+      "title": "PauseGate",
+      "desc": "串行协调同一个 Run 的推进",
+      "fields": [
+        "run *Run",
+        "request *PauseRequest",
+        "decision *ApprovalDecision"
+      ],
+      "methods": [
+        {
+          "id": "new",
+          "short": "NewPauseGate(run)",
+          "full": "func NewPauseGate(run *Run) (*PauseGate, error)",
+          "desc": "宿主将该 Run 的写入交给唯一门禁。",
+          "source": "pause-23-38"
+        },
+        {
+          "id": "apply",
+          "short": "Apply(e) (State, error)",
+          "full": "func (g *PauseGate) Apply(e Event) (State, error)",
+          "desc": "暂停时拒绝事件，原始 context 已取消时委托 Run.Apply 观察取消。终态清理暂停与决定。",
+          "source": "pause-81-97"
+        }
+      ],
+      "source": "pause-23-38",
+      "kind": "type"
+    },
+    "hrun": {
+      "x": 484,
+      "y": 50,
+      "namespace": "runstate · struct",
+      "title": "Run",
+      "desc": "持有原始 context 与当前状态",
+      "fields": [
+        "ctx context.Context",
+        "state State"
+      ],
+      "methods": [
+        {
+          "id": "apply",
+          "short": "Apply(e) (State, error)",
+          "full": "func (r *Run) Apply(e Event) (State, error)",
+          "desc": "在锁内提交单个事件，原始 context 取消时提交 Cancel。",
+          "source": "run-43-67"
+        },
+        {
+          "id": "cp",
+          "short": "Checkpoint() (Checkpoint, error)",
+          "full": "func (r *Run) Checkpoint() (Checkpoint, error)",
+          "desc": "仅在 ready、tools_pending 或终态捕获数据。Pause 直接使用这个方法。",
+          "source": "cp-28-46"
+        }
+      ],
+      "source": "run-8-14",
+      "kind": "type"
+    },
+    "advance": {
+      "x": 714,
+      "y": 50,
+      "namespace": "runstate · func",
+      "title": "Advance",
+      "desc": "根据事件计算下一份 State",
+      "fields": [],
+      "methods": [
+        {
+          "id": "advance",
+          "short": "Advance(current, e) (State, error)",
+          "full": "func Advance(current State, e Event) (State, error)",
+          "desc": "无 I/O 的状态转换。StartModel 检查预算；ToolsReturned 验证数量、顺序与 CallID。",
+          "source": "state-87-105"
+        }
+      ],
+      "source": "state-47-52",
+      "kind": "function"
+    },
+    "hstate": {
+      "x": 944,
+      "y": 50,
+      "namespace": "runstate · struct",
+      "title": "State",
+      "desc": "记录阶段、轮次、历史与结果",
+      "fields": [
+        "Phase Phase",
+        "Step, MaxSteps int",
+        "Messages []model.Message",
+        "Pending []model.ToolCall",
+        "Result, Failure string"
+      ],
+      "methods": [],
+      "source": "state-11-46",
+      "kind": "type"
+    },
+    "hmodel": {
+      "x": 24,
+      "y": 246,
+      "namespace": "model · interface",
+      "title": "Model",
+      "desc": "宿主在锁外提供模型响应",
+      "fields": [],
+      "methods": [
+        {
+          "id": "gen",
+          "short": "Generate(ctx, messages)",
+          "full": "Generate(ctx context.Context, messages []Message) (*Response, error)",
+          "desc": "模拟采用 Day 27 测试宿主直接提供的 fixture 响应。实际提供方由宿主确定。",
+          "source": "hostTest-31-45"
+        }
+      ],
+      "source": "model-58-60",
+      "kind": "type"
+    },
+    "hresponse": {
+      "x": 254,
+      "y": 246,
+      "namespace": "Advance · ModelReturned",
+      "title": "有 ToolCalls？",
+      "desc": "零调用进入 completed",
+      "fields": [],
+      "methods": [
+        {
+          "id": "branch",
+          "short": "Apply(Event{ModelReturned})",
+          "full": "func (g *PauseGate) Apply(e Event) (State, error)",
+          "desc": "记录合法 assistant 响应。有调用则复制到 Pending，进入 tools_pending。",
+          "source": "state-104-123"
+        }
+      ],
+      "source": "state-104-123",
+      "kind": "decision"
+    },
+    "pause": {
+      "x": 484,
+      "y": 246,
+      "namespace": "PauseGate · method",
+      "title": "Pause",
+      "desc": "在 ToolsPending 建立暂停",
+      "fields": [],
+      "methods": [
+        {
+          "id": "pause",
+          "short": "Pause(id, reason)",
+          "full": "func (g *PauseGate) Pause(id, reason string) (PauseRequest, error)",
+          "desc": "通过 Run.Checkpoint 取得 before_tools 候选，同一 Run 保持 tools_pending。",
+          "source": "pause-53-79"
+        }
+      ],
+      "source": "pause-15-21",
+      "kind": "function"
+    },
+    "decision": {
+      "x": 714,
+      "y": 246,
+      "namespace": "PauseGate · methods",
+      "title": "Decide / ResolveDecision",
+      "desc": "先记录决定，再消费并推进",
+      "fields": [],
+      "methods": [
+        {
+          "id": "decide",
+          "short": "Decide(d) (ApprovalDecision, error)",
+          "full": "func (g *PauseGate) Decide(d ApprovalDecision) (ApprovalDecision, error)",
+          "desc": "关联 RunID、RequestID 和宿主提供的决定，仅接收第一份有效决定。",
+          "source": "approval-32-59"
+        },
+        {
+          "id": "resolve",
+          "short": "ResolveDecision(runID, requestID)",
+          "full": "func (g *PauseGate) ResolveDecision(runID, requestID string) (State, error)",
+          "desc": "批准提交 StartTools；拒绝提交 Abort。成功消费或到达终态时清除门禁记录。",
+          "source": "resolve-14-47"
+        }
+      ],
+      "source": "approval-22-30",
+      "kind": "function"
+    },
+    "snapshot": {
+      "x": 944,
+      "y": 246,
+      "namespace": "runstate · struct",
+      "title": "PauseSnapshot",
+      "desc": "捕获 schema v1 暂停候选",
+      "fields": [
+        "Request PauseRequest",
+        "Decision *ApprovalDecision"
+      ],
+      "methods": [
+        {
+          "id": "snap",
+          "short": "PauseSnapshot() (PauseSnapshot, error)",
+          "full": "func (g *PauseGate) PauseSnapshot() (PauseSnapshot, error)",
+          "desc": "在同一门禁锁捕获请求和可选决定的副本。",
+          "source": "snap-36-55"
+        },
+        {
+          "id": "codec",
+          "short": "Encode / DecodePauseSnapshot",
+          "full": "func EncodePauseSnapshot(s PauseSnapshot) ([]byte, error)\nfunc DecodePauseSnapshot(data []byte) (PauseSnapshot, error)",
+          "desc": "Gob 往返保留参数字节，接受有界且一致的宿主数据。",
+          "source": "snap-87-113"
+        }
+      ],
+      "source": "snap-10-23",
+      "kind": "type"
+    },
+    "hresult": {
+      "x": 24,
+      "y": 448,
+      "namespace": "runstate · 宿主读取",
+      "title": "State.Result / Failure",
+      "desc": "最终响应或当前退出原因",
+      "fields": [],
+      "methods": [
+        {
+          "id": "result",
+          "short": "Snapshot() State",
+          "full": "func (g *PauseGate) Snapshot() State",
+          "desc": "读取独立副本。核验失败时宿主也可获得当前仍活动的 State。",
+          "source": "pause-40-40"
+        }
+      ],
+      "source": "state-39-46",
+      "kind": "boundary"
+    },
+    "hwrite": {
+      "x": 254,
+      "y": 448,
+      "namespace": "Advance · ToolsReturned",
+      "title": "回填并返回 Ready",
+      "desc": "校验整批结果，保留当前轮次",
+      "fields": [],
+      "methods": [
+        {
+          "id": "write",
+          "short": "Apply(Event{ToolsReturned})",
+          "full": "func (r *Run) Apply(e Event) (State, error)",
+          "desc": "追加匹配原调用 ID 的 tool 消息，清空 Pending，然后可开始下一轮。",
+          "source": "state-124-140"
+        }
+      ],
+      "source": "state-124-140",
+      "kind": "boundary"
+    },
+    "recon": {
+      "x": 484,
+      "y": 448,
+      "namespace": "PauseGate · method",
+      "title": "ReconcileToolResults",
+      "desc": "在同一存活 Run 回填已知结果",
+      "fields": [],
+      "methods": [
+        {
+          "id": "query",
+          "short": "ReconcileToolResults(ctx, source)",
+          "full": "func (g *PauseGate) ReconcileToolResults(queryCtx context.Context, source ToolOutcomeSource) (State, error)",
+          "desc": "锁外查证；结果不全直接返回当前快照和 ErrOutcomeIncomplete。",
+          "source": "recon-14-27"
+        },
+        {
+          "id": "commit",
+          "short": "DeepEqual → Run.Apply",
+          "full": "func (g *PauseGate) ReconcileToolResults(queryCtx context.Context, source ToolOutcomeSource) (State, error)",
+          "desc": "锁内比对观察与当前状态。冲突保持当前状态；一致才委托 Run.Apply 提交。",
+          "source": "recon-28-45"
+        }
+      ],
+      "source": "recon-9-18",
+      "kind": "function"
+    },
+    "inspect": {
+      "x": 714,
+      "y": 448,
+      "namespace": "runstate · func",
+      "title": "InspectToolOutcomes",
+      "desc": "核对一批逻辑调用的证据",
+      "fields": [],
+      "methods": [
+        {
+          "id": "inspect",
+          "short": "InspectToolOutcomes(ctx, src, s)",
+          "full": "func InspectToolOutcomes(ctx context.Context, source ToolOutcomeSource, observed State) (ToolOutcomeReport, error)",
+          "desc": "按 Pending 顺序逐次只读查询。只有整批 ResultKnown 产生完整 Results。",
+          "source": "inspect-83-108"
+        }
+      ],
+      "source": "inspect-38-45",
+      "kind": "function"
+    },
+    "source": {
+      "x": 944,
+      "y": 448,
+      "namespace": "runstate · interface",
+      "title": "ToolOutcomeSource",
+      "desc": "受信宿主的只读查询端口",
+      "fields": [],
+      "methods": [
+        {
+          "id": "lookup",
+          "short": "Lookup(ctx, attempt)",
+          "full": "Lookup(context.Context, ToolAttempt) (ToolOutcomeEvidence, error)",
+          "desc": "每项绑定 RunID、Step、CallID、名称与参数原字节。具体来源由宿主注入。",
+          "source": "inspect-17-36"
+        }
+      ],
+      "source": "inspect-17-36",
+      "kind": "type"
+    },
+    "hstore": {
+      "x": 24,
+      "y": 636,
+      "namespace": "runstate · interface",
+      "title": "CheckpointStore",
+      "desc": "保存或读取带 CAS 版本的候选",
+      "fields": [],
+      "methods": [
+        {
+          "id": "save",
+          "short": "Save(ctx, cp, expected)",
+          "full": "Save(context.Context, Checkpoint, uint64) (StoredCheckpoint, error)",
+          "desc": "这里演示 MemoryCheckpointStore 首次保存，expected=0，版本为 1。",
+          "source": "store-91-113"
+        },
+        {
+          "id": "load",
+          "short": "Load(ctx, runID)",
+          "full": "Load(context.Context, string) (StoredCheckpoint, error)",
+          "desc": "只读审查委托 store.Load 获取独立副本。",
+          "source": "store-67-89"
+        }
+      ],
+      "source": "store-18-35",
+      "kind": "type"
+    },
+    "review": {
+      "x": 254,
+      "y": 636,
+      "namespace": "assembly · func",
+      "title": "ReviewWeek03",
+      "desc": "宿主选择对保存记录做审查",
+      "fields": [],
+      "methods": [
+        {
+          "id": "review",
+          "short": "ReviewWeek03(ctx, store, …)",
+          "full": "func ReviewWeek03(ctx context.Context, store runstate.CheckpointStore, source ReplayEvidenceSource, runID string) (Week03Report, error)",
+          "desc": "读取恢复计划，仅 review_pending 期间查询受信证据并生成重放建议。",
+          "source": "review-23-54"
+        }
+      ],
+      "source": "review-10-21",
+      "kind": "function"
+    },
+    "recovery": {
+      "x": 484,
+      "y": 636,
+      "namespace": "runstate · func",
+      "title": "PlanRecovery",
+      "desc": "分类已保存的 Checkpoint",
+      "fields": [],
+      "methods": [
+        {
+          "id": "plan",
+          "short": "PlanRecovery(ctx, store, runID)",
+          "full": "func PlanRecovery(ctx context.Context, store CheckpointStore, runID string) (RecoveryPlan, error)",
+          "desc": "只 Load 一次。返回 recorded_ready、review_pending、terminal 或 budget_exhausted。",
+          "source": "recovery-63-91"
+        }
+      ],
+      "source": "recovery-9-23",
+      "kind": "function"
+    },
+    "replay": {
+      "x": 714,
+      "y": 636,
+      "namespace": "runstate · func",
+      "title": "PlanReplay",
+      "desc": "生成 Hold / Invoke / Reuse 建议",
+      "fields": [],
+      "methods": [
+        {
+          "id": "plan",
+          "short": "PlanReplay(ctx, recovery, e)",
+          "full": "func PlanReplay(ctx context.Context, recovery RecoveryPlan, evidence ReplayEvidenceSet) (ReplayPlan, error)",
+          "desc": "证据绑定 RunID、保存版本和原调用。Unknown 阻塞整批，Invoke 仅代表建议。",
+          "source": "replay-72-115"
+        }
+      ],
+      "source": "replay-34-55",
+      "kind": "function"
+    },
+    "hostio": {
+      "x": 944,
+      "y": 636,
+      "namespace": "宿主 · I/O 边界",
+      "title": "工具结果交还宿主",
+      "desc": "由宿主提供有序 tool 消息",
+      "fields": [],
+      "methods": [
+        {
+          "id": "io",
+          "short": "Run.Context() context.Context",
+          "full": "func (r *Run) Context() context.Context",
+          "desc": "批准后宿主可运行 I/O，状态机定义事件边界。演示使用测试式结果夹具。",
+          "source": "run-32-34"
+        }
+      ],
+      "source": "resolve-10-13",
+      "kind": "boundary"
+    }
+  },
+  "edges": {
+    "b-dis": {
+      "a": "build.build",
+      "b": "discover.discover",
+      "ports": "rl",
+      "kind": "call",
+      "label": "握手成功后发现工具",
+      "via": [],
+      "at": [
+        237,
+        46
+      ]
+    },
+    "b-reg": {
+      "a": "discover.discover",
+      "b": "registry.register",
+      "ports": "rl",
+      "kind": "data",
+      "label": "候选能力",
+      "via": [],
+      "at": [
+        468,
+        46
+      ]
+    },
+    "b-new": {
+      "a": "registry.tools",
+      "b": "new.new",
+      "ports": "rl",
+      "kind": "data",
+      "label": "策略包装",
+      "via": [],
+      "at": [
+        698,
+        46
+      ]
+    },
+    "b-binder": {
+      "a": "new.new",
+      "b": "binder.with",
+      "ports": "rl",
+      "kind": "call",
+      "label": "实现接口时",
+      "via": [],
+      "at": [
+        928,
+        46
+      ]
+    },
+    "b-input": {
+      "a": "new.new",
+      "b": "input",
+      "ports": "bt",
+      "kind": "data",
+      "label": "*Agent",
+      "via": [
+        [
+          815,
+          202
+        ],
+        [
+          125,
+          202
+        ]
+      ],
+      "at": [
+        444,
+        202
+      ]
+    },
+    "a-in": {
+      "a": "input.input",
+      "b": "agent.run",
+      "ports": "rl",
+      "kind": "call",
+      "label": "",
+      "via": [],
+      "at": null
+    },
+    "a-init": {
+      "a": "agent.state",
+      "b": "record.create",
+      "ports": "bl",
+      "kind": "call",
+      "label": "",
+      "via": [
+        [
+          355,
+          417
+        ],
+        [
+          231,
+          417
+        ],
+        [
+          231,
+          528
+        ]
+      ],
+      "at": null
+    },
+    "a-model": {
+      "a": "agent.state",
+      "b": "model.generate",
+      "ports": "rl",
+      "kind": "dep",
+      "label": "ctx, Messages",
+      "via": [],
+      "at": [
+        552,
+        369
+      ]
+    },
+    "a-loop": {
+      "a": "history.update",
+      "b": "model.generate",
+      "ports": "bt",
+      "kind": "data",
+      "label": "下一轮 · Step ≤ maxSteps",
+      "via": [
+        [
+          585,
+          590
+        ],
+        [
+          692,
+          590
+        ],
+        [
+          692,
+          220
+        ],
+        [
+          585,
+          220
+        ]
+      ],
+      "at": [
+        593,
+        220
+      ]
+    },
+    "a-response": {
+      "a": "model.generate",
+      "b": "response.branch",
+      "ports": "rl",
+      "kind": "data",
+      "label": "*Response",
+      "via": [],
+      "at": [
+        699,
+        230
+      ]
+    },
+    "a-batch": {
+      "a": "response.branch",
+      "b": "batch.batch",
+      "ports": "rl",
+      "kind": "call",
+      "label": "有调用",
+      "via": [],
+      "at": [
+        930,
+        230
+      ]
+    },
+    "a-direct": {
+      "a": "response",
+      "b": "record.finish",
+      "ports": "bl",
+      "kind": "data",
+      "label": "无调用 · Content",
+      "via": [
+        [
+          815,
+          413
+        ],
+        [
+          237,
+          413
+        ],
+        [
+          237,
+          545
+        ]
+      ],
+      "at": [
+        616,
+        413
+      ]
+    },
+    "a-pre": {
+      "a": "batch.batch",
+      "b": "grant.check",
+      "ports": "bt",
+      "kind": "call",
+      "label": "",
+      "via": [
+        [
+          1045,
+          404
+        ],
+        [
+          815,
+          404
+        ]
+      ],
+      "at": null
+    },
+    "a-auth": {
+      "a": "grant.check",
+      "b": "auth.authorize",
+      "ports": "rl",
+      "kind": "dep",
+      "label": "",
+      "via": [],
+      "at": null
+    },
+    "a-auth-ret": {
+      "a": "auth",
+      "b": "grant",
+      "ports": "bt",
+      "kind": "data",
+      "label": "error / nil",
+      "via": [
+        [
+          1045,
+          566
+        ],
+        [
+          927,
+          566
+        ],
+        [
+          927,
+          423
+        ],
+        [
+          815,
+          423
+        ]
+      ],
+      "at": [
+        951,
+        558
+      ]
+    },
+    "a-deny": {
+      "a": "grant",
+      "b": "record",
+      "ports": "br",
+      "kind": "data",
+      "label": "拒绝 · 整批退出",
+      "via": [
+        [
+          815,
+          582
+        ],
+        [
+          468,
+          582
+        ],
+        [
+          468,
+          545
+        ]
+      ],
+      "at": [
+        637,
+        582
+      ]
+    },
+    "a-execute": {
+      "a": "grant",
+      "b": "policy.execute",
+      "ports": "bt",
+      "kind": "call",
+      "label": "允许 · 逐项执行",
+      "via": [
+        [
+          815,
+          605
+        ],
+        [
+          1045,
+          605
+        ]
+      ],
+      "at": [
+        973,
+        605
+      ]
+    },
+    "a-adapt": {
+      "a": "policy.execute",
+      "b": "legacy.execute",
+      "ports": "bl",
+      "kind": "dep",
+      "label": "target.Execute(ctx, args)",
+      "via": [
+        [
+          1045,
+          793
+        ],
+        [
+          237,
+          793
+        ],
+        [
+          237,
+          695
+        ]
+      ],
+      "at": [
+        716,
+        793
+      ]
+    },
+    "a-doc": {
+      "a": "legacy.execute",
+      "b": "doc.invoke",
+      "ports": "lr",
+      "kind": "dep",
+      "label": "本地",
+      "via": [],
+      "at": [
+        235,
+        621
+      ]
+    },
+    "a-remote": {
+      "a": "legacy.execute",
+      "b": "remote.invoke",
+      "ports": "rl",
+      "kind": "dep",
+      "label": "MCP",
+      "via": [],
+      "at": [
+        469,
+        621
+      ]
+    },
+    "a-mcp": {
+      "a": "remote.invoke",
+      "b": "client.tool",
+      "ports": "rl",
+      "kind": "call",
+      "label": "远端名",
+      "via": [],
+      "at": [
+        704,
+        621
+      ]
+    },
+    "a-localret": {
+      "a": "doc",
+      "b": "history.pack",
+      "ports": "tb",
+      "kind": "data",
+      "label": "本地结果",
+      "via": [
+        [
+          125,
+          603
+        ],
+        [
+          585,
+          603
+        ]
+      ],
+      "at": [
+        447,
+        603
+      ]
+    },
+    "a-remoteret": {
+      "a": "client",
+      "b": "remote",
+      "ports": "bt",
+      "kind": "data",
+      "label": "ToolResult / error",
+      "via": [
+        [
+          815,
+          767
+        ],
+        [
+          700,
+          767
+        ],
+        [
+          700,
+          612
+        ],
+        [
+          585,
+          612
+        ]
+      ],
+      "at": [
+        788,
+        767
+      ]
+    },
+    "a-remotepack": {
+      "a": "remote",
+      "b": "history.pack",
+      "ports": "tl",
+      "kind": "data",
+      "label": "",
+      "via": [
+        [
+          585,
+          616
+        ],
+        [
+          472,
+          616
+        ],
+        [
+          472,
+          510
+        ]
+      ],
+      "at": null
+    },
+    "a-next": {
+      "a": "history",
+      "b": "policy",
+      "ports": "br",
+      "kind": "data",
+      "label": "批内还有调用",
+      "via": [
+        [
+          585,
+          577
+        ],
+        [
+          1160,
+          577
+        ],
+        [
+          1160,
+          660
+        ]
+      ],
+      "at": [
+        1050,
+        577
+      ]
+    },
+    "a-exit": {
+      "a": "history.pack",
+      "b": "record.finish",
+      "ports": "lr",
+      "kind": "data",
+      "label": "",
+      "via": [],
+      "at": null
+    },
+    "a-modelerr": {
+      "a": "model",
+      "b": "record.finish",
+      "ports": "bl",
+      "kind": "data",
+      "label": "模型错误 / 取消",
+      "via": [
+        [
+          585,
+          386
+        ],
+        [
+          230,
+          386
+        ],
+        [
+          230,
+          545
+        ]
+      ],
+      "at": [
+        542,
+        386
+      ]
+    },
+    "a-invalid": {
+      "a": "batch",
+      "b": "record.finish",
+      "ports": "br",
+      "kind": "data",
+      "label": "预检错误",
+      "via": [
+        [
+          1045,
+          392
+        ],
+        [
+          475,
+          392
+        ],
+        [
+          475,
+          545
+        ]
+      ],
+      "at": [
+        956,
+        392
+      ]
+    },
+    "a-end": {
+      "a": "record.finish",
+      "b": "result.result",
+      "ports": "lr",
+      "kind": "data",
+      "label": "Snapshot",
+      "via": [],
+      "at": [
+        237,
+        435
+      ]
+    },
+    "h-init": {
+      "a": "hnew.new",
+      "b": "hgate.new",
+      "ports": "rl",
+      "kind": "data",
+      "label": "*Run",
+      "via": [],
+      "at": [
+        237,
+        46
+      ]
+    },
+    "h-apply": {
+      "a": "hgate.apply",
+      "b": "hrun.apply",
+      "ports": "rl",
+      "kind": "call",
+      "label": "",
+      "via": [],
+      "at": null
+    },
+    "h-advance": {
+      "a": "hrun.apply",
+      "b": "advance.advance",
+      "ports": "rl",
+      "kind": "call",
+      "label": "Event",
+      "via": [],
+      "at": [
+        698,
+        46
+      ]
+    },
+    "h-state": {
+      "a": "advance.advance",
+      "b": "hstate",
+      "ports": "rl",
+      "kind": "data",
+      "label": "State",
+      "via": [],
+      "at": [
+        928,
+        46
+      ]
+    },
+    "h-start": {
+      "a": "hrun",
+      "b": "hmodel.gen",
+      "ports": "bl",
+      "kind": "data",
+      "label": "StartModel · Messages",
+      "via": [
+        [
+          585,
+          218
+        ],
+        [
+          12,
+          218
+        ],
+        [
+          12,
+          315
+        ]
+      ],
+      "at": [
+        125,
+        205
+      ]
+    },
+    "h-response": {
+      "a": "hmodel.gen",
+      "b": "hresponse.branch",
+      "ports": "rl",
+      "kind": "data",
+      "label": "",
+      "via": [],
+      "at": null
+    },
+    "h-pause": {
+      "a": "hresponse.branch",
+      "b": "pause.pause",
+      "ports": "rl",
+      "kind": "data",
+      "label": "ToolsPending",
+      "via": [],
+      "at": [
+        470,
+        243
+      ]
+    },
+    "h-cp": {
+      "a": "pause.pause",
+      "b": "hrun.cp",
+      "ports": "tb",
+      "kind": "call",
+      "label": "before_tools",
+      "via": [],
+      "at": [
+        638,
+        213
+      ]
+    },
+    "h-decide": {
+      "a": "pause.pause",
+      "b": "decision.decide",
+      "ports": "rl",
+      "kind": "data",
+      "label": "RequestID",
+      "via": [],
+      "at": [
+        700,
+        243
+      ]
+    },
+    "h-snap": {
+      "a": "decision.decide",
+      "b": "snapshot.snap",
+      "ports": "rl",
+      "kind": "data",
+      "label": "可选捕获",
+      "via": [],
+      "at": [
+        929,
+        243
+      ]
+    },
+    "h-snapret": {
+      "a": "snapshot",
+      "b": "decision.resolve",
+      "ports": "bl",
+      "kind": "data",
+      "label": "候选副本",
+      "via": [
+        [
+          1045,
+          413
+        ],
+        [
+          696,
+          413
+        ],
+        [
+          696,
+          327
+        ]
+      ],
+      "at": [
+        922,
+        413
+      ]
+    },
+    "h-reject": {
+      "a": "decision",
+      "b": "hresult",
+      "ports": "bl",
+      "kind": "data",
+      "label": "Abort · Failed",
+      "via": [
+        [
+          815,
+          426
+        ],
+        [
+          12,
+          426
+        ],
+        [
+          12,
+          477
+        ]
+      ],
+      "at": [
+        325,
+        426
+      ]
+    },
+    "h-direct": {
+      "a": "hresponse",
+      "b": "hresult",
+      "ports": "bl",
+      "kind": "data",
+      "label": "零调用 · Completed",
+      "via": [
+        [
+          355,
+          396
+        ],
+        [
+          12,
+          396
+        ],
+        [
+          12,
+          496
+        ]
+      ],
+      "at": [
+        153,
+        396
+      ]
+    },
+    "h-io": {
+      "a": "decision.resolve",
+      "b": "hostio.io",
+      "ports": "br",
+      "kind": "data",
+      "label": "StartTools · ToolsRunning",
+      "via": [
+        [
+          815,
+          399
+        ],
+        [
+          1163,
+          399
+        ],
+        [
+          1163,
+          707
+        ]
+      ],
+      "at": [
+        932,
+        400
+      ]
+    },
+    "h-confirm": {
+      "a": "hostio",
+      "b": "recon.query",
+      "ports": "bl",
+      "kind": "call",
+      "label": "缺少结果 · 同一个存活 Run",
+      "via": [
+        [
+          1045,
+          779
+        ],
+        [
+          470,
+          779
+        ],
+        [
+          470,
+          518
+        ]
+      ],
+      "at": [
+        945,
+        779
+      ]
+    },
+    "h-inspect": {
+      "a": "recon.query",
+      "b": "inspect.inspect",
+      "ports": "rl",
+      "kind": "call",
+      "label": "锁外查证",
+      "via": [],
+      "at": [
+        699,
+        445
+      ]
+    },
+    "h-lookup": {
+      "a": "inspect.inspect",
+      "b": "source.lookup",
+      "ports": "rl",
+      "kind": "dep",
+      "label": "每项一次",
+      "via": [],
+      "at": [
+        928,
+        445
+      ]
+    },
+    "h-report": {
+      "a": "source",
+      "b": "inspect",
+      "ports": "br",
+      "kind": "data",
+      "label": "Evidence",
+      "via": [
+        [
+          1045,
+          586
+        ],
+        [
+          931,
+          586
+        ],
+        [
+          931,
+          474
+        ]
+      ],
+      "at": [
+        1009,
+        586
+      ]
+    },
+    "h-report2": {
+      "a": "inspect",
+      "b": "recon.commit",
+      "ports": "br",
+      "kind": "data",
+      "label": "Report",
+      "via": [
+        [
+          815,
+          574
+        ],
+        [
+          700,
+          574
+        ],
+        [
+          700,
+          528
+        ]
+      ],
+      "at": [
+        765,
+        574
+      ]
+    },
+    "h-write": {
+      "a": "recon.commit",
+      "b": "hwrite.write",
+      "ports": "lr",
+      "kind": "call",
+      "label": "一致 · 全已知",
+      "via": [],
+      "at": [
+        470,
+        445
+      ]
+    },
+    "h-normal": {
+      "a": "hostio",
+      "b": "hwrite",
+      "ports": "tl",
+      "kind": "data",
+      "label": "正常取得 Results",
+      "via": [
+        [
+          1045,
+          610
+        ],
+        [
+          234,
+          610
+        ],
+        [
+          234,
+          507
+        ]
+      ],
+      "at": [
+        933,
+        610
+      ]
+    },
+    "h-next": {
+      "a": "hwrite",
+      "b": "hmodel",
+      "ports": "bt",
+      "kind": "data",
+      "label": "Ready → StartModel",
+      "via": [
+        [
+          355,
+          591
+        ],
+        [
+          239,
+          591
+        ],
+        [
+          239,
+          229
+        ],
+        [
+          125,
+          229
+        ]
+      ],
+      "at": [
+        210,
+        229
+      ]
+    },
+    "h-stop": {
+      "a": "recon",
+      "b": "hresult.result",
+      "ports": "bl",
+      "kind": "data",
+      "label": "不完整 / 冲突 / 取消",
+      "via": [
+        [
+          585,
+          594
+        ],
+        [
+          12,
+          594
+        ],
+        [
+          12,
+          530
+        ]
+      ],
+      "at": [
+        417,
+        594
+      ]
+    },
+    "h-save": {
+      "a": "pause",
+      "b": "hstore.save",
+      "ports": "bl",
+      "kind": "data",
+      "label": "可选 · Checkpoint",
+      "via": [
+        [
+          585,
+          384
+        ],
+        [
+          8,
+          384
+        ],
+        [
+          8,
+          707
+        ]
+      ],
+      "at": [
+        442,
+        384
+      ]
+    },
+    "h-review": {
+      "a": "hstore",
+      "b": "review.review",
+      "ports": "rl",
+      "kind": "data",
+      "label": "Version",
+      "via": [],
+      "at": [
+        237,
+        634
+      ]
+    },
+    "h-plan": {
+      "a": "review.review",
+      "b": "recovery.plan",
+      "ports": "rl",
+      "kind": "call",
+      "label": "分类",
+      "via": [],
+      "at": [
+        470,
+        634
+      ]
+    },
+    "h-load": {
+      "a": "recovery",
+      "b": "hstore.load",
+      "ports": "bl",
+      "kind": "dep",
+      "label": "Load 一次",
+      "via": [
+        [
+          585,
+          752
+        ],
+        [
+          14,
+          752
+        ],
+        [
+          14,
+          725
+        ]
+      ],
+      "at": [
+        400,
+        752
+      ]
+    },
+    "h-replay": {
+      "a": "recovery.plan",
+      "b": "replay.plan",
+      "ports": "rl",
+      "kind": "data",
+      "label": "review_pending",
+      "via": [],
+      "at": [
+        700,
+        634
+      ]
+    }
+  },
+  "sources": {
+    "build-34-53": {
+      "path": "examples/internal/assembly/week02.go",
+      "start": 34,
+      "end": 53,
+      "code": "// Build initializes/discovers capabilities but does not invoke business tools.\n// The caller owns transport cleanup; a failed/ambiguous session is not replayed.\nfunc Build(ctx context.Context, c Config) (*Runtime, error) {\n\tif err := ctx.Err(); err != nil {\n\t\treturn nil, err\n\t}\n\tif c.Model == nil || c.Local == nil || c.Transport == nil || c.MaxPages \u003c= 0 || c.MaxSteps \u003c= 0 || c.ToolTimeout \u003c 0 {\n\t\treturn nil, fmt.Errorf(\"assembly: invalid config\")\n\t}\n\tclient, err := mcp.NewClient(c.Transport)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tif _, err = client.Initialize(ctx); err != nil {\n\t\treturn nil, err\n\t}\n\tcandidates, err := mcptool.Discover(ctx, client, c.Prefix, c.MaxPages)\n\tif err != nil {\n\t\treturn nil, err\n\t}"
+    },
+    "mcp-106-142": {
+      "path": "examples/internal/mcp/client.go",
+      "start": 106,
+      "end": 142,
+      "code": "func (c *Client) Initialize(ctx context.Context) (InitializeResult, error) {\n\tvar result InitializeResult\n\tif err := c.enter(ctx); err != nil {\n\t\treturn result, err\n\t}\n\tdefer c.leave()\n\tif c.state != \"new\" {\n\t\treturn result, ErrSessionState\n\t}\n\t// Never replay initialization on an ambiguous, possibly initialized transport.\n\tc.state = \"failed\"\n\traw, err := c.rpc(ctx, \"initialize\", struct {\n\t\tProtocolVersion string         `json:\"protocolVersion\"`\n\t\tCapabilities    struct{}       `json:\"capabilities\"`\n\t\tClientInfo      Implementation `json:\"clientInfo\"`\n\t}{ProtocolVersion: ProtocolVersion, ClientInfo: Implementation{Name: \"agent-runtime-examples\", Version: \"0.1.0\"}})\n\tif err != nil {\n\t\treturn result, err\n\t}\n\tif json.Unmarshal(raw, &result) != nil || result.ProtocolVersion != ProtocolVersion || result.Capabilities == nil || result.ServerInfo.Name == \"\" || result.ServerInfo.Version == \"\" {\n\t\treturn result, c.protocol(\"unsupported version or invalid initialize result\")\n\t}\n\tnotification, _ := json.Marshal(request{JSONRPC: \"2.0\", Method: \"notifications/initialized\"})\n\treply, err := c.transport.Send(ctx, notification)\n\tif ctx.Err() != nil {\n\t\terr = ctx.Err()\n\t}\n\tif err != nil {\n\t\treturn result, fmt.Errorf(\"mcp initialized notification: %w\", err)\n\t}\n\tif len(bytes.TrimSpace(reply)) != 0 {\n\t\treturn result, c.protocol(\"notification must not receive a response\")\n\t}\n\tc.toolsAvailable = result.Capabilities.Tools != nil\n\tc.state = \"ready\"\n\treturn result, nil\n}"
+    },
+    "build-16-32": {
+      "path": "examples/internal/assembly/week02.go",
+      "start": 16,
+      "end": 32,
+      "code": "type Config struct {\n\tModel              model.Model\n\tLocal              tool.Invokable\n\tTransport          mcp.Transport\n\tPrefix             string\n\tRules              map[string]tool.Capability\n\tGrants             map[string][]tool.Capability\n\tPolicies           map[string]tool.Policy\n\tVisible            []string\n\tMaxPages, MaxSteps int\n\tToolTimeout        time.Duration\n\tSink               agent.EventSink\n}\ntype Runtime struct {\n\tAgent  *agent.Agent\n\tClient *mcp.Client\n}"
+    },
+    "discover-12-33": {
+      "path": "examples/internal/tool/mcptool/discovery.go",
+      "start": 12,
+      "end": 33,
+      "code": "func Discover(ctx context.Context, caller Caller, prefix string, maxPages int) ([]tool.Invokable, error) {\n\tif caller == nil || !prefixPattern.MatchString(prefix) || maxPages \u003c= 0 {\n\t\treturn nil, fmt.Errorf(\"%w: invalid discovery configuration\", ErrDiscovery)\n\t}\n\ttools := make([]tool.Invokable, 0)\n\tseenNames := make(map[string]bool)\n\tseenCursors := map[string]bool{\"\": true}\n\tcursor := \"\"\n\tfor pageNumber := 0; pageNumber \u003c maxPages; pageNumber++ {\n\t\tif err := ctx.Err(); err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tpage, err := caller.ListTools(ctx, cursor)\n\t\tif ctx.Err() != nil {\n\t\t\treturn nil, ctx.Err()\n\t\t}\n\t\tif err != nil {\n\t\t\treturn nil, fmt.Errorf(\"mcptool: listing tools: %w\", err)\n\t\t}\n\t\tif page.Tools == nil {\n\t\t\treturn nil, fmt.Errorf(\"%w: tools array required\", ErrDiscovery)\n\t\t}"
+    },
+    "remote-44-51": {
+      "path": "examples/internal/tool/mcptool/adapter.go",
+      "start": 44,
+      "end": 51,
+      "code": "func localName(prefix, name string) (string, error) {\n\tlocal := prefix + \"__\" + name\n\t// Prefixes deliberately exclude underscores so namespace boundaries are unique.\n\tif !prefixPattern.MatchString(prefix) || !namePattern.MatchString(name) || len(local) > 64 {\n\t\treturn \"\", fmt.Errorf(\"%w: incompatible local tool name\", ErrDiscovery)\n\t}\n\treturn local, nil\n}"
+    },
+    "reg-37-61": {
+      "path": "examples/internal/tool/registry.go",
+      "start": 37,
+      "end": 61,
+      "code": "// Register 读取一次元信息；不调用 Invoke。重复名称绝不覆盖。\nfunc (r *Registry) Register(ctx context.Context, t Invokable) error {\n\tif err := ctx.Err(); err != nil {\n\t\treturn err\n\t}\n\tif t == nil {\n\t\treturn fmt.Errorf(\"tool: nil invokable\")\n\t}\n\ts, err := t.Meta(ctx)\n\tif err != nil {\n\t\treturn err\n\t}\n\tif err = validateSpec(s); err != nil {\n\t\treturn err\n\t}\n\tr.mu.Lock()\n\tdefer r.mu.Unlock()\n\tif r.entries == nil {\n\t\tr.entries = make(map[string]registration)\n\t}\n\tif _, exists := r.entries[s.Name]; exists {\n\t\treturn fmt.Errorf(\"tool: duplicate name %q\", s.Name)\n\t}\n\tr.entries[s.Name] = registration{spec: cloneSpec(s), target: t}\n\treturn nil"
+    },
+    "reg-98-106": {
+      "path": "examples/internal/tool/registry.go",
+      "start": 98,
+      "end": 106,
+      "code": "// Tools 为旧 Agent 构造 API 提供所有已注册工具的适配快照。\nfunc (r *Registry) Tools() map[string]Tool {\n\tr.mu.RLock()\n\tdefer r.mu.RUnlock()\n\tout := make(map[string]Tool, len(r.entries))\n\tfor name, e := range r.entries {\n\t\tout[name] = &legacyAdapter{spec: cloneSpec(e.spec), target: e.target}\n\t}\n\treturn out"
+    },
+    "reg-14-25": {
+      "path": "examples/internal/tool/registry.go",
+      "start": 14,
+      "end": 25,
+      "code": "type registration struct {\n\tspec   Spec\n\ttarget Invokable\n}\n\n// Registry 保存完整执行集合。Specs 为模型可见集合的独立快照，不授予执行权限。\ntype Registry struct {\n\tmu      sync.RWMutex\n\tentries map[string]registration\n}\n\nfunc NewRegistry() *Registry { return &Registry{entries: make(map[string]registration)} }"
+    },
+    "a-29-51": {
+      "path": "examples/internal/agent/agent.go",
+      "start": 29,
+      "end": 51,
+      "code": "func New(m model.Model, tools map[string]tool.Tool, maxSteps int, opts ...Option) (*Agent, error) {\n\tif m == nil || maxSteps \u003c= 0 {\n\t\treturn nil, fmt.Errorf(\"agent: model and positive maxSteps required\")\n\t}\n\ta := &Agent{model: m, tools: make(map[string]tool.Tool), maxSteps: maxSteps}\n\tfor _, opt := range opts {\n\t\tif opt != nil {\n\t\t\topt(a)\n\t\t}\n\t}\n\tif a.authorizationSet && a.authorizer == nil {\n\t\treturn nil, fmt.Errorf(\"agent: nil authorizer\")\n\t}\n\tif a.toolTimeout \u003c 0 {\n\t\treturn nil, fmt.Errorf(\"agent: negative timeout\")\n\t}\n\tnames := make([]string, 0, len(tools))\n\tfor name, t := range tools {\n\t\tif t == nil || name == \"\" || name != t.Name() {\n\t\t\treturn nil, fmt.Errorf(\"agent: invalid tool registration %q\", name)\n\t\t}\n\t\ta.tools[name] = t\n\t\tnames = append(names, name)"
+    },
+    "build-63-88": {
+      "path": "examples/internal/assembly/week02.go",
+      "start": 63,
+      "end": 88,
+      "code": "\ttools := registry.Tools()\n\tfor name, target := range tools {\n\t\tdescribed, ok := target.(tool.DescribedTool)\n\t\tif !ok {\n\t\t\treturn nil, fmt.Errorf(\"assembly: description required\")\n\t\t}\n\t\twrapped, err := tool.WithPolicy(described, c.Policies[name])\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\ttools[name] = wrapped\n\t}\n\tauth, err := tool.NewCapabilityAuthorizer(c.Rules, c.Grants)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\topts := []agent.Option{agent.WithAuthorizer(auth), agent.WithToolTimeout(c.ToolTimeout), agent.WithEventSink(c.Sink)}\n\tif c.Visible != nil {\n\t\topts = append(opts, agent.WithVisibleTools(c.Visible...))\n\t}\n\ta, err := agent.New(c.Model, tools, c.MaxSteps, opts...)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\treturn &Runtime{Agent: a, Client: client}, nil\n}"
+    },
+    "a-83-94": {
+      "path": "examples/internal/agent/agent.go",
+      "start": 83,
+      "end": 94,
+      "code": "\tif binder, ok := m.(model.ToolBinder); ok {\n\t\tbound, err := binder.WithTools(defs)\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tif bound == nil {\n\t\t\treturn nil, fmt.Errorf(\"agent: nil bound model\")\n\t\t}\n\t\ta.model = bound\n\t}\n\treturn a, nil\n}"
+    },
+    "model-62-70": {
+      "path": "examples/internal/model/model.go",
+      "start": 62,
+      "end": 70,
+      "code": "type ToolDefinition struct {\n\tName        string          `json:\"name\"`\n\tDescription string          `json:\"description,omitempty\"`\n\tParameters  json.RawMessage `json:\"parameters,omitempty\"`\n}\n\ntype ToolBinder interface {\n\tWithTools(defs []ToolDefinition) (Model, error)\n}"
+    },
+    "fixture-152-165": {
+      "path": "examples/internal/assembly/week02_test.go",
+      "start": 152,
+      "end": 165,
+      "code": "\t\t\tscripted := &weekModel{batch: batch}\n\t\t\ttrace := &eventProbe{}\n\t\t\truntime, err := Build(ctx, Config{\n\t\t\t\tModel: scripted, Local: local, Transport: wire, Prefix: \"knowledge\",\n\t\t\t\tRules: rules, Grants: map[string][]tool.Capability{\"reader\": {tool.ReadCapability}},\n\t\t\t\tPolicies: policies, Visible: []string{localName, remoteName},\n\t\t\t\tMaxPages: 4, MaxSteps: 3, ToolTimeout: 2 * time.Second, Sink: trace,\n\t\t\t})\n\t\t\tif err != nil {\n\t\t\t\tt.Fatal(err)\n\t\t\t}\n\t\t\tclient := runtime.Client\n\t\t\toutput, runErr := runtime.Agent.Run(ctx, \"compare known local-1 and remote-1 documents\")\n\t\t\tif tc.terminal {"
+    },
+    "a-104-107": {
+      "path": "examples/internal/agent/agent.go",
+      "start": 104,
+      "end": 107,
+      "code": "func (a *Agent) Run(ctx context.Context, input string) (string, error) {\n\tresult, err := a.RunWithState(ctx, input)\n\treturn result.Output, err\n}"
+    },
+    "a-109-132": {
+      "path": "examples/internal/agent/agent.go",
+      "start": 109,
+      "end": 132,
+      "code": "// RunWithState returns a final, independent observation snapshot, even on a Run error.\n// It does not persist, resume, or authorize replay from a snapshot.\nfunc (a *Agent) RunWithState(ctx context.Context, input string) (result RunResult, runErr error) {\n\trecord, err := newRunRecord(input)\n\tif err != nil {\n\t\treturn RunResult{}, err\n\t}\n\tif err = record.transition(RunRunning); err != nil {\n\t\treturn RunResult{Snapshot: record.snapshot()}, err\n\t}\n\tstarted := time.Now()\n\ta.emit(ctx, Event{Type: EventRunStarted, Status: \"ok\"})\n\tdefer func() {\n\t\trunErr = record.finish(runErr)\n\t\tif runErr != nil {\n\t\t\tresult.Output = \"\"\n\t\t}\n\t\tresult.Snapshot = record.snapshot()\n\t\tkind := EventRunFinished\n\t\tif runErr != nil {\n\t\t\tkind = EventRunFailed\n\t\t}\n\t\ta.emit(ctx, Event{Type: kind, Step: record.data.Step, Duration: time.Since(started), Status: status(runErr)})\n\t}()"
+    },
+    "a-15-25": {
+      "path": "examples/internal/agent/agent.go",
+      "start": 15,
+      "end": 25,
+      "code": "type Agent struct {\n\tmodel            model.Model\n\ttools            map[string]tool.Tool\n\tmaxSteps         int\n\tsink             EventSink\n\tvisibleTools     []string\n\tvisibilitySet    bool\n\ttoolTimeout      time.Duration\n\tauthorizer       tool.Authorizer\n\tauthorizationSet bool\n}"
+    },
+    "fixture-69-90": {
+      "path": "examples/internal/assembly/week02_test.go",
+      "start": 69,
+      "end": 90,
+      "code": "type weekModel struct {\n\tbatch   []model.ToolCall\n\tcalls   int\n\tdefs    []model.ToolDefinition\n\thistory []model.Message\n}\n\nfunc (m *weekModel) WithTools(defs []model.ToolDefinition) (model.Model, error) {\n\tm.defs = append([]model.ToolDefinition(nil), defs...)\n\treturn m, nil\n}\nfunc (m *weekModel) Generate(ctx context.Context, messages []model.Message) (*model.Response, error) {\n\tif err := ctx.Err(); err != nil {\n\t\treturn nil, err\n\t}\n\tm.calls++\n\tm.history = append([]model.Message(nil), messages...)\n\tif m.calls == 1 {\n\t\treturn &model.Response{Message: model.Message{Role: \"assistant\", ToolCalls: m.batch}}, nil\n\t}\n\treturn &model.Response{Message: model.Message{Role: \"assistant\", Content: \"scripted final\"}}, nil\n}"
+    },
+    "model-58-60": {
+      "path": "examples/internal/model/model.go",
+      "start": 58,
+      "end": 60,
+      "code": "type Model interface {\n\tGenerate(ctx context.Context, messages []Message) (*Response, error)\n}"
+    },
+    "a-133-161": {
+      "path": "examples/internal/agent/agent.go",
+      "start": 133,
+      "end": 161,
+      "code": "\tfor record.data.Step = 1; record.data.Step \u003c= a.maxSteps; record.data.Step++ {\n\t\tif err := ctx.Err(); err != nil {\n\t\t\treturn RunResult{}, err\n\t\t}\n\t\ta.emit(ctx, Event{Type: EventStepStarted, Step: record.data.Step, Status: \"ok\"})\n\t\tstart := time.Now()\n\t\tr, err := a.model.Generate(ctx, record.data.Messages)\n\t\tif ctx.Err() != nil {\n\t\t\terr = ctx.Err()\n\t\t}\n\t\tif err == nil && r == nil {\n\t\t\terr = fmt.Errorf(\"agent: nil model response\")\n\t\t}\n\t\ta.emit(ctx, Event{Type: EventModelCompleted, Step: record.data.Step, Duration: time.Since(start), Status: status(err)})\n\t\tif err != nil {\n\t\t\treturn RunResult{}, err\n\t\t}\n\t\tif r.Message.Role != \"assistant\" {\n\t\t\treturn RunResult{}, fmt.Errorf(\"agent: expected assistant message\")\n\t\t}\n\t\trecord.data.Messages = append(record.data.Messages, r.Message)\n\t\tif len(r.Message.ToolCalls) == 0 {\n\t\t\treturn RunResult{Output: r.Message.Content}, nil\n\t\t}\n\t\tresults, err := a.executeBatchWithState(ctx, r.Message.ToolCalls, record.data.Step, record)\n\t\tif err != nil {\n\t\t\treturn RunResult{}, err\n\t\t}\n\t\trecord.data.Messages = append(record.data.Messages, results...)"
+    },
+    "model-8-19": {
+      "path": "examples/internal/model/model.go",
+      "start": 8,
+      "end": 19,
+      "code": "type Message struct {\n\tRole       string\n\tContent    string\n\tToolCalls  []ToolCall\n\tToolCallID string\n}\n\ntype ToolCall struct {\n\tID        string\n\tName      string\n\tArguments json.RawMessage\n}"
+    },
+    "batch-19-42": {
+      "path": "examples/internal/agent/executor.go",
+      "start": 19,
+      "end": 42,
+      "code": "func (a *Agent) executeBatchWithState(ctx context.Context, calls []model.ToolCall, step int, record *runRecord) ([]model.Message, error) {\n\tbase := 0\n\tif record != nil {\n\t\tvar err error\n\t\tbase, err = record.plan(calls, step)\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t}\n\tvar results []model.Message\n\t// 整批预校验，避免后面的未知工具或重复 ID 导致前面的工具已产生副作用。\n\tseen := map[string]bool{}\n\tfor _, call := range calls {\n\t\tif call.ID == \"\" || seen[call.ID] {\n\t\t\treturn nil, fmt.Errorf(\"agent: missing or duplicate tool call ID\")\n\t\t}\n\t\tseen[call.ID] = true\n\t\tif _, ok := a.tools[call.Name]; !ok {\n\t\t\treturn nil, &tool.Error{Kind: tool.NotFoundError, Message: \"tool not registered\"}\n\t\t}\n\t}\n\tif err := a.authorizeBatch(ctx, calls, step); err != nil {\n\t\treturn nil, err\n\t}"
+    },
+    "rec-44-55": {
+      "path": "examples/internal/agent/state.go",
+      "start": 44,
+      "end": 55,
+      "code": "type RunSnapshot struct {\n\tRunID        string\n\tStatus       RunStatus\n\tStep         int\n\tMessages     []model.Message\n\tCalls        []CallRecord\n\tFailureClass string // controlled category, never the raw error text\n}\ntype RunResult struct {\n\tOutput   string\n\tSnapshot RunSnapshot\n}"
+    },
+    "rec-100-114": {
+      "path": "examples/internal/agent/state.go",
+      "start": 100,
+      "end": 114,
+      "code": "type runRecord struct{ data RunSnapshot }\n\nfunc newRunRecord(input string) (*runRecord, error) {\n\tvar id [16]byte\n\tif _, err := rand.Read(id[:]); err != nil {\n\t\treturn nil, fmt.Errorf(\"agent: create run ID: %w\", err)\n\t}\n\treturn &runRecord{data: RunSnapshot{RunID: hex.EncodeToString(id[:]), Status: RunCreated, Messages: []model.Message{{Role: \"user\", Content: input}}}}, nil\n}\nfunc (r *runRecord) transition(to RunStatus) error {\n\tif !CanTransition(r.data.Status, to) {\n\t\treturn fmt.Errorf(\"%w: %s -> %s\", ErrInvalidTransition, r.data.Status, to)\n\t}\n\tr.data.Status = to\n\treturn nil"
+    },
+    "rec-169-199": {
+      "path": "examples/internal/agent/state.go",
+      "start": 169,
+      "end": 199,
+      "code": "func (r *runRecord) finish(runErr error) error {\n\tif r.data.Status != RunRunning {\n\t\treturn errors.Join(runErr, ErrInvalidTransition)\n\t}\n\tfor i := range r.data.Calls {\n\t\tc := &r.data.Calls[i]\n\t\tif c.Status == CallPlanned || c.Status == CallRunning {\n\t\t\tif runErr == nil {\n\t\t\t\trunErr = fmt.Errorf(\"%w: unfinished calls\", ErrInvalidTransition)\n\t\t\t}\n\t\t\tif c.Status == CallPlanned {\n\t\t\t\tc.Status = CallBlocked\n\t\t\t} else {\n\t\t\t\tc.Status = CallUnconfirmed\n\t\t\t}\n\t\t}\n\t}\n\ttarget := RunCompleted\n\tif runErr != nil {\n\t\ttarget = RunFailed\n\t}\n\tif errors.Is(runErr, context.Canceled) || errors.Is(runErr, context.DeadlineExceeded) {\n\t\ttarget = RunCancelled\n\t}\n\tif err := r.transition(target); err != nil {\n\t\trunErr = errors.Join(runErr, err)\n\t}\n\tr.data.FailureClass = failureClass(runErr)\n\treturn runErr\n}\nfunc (r *runRecord) snapshot() RunSnapshot { return r.data.Clone() }"
+    },
+    "rec-36-55": {
+      "path": "examples/internal/agent/state.go",
+      "start": 36,
+      "end": 55,
+      "code": "// CallRecord describes Runtime observations, not a remote commit/rollback.\n// Step+Index identifies the position even in a batch with invalid duplicate IDs.\ntype CallRecord struct {\n\tStep, Index      int\n\tCallID, ToolName string\n\tStatus           CallStatus\n\tResult           *model.Message\n}\ntype RunSnapshot struct {\n\tRunID        string\n\tStatus       RunStatus\n\tStep         int\n\tMessages     []model.Message\n\tCalls        []CallRecord\n\tFailureClass string // controlled category, never the raw error text\n}\ntype RunResult struct {\n\tOutput   string\n\tSnapshot RunSnapshot\n}"
+    },
+    "a-157-165": {
+      "path": "examples/internal/agent/agent.go",
+      "start": 157,
+      "end": 165,
+      "code": "\t\tresults, err := a.executeBatchWithState(ctx, r.Message.ToolCalls, record.data.Step, record)\n\t\tif err != nil {\n\t\t\treturn RunResult{}, err\n\t\t}\n\t\trecord.data.Messages = append(record.data.Messages, results...)\n\t}\n\trecord.data.Step = a.maxSteps\n\treturn RunResult{}, ErrMaxSteps\n}"
+    },
+    "rec-133-152": {
+      "path": "examples/internal/agent/state.go",
+      "start": 133,
+      "end": 152,
+      "code": "func (r *runRecord) completeCall(index int, result *model.Message, err error) error {\n\tif r.data.Status != RunRunning || index \u003c 0 || index >= len(r.data.Calls) || r.data.Calls[index].Status != CallRunning {\n\t\treturn ErrInvalidTransition\n\t}\n\tcall := &r.data.Calls[index]\n\tif errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {\n\t\tcall.Status = CallUnconfirmed\n\t\treturn nil\n\t}\n\tif result == nil || result.Role != \"tool\" || result.ToolCallID != call.CallID {\n\t\treturn ErrInvalidTransition\n\t}\n\tm := cloneMessage(*result)\n\tcall.Result = &m\n\tcall.Status = CallReturned\n\tif err != nil {\n\t\tcall.Status = CallErrored\n\t}\n\treturn nil\n}"
+    },
+    "batch-69-95": {
+      "path": "examples/internal/agent/executor.go",
+      "start": 69,
+      "end": 95,
+      "code": "\t\tif errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {\n\t\t\tif record != nil {\n\t\t\t\tif stateErr := record.completeCall(base+index, nil, err); stateErr != nil {\n\t\t\t\t\treturn nil, errors.Join(err, stateErr)\n\t\t\t\t}\n\t\t\t}\n\t\t\treturn nil, err\n\t\t}\n\t\tif err != nil {\n\t\t\t// 仅回填受控提示，未知内部错误不暴露给模型。\n\t\t\tvar known *tool.Error\n\t\t\tif errors.As(err, &known) {\n\t\t\t\tresult = known.Error()\n\t\t\t} else {\n\t\t\t\tresult = \"execution_failed: tool execution failed\"\n\t\t\t}\n\t\t}\n\t\tmessage := model.Message{Role: \"tool\", ToolCallID: call.ID, Content: result}\n\t\tif record != nil {\n\t\t\tif stateErr := record.completeCall(base+index, &message, err); stateErr != nil {\n\t\t\t\treturn nil, stateErr\n\t\t\t}\n\t\t}\n\t\tresults = append(results, message)\n\t}\n\treturn results, nil\n}"
+    },
+    "pre-11-40": {
+      "path": "examples/internal/agent/authorization_preflight.go",
+      "start": 11,
+      "end": 40,
+      "code": "// authorizeBatch runs after protocol validation, before the first tool executes.\nfunc (a *Agent) authorizeBatch(ctx context.Context, calls []model.ToolCall, step int) error {\n\t// Authorization is a whole-batch preflight, before any side effects.\n\t// A custom authorizer receives a copy of arguments, not the executable buffer.\n\tif a.authorizer != nil {\n\t\tprincipal, _ := tool.PrincipalFromContext(ctx)\n\t\tfor _, call := range calls {\n\t\t\tcheck := call\n\t\t\tcheck.Arguments = append([]byte(nil), call.Arguments...)\n\t\t\terr := a.authorizer.Authorize(ctx, check)\n\t\t\tif ctx.Err() != nil {\n\t\t\t\terr = ctx.Err()\n\t\t\t}\n\t\t\tkind := EventToolAuthorized\n\t\t\tdecisionStatus := \"ok\"\n\t\t\tif err != nil {\n\t\t\t\tkind = EventToolDenied\n\t\t\t\tdecisionStatus = status(err)\n\t\t\t\tif errors.Is(err, tool.ErrForbidden) {\n\t\t\t\t\tdecisionStatus = \"denied\"\n\t\t\t\t}\n\t\t\t}\n\t\t\ta.emit(ctx, Event{Type: kind, Step: step, ToolName: call.Name, ToolCallID: call.ID, PrincipalID: principal.ID, Status: decisionStatus})\n\t\t\tif err != nil {\n\t\t\t\treturn fmt.Errorf(\"agent: authorization failed: %w\", err)\n\t\t\t}\n\t\t}\n\t}\n\treturn nil\n}"
+    },
+    "auth-68-81": {
+      "path": "examples/internal/tool/access.go",
+      "start": 68,
+      "end": 81,
+      "code": "func (a *CapabilityAuthorizer) Authorize(ctx context.Context, call Call) error {\n\tif err := ctx.Err(); err != nil {\n\t\treturn err\n\t}\n\tprincipal, ok := PrincipalFromContext(ctx)\n\tif !ok || a == nil {\n\t\treturn ErrForbidden\n\t}\n\tcapability, registered := a.rules[call.Name]\n\tif !registered || !a.grants[principal.ID][capability] {\n\t\treturn ErrForbidden\n\t}\n\treturn nil\n}"
+    },
+    "auth-31-40": {
+      "path": "examples/internal/tool/access.go",
+      "start": 31,
+      "end": 40,
+      "code": "type Authorizer interface {\n\tAuthorize(context.Context, Call) error\n}\n\n// CapabilityAuthorizer is an immutable, tool-level teaching policy.\n// It is not an authentication service or a resource/tenant-level ACL.\ntype CapabilityAuthorizer struct {\n\trules  map[string]Capability\n\tgrants map[string]map[Capability]bool\n}"
+    },
+    "doc-60-88": {
+      "path": "examples/internal/tool/knowledge/tools.go",
+      "start": 60,
+      "end": 88,
+      "code": "type GetDocument struct{ Store Store }\n\nfunc (*GetDocument) Meta(ctx context.Context) (tool.Spec, error) {\n\tif err := ctx.Err(); err != nil {\n\t\treturn tool.Spec{}, err\n\t}\n\treturn tool.Spec{Name: \"get_document\", Description: \"按文档 ID 读取正文\", InputSchema: json.RawMessage(`{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"string\"}},\"required\":[\"id\"],\"additionalProperties\":false}`)}, nil\n}\nfunc (t *GetDocument) Invoke(ctx context.Context, args json.RawMessage) (string, error) {\n\tvar input struct {\n\t\tID string `json:\"id\"`\n\t}\n\tif err := decode(args, &input); err != nil {\n\t\treturn \"\", err\n\t}\n\tif input.ID == \"\" {\n\t\treturn \"\", &tool.Error{Kind: tool.ValidationError, Message: \"id required\"}\n\t}\n\tif err := ctx.Err(); err != nil {\n\t\treturn \"\", err\n\t}\n\tif t.Store == nil {\n\t\treturn \"\", fmt.Errorf(\"knowledge: missing store\")\n\t}\n\tdoc, err := t.Store.Get(ctx, input.ID)\n\tif err != nil {\n\t\treturn \"\", err\n\t}\n\tb, err := json.Marshal(doc)"
+    },
+    "legacy-45-56": {
+      "path": "examples/internal/tool/contract.go",
+      "start": 45,
+      "end": 56,
+      "code": "type legacyAdapter struct {\n\tspec   Spec\n\ttarget Invokable\n}\n\nfunc (t *legacyAdapter) Name() string { return t.spec.Name }\nfunc (t *legacyAdapter) Definition() model.ToolDefinition {\n\treturn model.ToolDefinition{Name: t.spec.Name, Description: t.spec.Description, Parameters: append(json.RawMessage(nil), t.spec.InputSchema...)}\n}\nfunc (t *legacyAdapter) Execute(ctx context.Context, args json.RawMessage) (string, error) {\n\treturn t.target.Invoke(ctx, args)\n}"
+    },
+    "remote-79-102": {
+      "path": "examples/internal/tool/mcptool/adapter.go",
+      "start": 79,
+      "end": 102,
+      "code": "func failure(message string, cause error) error {\n\treturn &tool.Error{Kind: tool.ExecutionError, Message: message, Cause: cause}\n}\nfunc (t *remoteTool) Invoke(ctx context.Context, args json.RawMessage) (string, error) {\n\tif err := ctx.Err(); err != nil {\n\t\treturn \"\", err\n\t}\n\tresult, err := t.caller.CallTool(ctx, t.remoteName, append(json.RawMessage(nil), args...))\n\tif ctx.Err() != nil {\n\t\treturn \"\", ctx.Err()\n\t}\n\tif errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {\n\t\treturn \"\", err\n\t}\n\tif err != nil {\n\t\treturn \"\", failure(\"remote tool request failed\", err)\n\t}\n\tif result.IsError {\n\t\treturn \"\", failure(\"remote tool execution failed\", ErrRemoteExecution)\n\t}\n\tif result.Content == nil {\n\t\treturn \"\", failure(\"invalid remote result\", ErrInvalidResult)\n\t}\n\tenvelope := ResultEnvelope{Text: make([]string, 0, len(result.Content))}"
+    },
+    "remote-24-42": {
+      "path": "examples/internal/tool/mcptool/adapter.go",
+      "start": 24,
+      "end": 42,
+      "code": "// Caller is implemented by an already-initialized *mcp.Client.\n// The host owns initialization, transport cleanup and recovery.\ntype Caller interface {\n\tListTools(context.Context, string) (mcp.ToolsPage, error)\n\tCallTool(context.Context, string, json.RawMessage) (mcp.ToolResult, error)\n}\n\n// ResultEnvelope is the explicit projection into the existing string result.\n// Non-text blocks are rejected, not silently flattened or discarded.\ntype ResultEnvelope struct {\n\tText              []string        `json:\"text\"`\n\tStructuredContent json.RawMessage `json:\"structuredContent,omitempty\"`\n}\n\ntype remoteTool struct {\n\tcaller     Caller\n\tremoteName string\n\tspec       tool.Spec\n}"
+    },
+    "mcp-176-204": {
+      "path": "examples/internal/mcp/client.go",
+      "start": 176,
+      "end": 204,
+      "code": "func (c *Client) CallTool(ctx context.Context, name string, args json.RawMessage) (ToolResult, error) {\n\tvar result ToolResult\n\tif err := c.enter(ctx); err != nil {\n\t\treturn result, err\n\t}\n\tdefer c.leave()\n\tif c.state != \"ready\" {\n\t\treturn result, ErrSessionState\n\t}\n\tif !c.toolsAvailable {\n\t\treturn result, ErrToolsUnavailable\n\t}\n\tif len(args) == 0 {\n\t\targs = json.RawMessage(\"{}\")\n\t}\n\tvar object map[string]json.RawMessage\n\tif strings.TrimSpace(name) == \"\" || json.Unmarshal(args, &object) != nil || object == nil {\n\t\treturn result, fmt.Errorf(\"mcp: nonempty tool name and object arguments required\")\n\t}\n\traw, err := c.rpc(ctx, \"tools/call\", struct {\n\t\tName      string          `json:\"name\"`\n\t\tArguments json.RawMessage `json:\"arguments\"`\n\t}{name, args})\n\tif err != nil {\n\t\treturn result, err\n\t}\n\tif json.Unmarshal(raw, &result) != nil || result.Content == nil {\n\t\treturn result, c.protocol(\"content must be an array\")\n\t}"
+    },
+    "mcp-49-82": {
+      "path": "examples/internal/mcp/client.go",
+      "start": 49,
+      "end": 82,
+      "code": "// rpc is called with the session gate held. Transport/protocol failures mark\n// the session failed because the peer may already have executed the request.\n// A valid JSON-RPC error does not automatically invalidate the session.\nfunc (c *Client) rpc(ctx context.Context, method string, params any) (json.RawMessage, error) {\n\traw, err := json.Marshal(params)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tc.nextID++\n\tid := c.nextID\n\tmessage, err := json.Marshal(request{JSONRPC: \"2.0\", ID: id, Method: method, Params: raw})\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tpayload, err := c.transport.Send(ctx, message)\n\tif ctx.Err() != nil {\n\t\terr = ctx.Err()\n\t}\n\tif err != nil {\n\t\tc.state = \"failed\"\n\t\treturn nil, fmt.Errorf(\"mcp transport: %w\", err)\n\t}\n\tif len(payload) > MaxResponseBytes {\n\t\treturn nil, c.protocol(\"response exceeds byte budget\")\n\t}\n\tvar r response\n\tif err = json.Unmarshal(payload, &r); err != nil {\n\t\treturn nil, c.protocol(\"malformed JSON\")\n\t}\n\tif r.JSONRPC != \"2.0\" || string(r.ID) != strconv.FormatUint(id, 10) {\n\t\treturn nil, c.protocol(\"version or request ID mismatch\")\n\t}\n\tif (len(r.Result) == 0) == (len(r.Error) == 0) {\n\t\treturn nil, c.protocol(\"expected exactly one of result/error\")"
+    },
+    "mcp-12-25": {
+      "path": "examples/internal/mcp/client.go",
+      "start": 12,
+      "end": 25,
+      "code": "type Client struct {\n\ttransport      Transport\n\tgate           chan struct{}\n\tstate          string\n\tnextID         uint64\n\ttoolsAvailable bool\n}\n\nfunc NewClient(t Transport) (*Client, error) {\n\tif t == nil {\n\t\treturn nil, fmt.Errorf(\"mcp: nil transport\")\n\t}\n\treturn &Client{transport: t, gate: make(chan struct{}, 1), state: \"new\"}, nil\n}"
+    },
+    "policy-46-84": {
+      "path": "examples/internal/tool/policy.go",
+      "start": 46,
+      "end": 84,
+      "code": "func (t *policyTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {\n\tif err := ctx.Err(); err != nil {\n\t\treturn \"\", err\n\t}\n\tif t.policy.Timeout > 0 {\n\t\tvar cancel context.CancelFunc\n\t\tctx, cancel = context.WithTimeout(ctx, t.policy.Timeout)\n\t\tdefer cancel()\n\t}\n\tfor attempt := 1; attempt \u003c= t.policy.MaxAttempts; attempt++ {\n\t\tif err := ctx.Err(); err != nil {\n\t\t\treturn \"\", err\n\t\t}\n\t\tresult, err := t.target.Execute(ctx, append(json.RawMessage(nil), args...))\n\t\tif ctx.Err() != nil {\n\t\t\treturn \"\", ctx.Err()\n\t\t}\n\t\tif err == nil {\n\t\t\tif t.policy.MaxResultBytes > 0 && len(result) > t.policy.MaxResultBytes {\n\t\t\t\treturn \"\", &Error{Kind: ExecutionError, Message: \"tool result exceeds byte budget\"}\n\t\t\t}\n\t\t\treturn result, nil\n\t\t}\n\t\tif errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {\n\t\t\treturn \"\", err\n\t\t}\n\t\tvar controlled *Error\n\t\tif errors.As(err, &controlled) || attempt == t.policy.MaxAttempts || t.policy.Retryable == nil || !t.policy.Retryable(err) {\n\t\t\treturn \"\", err\n\t\t}\n\t\tif t.policy.RetryDelay > 0 {\n\t\t\ttimer := time.NewTimer(t.policy.RetryDelay)\n\t\t\tselect {\n\t\t\tcase \u003c-ctx.Done():\n\t\t\t\ttimer.Stop()\n\t\t\t\treturn \"\", ctx.Err()\n\t\t\tcase \u003c-timer.C:\n\t\t\t}\n\t\t}"
+    },
+    "policy-13-42": {
+      "path": "examples/internal/tool/policy.go",
+      "start": 13,
+      "end": 42,
+      "code": "// Policy applies to the whole logical call, including all retries and waits.\n// ReadOnly is an explicit application assertion, never inferred from a model.\ntype Policy struct {\n\tTimeout        time.Duration\n\tMaxAttempts    int\n\tReadOnly       bool\n\tRetryable      func(error) bool\n\tRetryDelay     time.Duration\n\tMaxResultBytes int\n}\n\n// WithPolicy preserves the legacy described-tool boundary used by Agent.\n// No automatic retry occurs unless both ReadOnly and Retryable permit it.\nfunc WithPolicy(t DescribedTool, p Policy) (DescribedTool, error) {\n\tif t == nil || p.Timeout \u003c 0 || p.MaxAttempts \u003c 0 || p.RetryDelay \u003c 0 || p.MaxResultBytes \u003c 0 {\n\t\treturn nil, fmt.Errorf(\"tool: invalid policy\")\n\t}\n\tif p.MaxAttempts == 0 {\n\t\tp.MaxAttempts = 1\n\t}\n\tif p.MaxAttempts > 1 && (!p.ReadOnly || p.Retryable == nil) {\n\t\treturn nil, fmt.Errorf(\"tool: retries require explicit read-only and retryable policy\")\n\t}\n\treturn &policyTool{target: t, policy: p}, nil\n}\n\ntype policyTool struct {\n\ttarget DescribedTool\n\tpolicy Policy\n}"
+    },
+    "run-16-30": {
+      "path": "examples/internal/runstate/run.go",
+      "start": 16,
+      "end": 30,
+      "code": "// NewRun retains ctx for cancellation/deadlines, not for storing State.\n// A cancelled context rejects construction; invalid identity/budget uses ErrTransition.\nfunc NewRun(ctx context.Context, runID, input string, maxSteps int) (*Run, error) {\n\tif ctx == nil {\n\t\treturn nil, ErrTransition\n\t}\n\tif err := ctx.Err(); err != nil {\n\t\treturn nil, err\n\t}\n\ts, err := New(runID, input, maxSteps)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\treturn &Run{ctx: ctx, state: s}, nil\n}"
+    },
+    "state-54-59": {
+      "path": "examples/internal/runstate/state.go",
+      "start": 54,
+      "end": 59,
+      "code": "func New(runID, input string, maxSteps int) (State, error) {\n\tif strings.TrimSpace(runID) == \"\" || maxSteps \u003c= 0 {\n\t\treturn State{}, ErrTransition\n\t}\n\treturn State{RunID: runID, Phase: Ready, MaxSteps: maxSteps, Messages: []model.Message{{Role: \"user\", Content: input}}}, nil\n}"
+    },
+    "pause-23-38": {
+      "path": "examples/internal/runstate/pause.go",
+      "start": 23,
+      "end": 38,
+      "code": "// PauseGate coordinates transitions only through this gate. The host must\n// transfer exclusive write ownership of the Run to ONE gate and never bypass it.\n// Zero value is not usable; do not copy after use.\ntype PauseGate struct {\n\tmu       sync.Mutex\n\trun      *Run\n\trequest  *PauseRequest\n\tdecision *ApprovalDecision\n}\n\nfunc NewPauseGate(run *Run) (*PauseGate, error) {\n\tif run == nil {\n\t\treturn nil, ErrInvalidPause\n\t}\n\treturn &PauseGate{run: run}, nil\n}"
+    },
+    "pause-81-97": {
+      "path": "examples/internal/runstate/pause.go",
+      "start": 81,
+      "end": 97,
+      "code": "// Apply preserves Run.Apply semantics while open. During a live pause every\n// event is rejected with a current owned State and ErrPaused. Observed context\n// cancellation is allowed through to Run.Apply; terminal state clears the pause.\n// The host may perform I/O only AFTER a successful transition; no I/O runs here.\nfunc (g *PauseGate) Apply(e Event) (State, error) {\n\tg.mu.Lock()\n\tdefer g.mu.Unlock()\n\tif g.request != nil && g.run.Context().Err() == nil {\n\t\treturn g.run.Snapshot(), ErrPaused\n\t}\n\tstate, err := g.run.Apply(e)\n\tif terminal(state.Phase) {\n\t\tg.request = nil\n\t\tg.decision = nil\n\t}\n\treturn state, err\n}"
+    },
+    "run-43-67": {
+      "path": "examples/internal/runstate/run.go",
+      "start": 43,
+      "end": 67,
+      "code": "// Apply commits exactly one valid event, or returns the unchanged current copy.\n// For a nonterminal Run, observed context cancellation commits Cancel and rejects\n// the event with the original context error. A terminal State is never overwritten.\n// This serializes transitions, not a snapshot -> external I/O -> Apply transaction.\nfunc (r *Run) Apply(e Event) (State, error) {\n\tr.mu.Lock()\n\tdefer r.mu.Unlock()\n\tif terminal(r.state.Phase) {\n\t\treturn cloneState(r.state), ErrTransition\n\t}\n\tif err := r.ctx.Err(); err != nil {\n\t\tnext, transitionErr := Advance(r.state, Event{Kind: Cancel})\n\t\tif transitionErr != nil {\n\t\t\treturn cloneState(r.state), transitionErr\n\t\t}\n\t\tr.state = next\n\t\treturn cloneState(r.state), err\n\t}\n\tnext, err := Advance(r.state, e)\n\tif err != nil {\n\t\treturn cloneState(r.state), err\n\t}\n\tr.state = next\n\treturn cloneState(r.state), nil\n}"
+    },
+    "cp-28-46": {
+      "path": "examples/internal/runstate/checkpoint.go",
+      "start": 28,
+      "end": 46,
+      "code": "// Checkpoint samples boundary and state under the same lock.\n// It does not observe context cancellation, advance state, pause the driver,\n// perform I/O, or promise that an external tool has not already taken effect.\nfunc (r *Run) Checkpoint() (Checkpoint, error) {\n\tr.mu.Lock()\n\tdefer r.mu.Unlock()\n\tvar boundary CheckpointBoundary\n\tswitch r.state.Phase {\n\tcase Ready:\n\t\tboundary = CheckpointReady\n\tcase ToolsPending:\n\t\tboundary = CheckpointBeforeTools\n\tcase Completed, Failed, Cancelled:\n\t\tboundary = CheckpointTerminal\n\tdefault:\n\t\treturn Checkpoint{}, ErrCheckpointBoundary\n\t}\n\treturn Checkpoint{Boundary: boundary, State: cloneState(r.state)}, nil\n}"
+    },
+    "run-8-14": {
+      "path": "examples/internal/runstate/run.go",
+      "start": 8,
+      "end": 14,
+      "code": "// Run owns one in-memory State. Use its pointer; do not copy it after use.\n// The zero value is not usable; construct with NewRun.\ntype Run struct {\n\tctx   context.Context\n\tmu    sync.Mutex\n\tstate State\n}"
+    },
+    "state-87-105": {
+      "path": "examples/internal/runstate/state.go",
+      "start": 87,
+      "end": 105,
+      "code": "// Advance has no I/O. The host performs calls between start/returned events.\n// It accepts states from New/Advance and never mutates input state/event buffers.\nfunc Advance(current State, e Event) (State, error) {\n\tif terminal(current.Phase) {\n\t\treturn State{}, ErrTransition\n\t}\n\tnext := cloneState(current)\n\tswitch e.Kind {\n\tcase StartModel:\n\t\tif current.Phase != Ready {\n\t\t\treturn State{}, ErrTransition\n\t\t}\n\t\tif current.Step >= current.MaxSteps {\n\t\t\treturn State{}, ErrMaxSteps\n\t\t}\n\t\tnext.Step++\n\t\tnext.Phase = ModelRunning\n\tcase ModelReturned:\n\t\tif current.Phase != ModelRunning || e.Response == nil || e.Response.Message.Role != \"assistant\" {"
+    },
+    "state-47-52": {
+      "path": "examples/internal/runstate/state.go",
+      "start": 47,
+      "end": 52,
+      "code": "type Event struct {\n\tKind     EventKind\n\tResponse *model.Response\n\tResults  []model.Message\n\tReason   string\n}"
+    },
+    "state-11-46": {
+      "path": "examples/internal/runstate/state.go",
+      "start": 11,
+      "end": 46,
+      "code": "type Phase string\n\nconst (\n\tReady        Phase = \"ready\"\n\tModelRunning Phase = \"model_running\"\n\tToolsPending Phase = \"tools_pending\"\n\tToolsRunning Phase = \"tools_running\"\n\tCompleted    Phase = \"completed\"\n\tFailed       Phase = \"failed\"\n\tCancelled    Phase = \"cancelled\"\n)\n\ntype EventKind string\n\nconst (\n\tStartModel    EventKind = \"start_model\"\n\tModelReturned EventKind = \"model_returned\"\n\tStartTools    EventKind = \"start_tools\"\n\tToolsReturned EventKind = \"tools_returned\"\n\tAbort         EventKind = \"abort\"\n\tCancel        EventKind = \"cancel\"\n)\n\nvar (\n\tErrTransition = errors.New(\"runstate: invalid transition\")\n\tErrMaxSteps   = errors.New(\"runstate: max model rounds exceeded\")\n)\n\ntype State struct {\n\tRunID           string\n\tPhase           Phase\n\tStep, MaxSteps  int\n\tMessages        []model.Message\n\tPending         []model.ToolCall\n\tResult, Failure string\n}"
+    },
+    "hostTest-31-45": {
+      "path": "examples/internal/runstate/reconcile_test.go",
+      "start": 31,
+      "end": 45,
+      "code": "func apply27(t *testing.T, g *runstate.PauseGate, e runstate.Event) runstate.State {\n\tt.Helper()\n\ts, err := g.Apply(e)\n\tif err != nil {\n\t\tt.Fatal(s, err)\n\t}\n\treturn s\n}\nfunc batch27(t *testing.T, g *runstate.PauseGate, pauseID string) runstate.State {\n\tt.Helper()\n\tapply27(t, g, runstate.Event{Kind: runstate.StartModel})\n\tresponse := model.Response{Message: model.Message{Role: \"assistant\", ToolCalls: []model.ToolCall{{ID: \"call-1\", Name: \"get_document\", Arguments: []byte(`{\"id\":\"doc-1\"}`)}, {ID: \"call-2\", Name: \"get_document\", Arguments: []byte(`{\"id\":\"doc-2\"}`)}}}}\n\tapply27(t, g, runstate.Event{Kind: runstate.ModelReturned, Response: &response})\n\tif _, e := g.Pause(pauseID, \"review\"); e != nil {\n\t\tt.Fatal(e)"
+    },
+    "state-104-123": {
+      "path": "examples/internal/runstate/state.go",
+      "start": 104,
+      "end": 123,
+      "code": "\tcase ModelReturned:\n\t\tif current.Phase != ModelRunning || e.Response == nil || e.Response.Message.Role != \"assistant\" {\n\t\t\treturn State{}, ErrTransition\n\t\t}\n\t\tmsg := e.Response.Message\n\t\tids := map[string]bool{}\n\t\tfor _, call := range msg.ToolCalls {\n\t\t\tif call.ID == \"\" || strings.TrimSpace(call.Name) == \"\" || ids[call.ID] {\n\t\t\t\treturn State{}, ErrTransition\n\t\t\t}\n\t\t\tids[call.ID] = true\n\t\t}\n\t\tnext.Messages = append(next.Messages, cloneMessages([]model.Message{msg})...)\n\t\tif len(msg.ToolCalls) == 0 {\n\t\t\tnext.Phase = Completed\n\t\t\tnext.Result = msg.Content\n\t\t} else {\n\t\t\tnext.Phase = ToolsPending\n\t\t\tnext.Pending = cloneCalls(msg.ToolCalls)\n\t\t}"
+    },
+    "pause-53-79": {
+      "path": "examples/internal/runstate/pause.go",
+      "start": 53,
+      "end": 79,
+      "code": "// Pause captures only ToolsPending, before StartTools through this gate.\n// It samples the original Run context and performs no I/O or state transition.\nfunc (g *PauseGate) Pause(id, reason string) (PauseRequest, error) {\n\tg.mu.Lock()\n\tdefer g.mu.Unlock()\n\tif err := g.run.Context().Err(); err != nil {\n\t\treturn PauseRequest{}, err\n\t}\n\tif strings.TrimSpace(id) == \"\" || strings.TrimSpace(reason) == \"\" {\n\t\treturn PauseRequest{}, ErrInvalidPause\n\t}\n\tif g.request != nil {\n\t\treturn PauseRequest{}, ErrPaused\n\t}\n\tcp, err := g.run.Checkpoint()\n\tif err != nil || cp.State.Phase != ToolsPending {\n\t\treturn PauseRequest{}, ErrPauseBoundary\n\t}\n\tif err := g.run.Context().Err(); err != nil {\n\t\treturn PauseRequest{}, err\n\t}\n\trequest := PauseRequest{ID: id, Reason: reason, Checkpoint: cp}\n\tg.request = &request\n\tout := request\n\tout.Checkpoint = out.Checkpoint.Clone()\n\treturn out, nil\n}"
+    },
+    "pause-15-21": {
+      "path": "examples/internal/runstate/pause.go",
+      "start": 15,
+      "end": 21,
+      "code": "// PauseRequest is an owned in-memory interruption snapshot, not a saved receipt,\n// an approval, a resume token or a declaration about external side effects.\ntype PauseRequest struct {\n\tID         string\n\tReason     string\n\tCheckpoint Checkpoint\n}"
+    },
+    "approval-32-59": {
+      "path": "examples/internal/runstate/approval.go",
+      "start": 32,
+      "end": 59,
+      "code": "// Decide records the first valid decision for this gate's held pause.\n// It does not unpause, execute, terminate or write a checkpoint.\nfunc (g *PauseGate) Decide(d ApprovalDecision) (ApprovalDecision, error) {\n\tg.mu.Lock()\n\tdefer g.mu.Unlock()\n\tif err := g.run.Context().Err(); err != nil {\n\t\treturn ApprovalDecision{}, err\n\t}\n\tif strings.TrimSpace(d.RunID) == \"\" || strings.TrimSpace(d.RequestID) == \"\" ||\n\t\tstrings.TrimSpace(d.Actor) == \"\" || strings.TrimSpace(d.Reason) == \"\" ||\n\t\t(d.Outcome != DecisionApprove && d.Outcome != DecisionReject) {\n\t\treturn ApprovalDecision{}, ErrInvalidDecision\n\t}\n\tif g.request == nil {\n\t\treturn ApprovalDecision{}, ErrNoPause\n\t}\n\tif d.RunID != g.request.Checkpoint.State.RunID || d.RequestID != g.request.ID {\n\t\treturn ApprovalDecision{}, ErrDecisionMismatch\n\t}\n\tif g.decision != nil {\n\t\treturn ApprovalDecision{}, ErrDecisionRecorded\n\t}\n\tif err := g.run.Context().Err(); err != nil {\n\t\treturn ApprovalDecision{}, err\n\t}\n\tg.decision = &d\n\treturn d, nil\n}"
+    },
+    "resolve-14-47": {
+      "path": "examples/internal/runstate/resolve.go",
+      "start": 14,
+      "end": 47,
+      "code": "func (g *PauseGate) ResolveDecision(runID, requestID string) (State, error) {\n\tg.mu.Lock()\n\tdefer g.mu.Unlock()\n\t// Preserve Run.Apply's cancellation observation and terminal-first behavior.\n\tif g.run.Context().Err() != nil {\n\t\tstate, err := g.run.Apply(Event{Kind: Cancel})\n\t\tif terminal(state.Phase) {\n\t\t\tg.request, g.decision = nil, nil\n\t\t}\n\t\treturn state, err\n\t}\n\tcurrent := g.run.Snapshot()\n\tif strings.TrimSpace(runID) == \"\" || strings.TrimSpace(requestID) == \"\" {\n\t\treturn current, ErrInvalidDecision\n\t}\n\tif g.request == nil {\n\t\treturn current, ErrNoPause\n\t}\n\tif runID != g.request.Checkpoint.State.RunID || requestID != g.request.ID {\n\t\treturn current, ErrDecisionMismatch\n\t}\n\tif g.decision == nil {\n\t\treturn current, ErrDecisionRequired\n\t}\n\tevent := Event{Kind: StartTools}\n\tif g.decision.Outcome == DecisionReject {\n\t\tevent = Event{Kind: Abort, Reason: g.decision.Reason}\n\t}\n\tstate, err := g.run.Apply(event)\n\tif err == nil || terminal(state.Phase) {\n\t\tg.request, g.decision = nil, nil\n\t}\n\treturn state, err\n}"
+    },
+    "approval-22-30": {
+      "path": "examples/internal/runstate/approval.go",
+      "start": 22,
+      "end": 30,
+      "code": "// ApprovalDecision is host-provided metadata, not proof of identity, authority,\n// persistence or permission to execute. All fields are immutable value strings.\ntype ApprovalDecision struct {\n\tRunID     string\n\tRequestID string\n\tActor     string\n\tOutcome   DecisionOutcome\n\tReason    string\n}"
+    },
+    "snap-36-55": {
+      "path": "examples/internal/runstate/pause_snapshot.go",
+      "start": 36,
+      "end": 55,
+      "code": "// PauseSnapshot captures held request and decision under the same gate lock.\n// It observes cancellation without committing it; it never calls Apply or I/O.\nfunc (g *PauseGate) PauseSnapshot() (PauseSnapshot, error) {\n\tg.mu.Lock()\n\tdefer g.mu.Unlock()\n\tif err := g.run.Context().Err(); err != nil {\n\t\treturn PauseSnapshot{}, err\n\t}\n\tif g.request == nil {\n\t\treturn PauseSnapshot{}, ErrNoPause\n\t}\n\ts := PauseSnapshot{SchemaVersion: PauseSnapshotSchema, Request: *g.request, Decision: g.decision}.Clone()\n\tif !pauseSnapshotValid(s) {\n\t\treturn PauseSnapshot{}, ErrInvalidPauseSnapshot\n\t}\n\tif err := g.run.Context().Err(); err != nil {\n\t\treturn PauseSnapshot{}, err\n\t}\n\treturn s, nil\n}"
+    },
+    "snap-87-113": {
+      "path": "examples/internal/runstate/pause_snapshot.go",
+      "start": 87,
+      "end": 113,
+      "code": "// EncodePauseSnapshot uses a fresh gob stream and preserves argument bytes.\n// No I/O/ctx is involved. This is not canonical encoding or a storage commit.\nfunc EncodePauseSnapshot(s PauseSnapshot) ([]byte, error) {\n\tif !pauseSnapshotValid(s) {\n\t\treturn nil, ErrInvalidPauseSnapshot\n\t}\n\tvar buf bytes.Buffer\n\tif err := gob.NewEncoder(&buf).Encode(s); err != nil || buf.Len() > MaxPauseSnapshotBytes {\n\t\treturn nil, ErrInvalidPauseSnapshot\n\t}\n\treturn buf.Bytes(), nil\n}\n\n// DecodePauseSnapshot accepts one bounded host artifact, not arbitrary network\n// input. Gob type/field handling remains the standard library's compatibility\n// behavior; this is not an authenticated or hostile-input-safe file format.\nfunc DecodePauseSnapshot(data []byte) (PauseSnapshot, error) {\n\tif len(data) == 0 || len(data) > MaxPauseSnapshotBytes {\n\t\treturn PauseSnapshot{}, ErrInvalidPauseSnapshot\n\t}\n\treader := bytes.NewReader(data)\n\tvar out PauseSnapshot\n\tif err := gob.NewDecoder(reader).Decode(&out); err != nil || reader.Len() != 0 || !pauseSnapshotValid(out) {\n\t\treturn PauseSnapshot{}, ErrInvalidPauseSnapshot\n\t}\n\treturn out, nil\n}"
+    },
+    "snap-10-23": {
+      "path": "examples/internal/runstate/pause_snapshot.go",
+      "start": 10,
+      "end": 23,
+      "code": "const (\n\tPauseSnapshotSchema   = 1\n\tMaxPauseSnapshotBytes = 1 \u003c\u003c 20\n)\n\nvar ErrInvalidPauseSnapshot = errors.New(\"runstate: invalid pause snapshot\")\n\n// PauseSnapshot is a versioned host-owned candidate, not a saved receipt,\n// restored Gate, fresh-state proof, approval credential or execution lease.\ntype PauseSnapshot struct {\n\tSchemaVersion int\n\tRequest       PauseRequest\n\tDecision      *ApprovalDecision\n}"
+    },
+    "pause-40-40": {
+      "path": "examples/internal/runstate/pause.go",
+      "start": 40,
+      "end": 40,
+      "code": "func (g *PauseGate) Snapshot() State { return g.run.Snapshot() }"
+    },
+    "state-39-46": {
+      "path": "examples/internal/runstate/state.go",
+      "start": 39,
+      "end": 46,
+      "code": "type State struct {\n\tRunID           string\n\tPhase           Phase\n\tStep, MaxSteps  int\n\tMessages        []model.Message\n\tPending         []model.ToolCall\n\tResult, Failure string\n}"
+    },
+    "state-124-140": {
+      "path": "examples/internal/runstate/state.go",
+      "start": 124,
+      "end": 140,
+      "code": "\tcase StartTools:\n\t\tif current.Phase != ToolsPending {\n\t\t\treturn State{}, ErrTransition\n\t\t}\n\t\tnext.Phase = ToolsRunning\n\tcase ToolsReturned:\n\t\tif current.Phase != ToolsRunning || len(e.Results) != len(current.Pending) {\n\t\t\treturn State{}, ErrTransition\n\t\t}\n\t\tfor i, msg := range e.Results {\n\t\t\tif msg.Role != \"tool\" || msg.ToolCallID != current.Pending[i].ID {\n\t\t\t\treturn State{}, ErrTransition\n\t\t\t}\n\t\t}\n\t\tnext.Messages = append(next.Messages, cloneMessages(e.Results)...)\n\t\tnext.Pending = nil\n\t\tnext.Phase = Ready"
+    },
+    "recon-14-27": {
+      "path": "examples/internal/runstate/reconcile.go",
+      "start": 14,
+      "end": 27,
+      "code": "// ReconcileToolResults repairs missing tool messages on THIS live Run only.\n// Queries occur outside the gate lock. The original observation is compared\n// and ToolsReturned committed under one gate lock, preventing duplicate commits\n// through this unique gate. It never executes/retries business tools or restores\n// a process. Every return includes an owned current State; callers must check err.\nfunc (g *PauseGate) ReconcileToolResults(queryCtx context.Context, source ToolOutcomeSource) (State, error) {\n\tobserved := g.Snapshot()\n\treport, err := InspectToolOutcomes(queryCtx, source, observed)\n\tif err != nil {\n\t\treturn g.Snapshot(), err\n\t}\n\tif !report.AllResultsKnown {\n\t\treturn g.Snapshot(), ErrOutcomeIncomplete\n\t}"
+    },
+    "recon-28-45": {
+      "path": "examples/internal/runstate/reconcile.go",
+      "start": 28,
+      "end": 45,
+      "code": "\tg.mu.Lock()\n\tdefer g.mu.Unlock()\n\tcurrent := g.run.Snapshot()\n\tif err := queryCtx.Err(); err != nil {\n\t\treturn current, err\n\t}\n\tif !reflect.DeepEqual(current, report.Observed) {\n\t\treturn current, ErrOutcomeConflict\n\t}\n\t// Run.Apply observes the ORIGINAL execution ctx. A fresh query ctx cannot\n\t// revive a cancelled execution, and a late query cancellation cannot roll back\n\t// a successful commit. Do not recursively call Gate.Apply while holding g.mu.\n\tstate, err := g.run.Apply(Event{Kind: ToolsReturned, Results: report.Results})\n\tif terminal(state.Phase) {\n\t\tg.request, g.decision = nil, nil\n\t}\n\treturn state, err\n}"
+    },
+    "recon-9-18": {
+      "path": "examples/internal/runstate/reconcile.go",
+      "start": 9,
+      "end": 18,
+      "code": "var (\n\tErrOutcomeIncomplete = errors.New(\"runstate: not all tool results are known\")\n\tErrOutcomeConflict   = errors.New(\"runstate: run changed during outcome inspection\")\n)\n\n// ReconcileToolResults repairs missing tool messages on THIS live Run only.\n// Queries occur outside the gate lock. The original observation is compared\n// and ToolsReturned committed under one gate lock, preventing duplicate commits\n// through this unique gate. It never executes/retries business tools or restores\n// a process. Every return includes an owned current State; callers must check err."
+    },
+    "inspect-83-108": {
+      "path": "examples/internal/runstate/outcome.go",
+      "start": 83,
+      "end": 108,
+      "code": "\tout := ToolOutcomeReport{Observed: cloneState(observed), Evidence: make([]ToolOutcomeEvidence, len(observed.Pending)), AllResultsKnown: true}\n\tresults := make([]model.Message, len(observed.Pending))\n\tfor i, call := range out.Observed.Pending {\n\t\tif err := ctx.Err(); err != nil {\n\t\t\treturn ToolOutcomeReport{}, err\n\t\t}\n\t\tinput := ToolAttempt{RunID: observed.RunID, Step: observed.Step, Call: cloneCalls([]model.ToolCall{call})[0]}\n\t\te, err := source.Lookup(ctx, input)\n\t\tif cancelErr := ctx.Err(); cancelErr != nil {\n\t\t\treturn ToolOutcomeReport{}, cancelErr\n\t\t}\n\t\tif err != nil {\n\t\t\treturn ToolOutcomeReport{}, err\n\t\t}\n\t\tv := e.Evidence\n\t\tif e.RunID != observed.RunID || e.Step != observed.Step || v.Call.ID != call.ID || v.Call.Name != call.Name ||\n\t\t\t!bytes.Equal(v.Call.Arguments, call.Arguments) || v.IdempotencyKey != \"\" {\n\t\t\treturn ToolOutcomeReport{}, ErrReplayEvidence\n\t\t}\n\t\tswitch v.Basis {\n\t\tcase BasisUnknown, BasisNotStarted:\n\t\t\tif v.Result != nil {\n\t\t\t\treturn ToolOutcomeReport{}, ErrReplayEvidence\n\t\t\t}\n\t\t\tout.AllResultsKnown = false\n\t\tcase BasisResultKnown:"
+    },
+    "inspect-38-45": {
+      "path": "examples/internal/runstate/outcome.go",
+      "start": 38,
+      "end": 45,
+      "code": "// ToolOutcomeReport is a point-in-time report, not fresh-state proof, a restored\n// Run or authorization. Results is nil unless ALL results are positively known.\ntype ToolOutcomeReport struct {\n\tObserved        State\n\tEvidence        []ToolOutcomeEvidence\n\tAllResultsKnown bool\n\tResults         []model.Message\n}"
+    },
+    "inspect-17-36": {
+      "path": "examples/internal/runstate/outcome.go",
+      "start": 17,
+      "end": 36,
+      "code": "// ToolAttempt identifies the logical call being inspected, not a network retry\n// counter. The host must additionally bind tenant, authority and backend scope.\ntype ToolAttempt struct {\n\tRunID string\n\tStep  int\n\tCall  model.ToolCall\n}\n\ntype ToolOutcomeEvidence struct {\n\tRunID    string\n\tStep     int\n\tEvidence ReplayEvidence\n}\n\n// ToolOutcomeSource is a trusted read-only host adapter. It must cooperate with\n// ctx, support intended concurrency and return owned buffers; Lookup must not\n// execute/retry the business operation while looking for its outcome.\ntype ToolOutcomeSource interface {\n\tLookup(context.Context, ToolAttempt) (ToolOutcomeEvidence, error)\n}"
+    },
+    "store-91-113": {
+      "path": "examples/internal/runstate/store.go",
+      "start": 91,
+      "end": 113,
+      "code": "func (s *MemoryCheckpointStore) Save(ctx context.Context, cp Checkpoint, expected uint64) (StoredCheckpoint, error) {\n\tif err := storeContext(ctx); err != nil {\n\t\treturn StoredCheckpoint{}, err\n\t}\n\tif expected == ^uint64(0) || !validateCandidate(cp) {\n\t\treturn StoredCheckpoint{}, ErrInvalidCheckpoint\n\t}\n\ts.mu.Lock()\n\tdefer s.mu.Unlock()\n\tif err := ctx.Err(); err != nil {\n\t\treturn StoredCheckpoint{}, err\n\t}\n\tcurrent := s.records[cp.State.RunID]\n\tif current.Version != expected {\n\t\treturn StoredCheckpoint{}, ErrCheckpointConflict\n\t}\n\tnext := StoredCheckpoint{Version: expected + 1, Checkpoint: cp.Clone()}\n\tif s.records == nil {\n\t\ts.records = make(map[string]StoredCheckpoint)\n\t}\n\ts.records[cp.State.RunID] = next\n\treturn cloneStored(next), nil\n}"
+    },
+    "store-67-89": {
+      "path": "examples/internal/runstate/store.go",
+      "start": 67,
+      "end": 89,
+      "code": "func (s *MemoryCheckpointStore) Load(ctx context.Context, runID string) (StoredCheckpoint, error) {\n\tif err := storeContext(ctx); err != nil {\n\t\treturn StoredCheckpoint{}, err\n\t}\n\tif strings.TrimSpace(runID) == \"\" {\n\t\treturn StoredCheckpoint{}, ErrInvalidCheckpoint\n\t}\n\ts.mu.Lock()\n\tdefer s.mu.Unlock()\n\tif err := ctx.Err(); err != nil {\n\t\treturn StoredCheckpoint{}, err\n\t}\n\tv, ok := s.records[runID]\n\tif !ok {\n\t\treturn StoredCheckpoint{}, ErrCheckpointNotFound\n\t}\n\treturn cloneStored(v), nil\n}\n\n// Save: expected=0 creates only if absent; otherwise it must equal current Version.\n// A successful write increments Version even for identical content.\n// Errors in this in-memory implementation return zero and leave stored data intact.\n// Cancellation is sampled before and after locking; later cancellation can still"
+    },
+    "store-18-35": {
+      "path": "examples/internal/runstate/store.go",
+      "start": 18,
+      "end": 35,
+      "code": "type StoredCheckpoint struct {\n\tVersion    uint64\n\tCheckpoint Checkpoint\n}\n\ntype CheckpointStore interface {\n\tLoad(context.Context, string) (StoredCheckpoint, error)\n\tSave(context.Context, Checkpoint, uint64) (StoredCheckpoint, error)\n}\n\n// MemoryCheckpointStore is process-local and not durable. Its zero value works.\n// Do not copy after use. It retains only the latest record for each exact RunID.\ntype MemoryCheckpointStore struct {\n\tmu      sync.Mutex\n\trecords map[string]StoredCheckpoint\n}\n\nfunc NewMemoryCheckpointStore() *MemoryCheckpointStore { return &MemoryCheckpointStore{} }"
+    },
+    "review-23-54": {
+      "path": "examples/internal/assembly/week03.go",
+      "start": 23,
+      "end": 54,
+      "code": "// ReviewWeek03 composes the Week03 read-only path; it does not restore or execute.\n// Exactly one Load is delegated to PlanRecovery. Only ReviewPending consults the\n// source once, using a separate record copy, then delegates to PlanReplay.\n// Every failure returns a zero report; dependency errors preserve their chains.\nfunc ReviewWeek03(ctx context.Context, store runstate.CheckpointStore, source ReplayEvidenceSource, runID string) (Week03Report, error) {\n\trecovery, err := runstate.PlanRecovery(ctx, store, runID)\n\tif err != nil {\n\t\treturn Week03Report{}, err\n\t}\n\tif err = ctx.Err(); err != nil {\n\t\treturn Week03Report{}, err\n\t}\n\tif recovery.Position != runstate.RecoveryReviewPending {\n\t\treturn Week03Report{Recovery: recovery}, nil\n\t}\n\tif source == nil {\n\t\treturn Week03Report{}, ErrEvidenceSourceRequired\n\t}\n\tinput := recovery.Record\n\tinput.Checkpoint = input.Checkpoint.Clone()\n\tevidence, err := source.Evidence(ctx, input)\n\tif cancelErr := ctx.Err(); cancelErr != nil {\n\t\treturn Week03Report{}, cancelErr\n\t}\n\tif err != nil {\n\t\treturn Week03Report{}, err\n\t}\n\treplay, err := runstate.PlanReplay(ctx, recovery, evidence)\n\tif err != nil {\n\t\treturn Week03Report{}, err\n\t}\n\treturn Week03Report{Recovery: recovery, Replay: &replay}, nil"
+    },
+    "review-10-21": {
+      "path": "examples/internal/assembly/week03.go",
+      "start": 10,
+      "end": 21,
+      "code": "// ReplayEvidenceSource is a trusted host adapter, not a model/tool assertion.\n// It must cooperate with context and support the intended concurrency.\ntype ReplayEvidenceSource interface {\n\tEvidence(context.Context, runstate.StoredCheckpoint) (runstate.ReplayEvidenceSet, error)\n}\n\nvar ErrEvidenceSourceRequired = errors.New(\"assembly: pending review requires an evidence source\")\n\ntype Week03Report struct {\n\tRecovery runstate.RecoveryPlan\n\tReplay   *runstate.ReplayPlan // nil for Ready, Exhausted or Terminal\n}"
+    },
+    "recovery-63-91": {
+      "path": "examples/internal/runstate/recovery.go",
+      "start": 63,
+      "end": 91,
+      "code": "func PlanRecovery(ctx context.Context, store CheckpointStore, runID string) (RecoveryPlan, error) {\n\tif err := storeContext(ctx); err != nil {\n\t\treturn RecoveryPlan{}, err\n\t}\n\tif store == nil || strings.TrimSpace(runID) == \"\" {\n\t\treturn RecoveryPlan{}, ErrInvalidCheckpoint\n\t}\n\tv, err := store.Load(ctx, runID)\n\tif cancelErr := ctx.Err(); cancelErr != nil {\n\t\treturn RecoveryPlan{}, cancelErr\n\t}\n\tif err != nil {\n\t\treturn RecoveryPlan{}, err\n\t}\n\tif !recoveryRecordValid(v, runID) {\n\t\treturn RecoveryPlan{}, ErrInvalidCheckpoint\n\t}\n\tposition := RecoveryTerminal\n\tswitch v.Checkpoint.State.Phase {\n\tcase Ready:\n\t\tposition = RecoveryReady\n\t\tif v.Checkpoint.State.Step >= v.Checkpoint.State.MaxSteps {\n\t\t\tposition = RecoveryExhausted\n\t\t}\n\tcase ToolsPending:\n\t\tposition = RecoveryReviewPending\n\t}\n\treturn RecoveryPlan{Position: position, Record: cloneStored(v)}, nil\n}"
+    },
+    "recovery-9-23": {
+      "path": "examples/internal/runstate/recovery.go",
+      "start": 9,
+      "end": 23,
+      "code": "type RecoveryPosition string\n\nconst (\n\tRecoveryReady         RecoveryPosition = \"recorded_ready\"\n\tRecoveryReviewPending RecoveryPosition = \"review_pending\"\n\tRecoveryTerminal      RecoveryPosition = \"terminal\"\n\tRecoveryExhausted     RecoveryPosition = \"budget_exhausted\"\n)\n\n// RecoveryPlan is a read-only description of one loaded record, not permission\n// to execute or a restored Run. Record retains the store's observed Version.\ntype RecoveryPlan struct {\n\tPosition RecoveryPosition\n\tRecord   StoredCheckpoint\n}"
+    },
+    "replay-72-115": {
+      "path": "examples/internal/runstate/replay.go",
+      "start": 72,
+      "end": 115,
+      "code": "\tout := ReplayPlan{Record: cloneStored(record), Steps: make([]ReplayStep, len(calls))}\n\tkeys := map[string]bool{}\n\tfor i, c := range calls {\n\t\tif err := ctx.Err(); err != nil {\n\t\t\treturn ReplayPlan{}, err\n\t\t}\n\t\te := evidence.Calls[i]\n\t\tif e.Call.ID != c.ID || e.Call.Name != c.Name || !bytes.Equal(e.Call.Arguments, c.Arguments) {\n\t\t\treturn ReplayPlan{}, ErrReplayEvidence\n\t\t}\n\t\tstep := ReplayStep{Call: cloneCalls([]model.ToolCall{c})[0]}\n\t\tswitch e.Basis {\n\t\tcase BasisUnknown:\n\t\t\tif e.Result != nil || e.IdempotencyKey != \"\" {\n\t\t\t\treturn ReplayPlan{}, ErrReplayEvidence\n\t\t\t}\n\t\t\tstep.Action = ActionHold\n\t\t\tout.Blocked = true\n\t\tcase BasisNotStarted:\n\t\t\tif e.Result != nil || e.IdempotencyKey != \"\" {\n\t\t\t\treturn ReplayPlan{}, ErrReplayEvidence\n\t\t\t}\n\t\t\tstep.Action = ActionInvoke\n\t\tcase BasisResultKnown:\n\t\t\tif e.Result == nil || e.Result.Role != \"tool\" || e.Result.ToolCallID != c.ID || len(e.Result.ToolCalls) != 0 || e.IdempotencyKey != \"\" {\n\t\t\t\treturn ReplayPlan{}, ErrReplayEvidence\n\t\t\t}\n\t\t\tmsg := cloneMessages([]model.Message{*e.Result})[0]\n\t\t\tstep.Action = ActionReuse\n\t\t\tstep.Result = &msg\n\t\tcase BasisBackendDedup:\n\t\t\tif e.Result != nil || strings.TrimSpace(e.IdempotencyKey) == \"\" || keys[e.IdempotencyKey] {\n\t\t\t\treturn ReplayPlan{}, ErrReplayEvidence\n\t\t\t}\n\t\t\tkeys[e.IdempotencyKey] = true\n\t\t\tstep.Action = ActionInvoke\n\t\t\tstep.IdempotencyKey = e.IdempotencyKey\n\t\tdefault:\n\t\t\treturn ReplayPlan{}, ErrReplayEvidence\n\t\t}\n\t\tout.Steps[i] = step\n\t}\n\tif err := ctx.Err(); err != nil {\n\t\treturn ReplayPlan{}, err"
+    },
+    "replay-34-55": {
+      "path": "examples/internal/runstate/replay.go",
+      "start": 34,
+      "end": 55,
+      "code": "type ReplayEvidence struct {\n\tCall           model.ToolCall\n\tBasis          ReplayBasis\n\tResult         *model.Message\n\tIdempotencyKey string\n}\ntype ReplayEvidenceSet struct {\n\tRunID   string\n\tVersion uint64\n\tCalls   []ReplayEvidence\n}\ntype ReplayStep struct {\n\tCall           model.ToolCall\n\tAction         ReplayAction\n\tResult         *model.Message\n\tIdempotencyKey string\n}\ntype ReplayPlan struct {\n\tRecord  StoredCheckpoint\n\tSteps   []ReplayStep\n\tBlocked bool // any Hold blocks the entire batch before effects/history updates\n}"
+    },
+    "run-32-34": {
+      "path": "examples/internal/runstate/run.go",
+      "start": 32,
+      "end": 34,
+      "code": "// Context returns the original context. The host owns any cancel function.\n// Model/tool I/O must use this context outside Apply, never while holding its lock.\nfunc (r *Run) Context() context.Context { return r.ctx }"
+    },
+    "resolve-10-13": {
+      "path": "examples/internal/runstate/resolve.go",
+      "start": 10,
+      "end": 13,
+      "code": "// ResolveDecision consumes the held decision and commits one transition.\n// Approve starts ToolsRunning; reject commits Failed using the recorded reason.\n// No external I/O runs here. The host may execute tools only after nil error AND\n// ToolsRunning from this call, never by inspecting a retry's returned State alone."
+    },
+    "a-133-149": {
+      "path": "examples/internal/agent/agent.go",
+      "start": 133,
+      "end": 149,
+      "code": "\tfor record.data.Step = 1; record.data.Step \u003c= a.maxSteps; record.data.Step++ {\n\t\tif err := ctx.Err(); err != nil {\n\t\t\treturn RunResult{}, err\n\t\t}\n\t\ta.emit(ctx, Event{Type: EventStepStarted, Step: record.data.Step, Status: \"ok\"})\n\t\tstart := time.Now()\n\t\tr, err := a.model.Generate(ctx, record.data.Messages)\n\t\tif ctx.Err() != nil {\n\t\t\terr = ctx.Err()\n\t\t}\n\t\tif err == nil && r == nil {\n\t\t\terr = fmt.Errorf(\"agent: nil model response\")\n\t\t}\n\t\ta.emit(ctx, Event{Type: EventModelCompleted, Step: record.data.Step, Duration: time.Since(start), Status: status(err)})\n\t\tif err != nil {\n\t\t\treturn RunResult{}, err\n\t\t}"
+    },
+    "a-150-161": {
+      "path": "examples/internal/agent/agent.go",
+      "start": 150,
+      "end": 161,
+      "code": "\t\tif r.Message.Role != \"assistant\" {\n\t\t\treturn RunResult{}, fmt.Errorf(\"agent: expected assistant message\")\n\t\t}\n\t\trecord.data.Messages = append(record.data.Messages, r.Message)\n\t\tif len(r.Message.ToolCalls) == 0 {\n\t\t\treturn RunResult{Output: r.Message.Content}, nil\n\t\t}\n\t\tresults, err := a.executeBatchWithState(ctx, r.Message.ToolCalls, record.data.Step, record)\n\t\tif err != nil {\n\t\t\treturn RunResult{}, err\n\t\t}\n\t\trecord.data.Messages = append(record.data.Messages, results...)"
+    },
+    "a-119-132": {
+      "path": "examples/internal/agent/agent.go",
+      "start": 119,
+      "end": 132,
+      "code": "\tstarted := time.Now()\n\ta.emit(ctx, Event{Type: EventRunStarted, Status: \"ok\"})\n\tdefer func() {\n\t\trunErr = record.finish(runErr)\n\t\tif runErr != nil {\n\t\t\tresult.Output = \"\"\n\t\t}\n\t\tresult.Snapshot = record.snapshot()\n\t\tkind := EventRunFinished\n\t\tif runErr != nil {\n\t\t\tkind = EventRunFailed\n\t\t}\n\t\ta.emit(ctx, Event{Type: kind, Step: record.data.Step, Duration: time.Since(started), Status: status(runErr)})\n\t}()"
+    },
+    "batch-43-64": {
+      "path": "examples/internal/agent/executor.go",
+      "start": 43,
+      "end": 64,
+      "code": "\tfor index, call := range calls {\n\t\tif err := ctx.Err(); err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tif record != nil {\n\t\t\tif err := record.startCall(base + index); err != nil {\n\t\t\t\treturn nil, err\n\t\t\t}\n\t\t}\n\t\tstart := time.Now()\n\t\te := Event{Type: EventToolStarted, Step: step, ToolName: call.Name, ToolCallID: call.ID, Status: \"ok\"}\n\t\ta.emit(ctx, e)\n\t\ttoolCtx := ctx\n\t\tcancel := func() {}\n\t\tif a.toolTimeout > 0 {\n\t\t\ttoolCtx, cancel = context.WithTimeout(ctx, a.toolTimeout)\n\t\t}\n\t\tresult, err := a.tools[call.Name].Execute(toolCtx, call.Arguments)\n\t\tif toolCtx.Err() != nil {\n\t\t\terr = toolCtx.Err()\n\t\t}\n\t\tcancel()"
+    },
+    "pre-24-39": {
+      "path": "examples/internal/agent/authorization_preflight.go",
+      "start": 24,
+      "end": 39,
+      "code": "\t\t\tkind := EventToolAuthorized\n\t\t\tdecisionStatus := \"ok\"\n\t\t\tif err != nil {\n\t\t\t\tkind = EventToolDenied\n\t\t\t\tdecisionStatus = status(err)\n\t\t\t\tif errors.Is(err, tool.ErrForbidden) {\n\t\t\t\t\tdecisionStatus = \"denied\"\n\t\t\t\t}\n\t\t\t}\n\t\t\ta.emit(ctx, Event{Type: kind, Step: step, ToolName: call.Name, ToolCallID: call.ID, PrincipalID: principal.ID, Status: decisionStatus})\n\t\t\tif err != nil {\n\t\t\t\treturn fmt.Errorf(\"agent: authorization failed: %w\", err)\n\t\t\t}\n\t\t}\n\t}\n\treturn nil"
+    },
+    "mcp-57-82": {
+      "path": "examples/internal/mcp/client.go",
+      "start": 57,
+      "end": 82,
+      "code": "\tc.nextID++\n\tid := c.nextID\n\tmessage, err := json.Marshal(request{JSONRPC: \"2.0\", ID: id, Method: method, Params: raw})\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tpayload, err := c.transport.Send(ctx, message)\n\tif ctx.Err() != nil {\n\t\terr = ctx.Err()\n\t}\n\tif err != nil {\n\t\tc.state = \"failed\"\n\t\treturn nil, fmt.Errorf(\"mcp transport: %w\", err)\n\t}\n\tif len(payload) > MaxResponseBytes {\n\t\treturn nil, c.protocol(\"response exceeds byte budget\")\n\t}\n\tvar r response\n\tif err = json.Unmarshal(payload, &r); err != nil {\n\t\treturn nil, c.protocol(\"malformed JSON\")\n\t}\n\tif r.JSONRPC != \"2.0\" || string(r.ID) != strconv.FormatUint(id, 10) {\n\t\treturn nil, c.protocol(\"version or request ID mismatch\")\n\t}\n\tif (len(r.Result) == 0) == (len(r.Error) == 0) {\n\t\treturn nil, c.protocol(\"expected exactly one of result/error\")"
+    },
+    "fake-103-122": {
+      "path": "examples/internal/mcp/fake.go",
+      "start": 103,
+      "end": 122,
+      "code": "\tcase \"tools/call\":\n\t\tvar p struct {\n\t\t\tName      string          `json:\"name\"`\n\t\t\tArguments json.RawMessage `json:\"arguments\"`\n\t\t}\n\t\tif json.Unmarshal(r.Params, &p) != nil || p.Name != s.spec.Name {\n\t\t\treturn reply(r.ID, nil, &RPCError{Code: -32602, Message: \"unknown tool or invalid parameters\"})\n\t\t}\n\t\tif len(p.Arguments) == 0 {\n\t\t\tp.Arguments = json.RawMessage(\"{}\")\n\t\t}\n\t\toutput, err := s.target.Invoke(ctx, p.Arguments)\n\t\tif ctx.Err() != nil {\n\t\t\treturn nil, ctx.Err()\n\t\t}\n\t\tif err != nil {\n\t\t\t// Controlled generic result; do not expose internal backend error text.\n\t\t\treturn reply(r.ID, ToolResult{Content: []json.RawMessage{textBlock(\"document tool failed\")}, IsError: true}, nil)\n\t\t}\n\t\treturn reply(r.ID, ToolResult{Content: []json.RawMessage{textBlock(output)}}, nil)"
+    },
+    "fixture-76-89": {
+      "path": "examples/internal/assembly/week02_test.go",
+      "start": 76,
+      "end": 89,
+      "code": "func (m *weekModel) WithTools(defs []model.ToolDefinition) (model.Model, error) {\n\tm.defs = append([]model.ToolDefinition(nil), defs...)\n\treturn m, nil\n}\nfunc (m *weekModel) Generate(ctx context.Context, messages []model.Message) (*model.Response, error) {\n\tif err := ctx.Err(); err != nil {\n\t\treturn nil, err\n\t}\n\tm.calls++\n\tm.history = append([]model.Message(nil), messages...)\n\tif m.calls == 1 {\n\t\treturn &model.Response{Message: model.Message{Role: \"assistant\", ToolCalls: m.batch}}, nil\n\t}\n\treturn &model.Response{Message: model.Message{Role: \"assistant\", Content: \"scripted final\"}}, nil"
+    },
+    "mock-9-25": {
+      "path": "examples/internal/model/mock.go",
+      "start": 9,
+      "end": 25,
+      "code": "type Mock struct {\n\tresponses []Response\n\ti         int\n}\n\nfunc NewMock(responses []Response) *Mock { return &Mock{responses: responses} }\nfunc (m *Mock) Generate(ctx context.Context, _ []Message) (*Response, error) {\n\tif err := ctx.Err(); err != nil {\n\t\treturn nil, err\n\t}\n\tif m.i >= len(m.responses) {\n\t\treturn nil, fmt.Errorf(\"mock: exhausted responses\")\n\t}\n\tr := m.responses[m.i]\n\tm.i++\n\treturn &r, nil\n}"
+    },
+    "policy-59-75": {
+      "path": "examples/internal/tool/policy.go",
+      "start": 59,
+      "end": 75,
+      "code": "\t\tresult, err := t.target.Execute(ctx, append(json.RawMessage(nil), args...))\n\t\tif ctx.Err() != nil {\n\t\t\treturn \"\", ctx.Err()\n\t\t}\n\t\tif err == nil {\n\t\t\tif t.policy.MaxResultBytes > 0 && len(result) > t.policy.MaxResultBytes {\n\t\t\t\treturn \"\", &Error{Kind: ExecutionError, Message: \"tool result exceeds byte budget\"}\n\t\t\t}\n\t\t\treturn result, nil\n\t\t}\n\t\tif errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {\n\t\t\treturn \"\", err\n\t\t}\n\t\tvar controlled *Error\n\t\tif errors.As(err, &controlled) || attempt == t.policy.MaxAttempts || t.policy.Retryable == nil || !t.policy.Retryable(err) {\n\t\t\treturn \"\", err\n\t\t}"
+    },
+    "state-94-105": {
+      "path": "examples/internal/runstate/state.go",
+      "start": 94,
+      "end": 105,
+      "code": "\tswitch e.Kind {\n\tcase StartModel:\n\t\tif current.Phase != Ready {\n\t\t\treturn State{}, ErrTransition\n\t\t}\n\t\tif current.Step >= current.MaxSteps {\n\t\t\treturn State{}, ErrMaxSteps\n\t\t}\n\t\tnext.Step++\n\t\tnext.Phase = ModelRunning\n\tcase ModelReturned:\n\t\tif current.Phase != ModelRunning || e.Response == nil || e.Response.Message.Role != \"assistant\" {"
+    },
+    "state-141-154": {
+      "path": "examples/internal/runstate/state.go",
+      "start": 141,
+      "end": 154,
+      "code": "\tcase Abort:\n\t\tif strings.TrimSpace(e.Reason) == \"\" {\n\t\t\treturn State{}, ErrTransition\n\t\t}\n\t\tnext.Phase = Failed\n\t\tnext.Failure = e.Reason\n\tcase Cancel:\n\t\tnext.Phase = Cancelled\n\t\tnext.Failure = \"cancelled\"\n\tdefault:\n\t\treturn State{}, ErrTransition\n\t}\n\treturn next, nil\n}"
+    },
+    "run-47-66": {
+      "path": "examples/internal/runstate/run.go",
+      "start": 47,
+      "end": 66,
+      "code": "func (r *Run) Apply(e Event) (State, error) {\n\tr.mu.Lock()\n\tdefer r.mu.Unlock()\n\tif terminal(r.state.Phase) {\n\t\treturn cloneState(r.state), ErrTransition\n\t}\n\tif err := r.ctx.Err(); err != nil {\n\t\tnext, transitionErr := Advance(r.state, Event{Kind: Cancel})\n\t\tif transitionErr != nil {\n\t\t\treturn cloneState(r.state), transitionErr\n\t\t}\n\t\tr.state = next\n\t\treturn cloneState(r.state), err\n\t}\n\tnext, err := Advance(r.state, e)\n\tif err != nil {\n\t\treturn cloneState(r.state), err\n\t}\n\tr.state = next\n\treturn cloneState(r.state), nil"
+    },
+    "inspect-97-128": {
+      "path": "examples/internal/runstate/outcome.go",
+      "start": 97,
+      "end": 128,
+      "code": "\t\tv := e.Evidence\n\t\tif e.RunID != observed.RunID || e.Step != observed.Step || v.Call.ID != call.ID || v.Call.Name != call.Name ||\n\t\t\t!bytes.Equal(v.Call.Arguments, call.Arguments) || v.IdempotencyKey != \"\" {\n\t\t\treturn ToolOutcomeReport{}, ErrReplayEvidence\n\t\t}\n\t\tswitch v.Basis {\n\t\tcase BasisUnknown, BasisNotStarted:\n\t\t\tif v.Result != nil {\n\t\t\t\treturn ToolOutcomeReport{}, ErrReplayEvidence\n\t\t\t}\n\t\t\tout.AllResultsKnown = false\n\t\tcase BasisResultKnown:\n\t\t\tif v.Result == nil || v.Result.Role != \"tool\" || v.Result.ToolCallID != call.ID || len(v.Result.ToolCalls) != 0 {\n\t\t\t\treturn ToolOutcomeReport{}, ErrReplayEvidence\n\t\t\t}\n\t\t\tresults[i] = cloneMessages([]model.Message{*v.Result})[0]\n\t\t\tmsg := cloneMessages([]model.Message{*v.Result})[0]\n\t\t\tv.Result = &msg\n\t\tdefault: // BackendDedup is a retry policy assertion, not a known outcome.\n\t\t\treturn ToolOutcomeReport{}, ErrReplayEvidence\n\t\t}\n\t\tv.Call = cloneCalls([]model.ToolCall{call})[0]\n\t\tout.Evidence[i] = ToolOutcomeEvidence{RunID: e.RunID, Step: e.Step, Evidence: v}\n\t}\n\tif err := ctx.Err(); err != nil {\n\t\treturn ToolOutcomeReport{}, err\n\t}\n\tif out.AllResultsKnown {\n\t\tout.Results = results\n\t}\n\treturn out, nil\n}"
+    }
+  },
+  "extra": {
+    "loop": "a-133-149",
+    "modelReturn": "a-150-161",
+    "finish": "a-119-132",
+    "callStart": "batch-43-64",
+    "callEnd": "batch-69-95",
+    "deny": "pre-24-39",
+    "clientRpc": "mcp-57-82",
+    "fake": "fake-103-122",
+    "binder": "fixture-76-89",
+    "mock": "mock-9-25",
+    "remotePolicy": "policy-59-75",
+    "advanceStart": "state-94-105",
+    "advanceFail": "state-141-154",
+    "applyCancel": "run-47-66",
+    "outcome": "inspect-97-128",
+    "store": "store-91-113"
+  },
+  "tracks": {
+    "agent": [
+      "build",
+      "discover",
+      "registry",
+      "new",
+      "binder",
+      "input",
+      "agent",
+      "model",
+      "response",
+      "batch",
+      "result",
+      "record",
+      "history",
+      "grant",
+      "auth",
+      "doc",
+      "legacy",
+      "remote",
+      "client",
+      "policy"
+    ],
+    "host": [
+      "hnew",
+      "hgate",
+      "hrun",
+      "advance",
+      "hstate",
+      "hmodel",
+      "hresponse",
+      "pause",
+      "decision",
+      "snapshot",
+      "hresult",
+      "hwrite",
+      "recon",
+      "inspect",
+      "source",
+      "hstore",
+      "review",
+      "recovery",
+      "replay",
+      "hostio"
+    ]
+  }
+}
+</script>
+<script>
+"use strict";
+const architecture = JSON.parse(document.getElementById("reference-data").textContent);
+
+// Each transition emits an observable teaching step. Snapshots are kept outside
+// the reducers so navigation can rewind and branch without mutating earlier steps.
+const prompts = {
+  agent: 'compare known local-1 and remote-1 documents',
+  host: '读取 doc-1 和 doc-2'
+};
+const usesTools = mode => !['direct','model-error'].includes(mode);
+const local = 'get_document';
+const remote = 'knowledge__get_document';
+const toolMessage = (id, content) => ({ Role: 'tool', ToolCallID: id, Content: content });
+const request = (id, name, doc) => ({ ID: id, Name: name, Arguments: JSON.stringify({id: doc}) });
+const assistant = (content, calls) => ({
+  Role: 'assistant', Content: content, ...(calls?.length ? {ToolCalls: calls} : {})
+});
+const description = (role, content) => ({Role:role, Content:content});
+const extra = architecture.extra;
+const phaseNames = {
+  idle:'待运行', assembly:'初始化装配', created:'已创建', running:'运行中',
+  ready:'就绪', model_running:'模型推理', tools_pending:'等待工具', tools_running:'工具运行',
+  completed:'已完成', failed:'失败', cancelled:'已取消'
+};
+const approvalChoices = [
+  ['approve','批准','允许此次人工审批进入工具阶段'],
+  ['reject','拒绝','以审批理由结束该 Run']
+];
+const outcomeChoices = [
+  ['normal','正常交回','宿主拿到整批结果'],
+  ['known','核验已知结果','响应缺失，查询确认整批结果'],
+  ['unknown','核验结果未知','至少有一项缺少肯定结果'],
+  ['not-started','确认一项未开始','查询返回 NotStarted'],
+  ['source-error','查询来源出错','读取来源返回错误'],
+  ['query-cancel','取消查询','只取消 queryCtx'],
+  ['conflict','并发回填冲突','另一次提交先改变当前状态']
+];
+
+function initial(config) {
+  return {
+    config, at:'start', phase:'idle', round:0, messages:[], calls:[], pending:[],
+    events:[], err:null, failureClass:'', output:'', invoked:[], queries:0,
+    maxSteps:config.track === 'host' ? 4 : config.mode === 'budget' ? 1 : 3,
+    status:'教学模拟已就绪'
+  };
+}
+function step(s, at, ref, title, info = {}) {
+  return Object.assign(s, {at, view:{ref,title,...info}});
+}
+function emit(s,name) { s.events.push(name); }
+function finishAgent(s, error, failureClass, reason, edges) {
+  s.err = error;
+  s.failureClass = failureClass || '';
+  s.phase = !error ? 'completed' : ['cancelled','deadline_exceeded'].includes(failureClass) ? 'cancelled' : 'failed';
+  for (const call of s.calls) {
+    if (call.Status === 'planned') call.Status = 'blocked';
+    else if (call.Status === 'running') call.Status = 'unconfirmed';
+  }
+  if (error) s.output = '';
+  emit(s,error ? 'EventRunFailed' : 'EventRunFinished');
+  return step(s,'a-finish','record.finish','提交 Run 终态',{
+    edges, from:'Agent.RunWithState · defer', input:{ runErr:error },
+    output:{ Status:s.phase, FailureClass:s.failureClass, Calls:s.calls },
+    reason, source:extra.finish
+  });
+}
+function agentGenerate(s) {
+  s.round++;
+  emit(s,'EventStepStarted');
+  return step(s,'a-generate','model.generate','调用脚本模型',{
+    edges:[s.round === 1 ? 'a-model' : 'a-loop'], from:'Agent.RunWithState',
+    input:{ctx:'原始请求 context', messages:s.messages},
+    reason:s.config.mode==='model-error'?'使用没有预设响应的 model.Mock。':'轮次预算内且 ctx.Err() == nil。', cancel:true, source:s.config.mode==='model-error'?extra.mock:extra.loop
+  });
+}
+function agentBeforeModelCancel(s) {
+  s.round++;
+  return finishAgent(s,'context.Canceled','cancelled','进入下一轮时先检查原始 context，模型未被调用。',[]);
+}
+function agentCallStart(s) {
+  const call = s.batch[s.index];
+  s.calls[s.index].Status = 'running';
+  s.invoked.push(call.Name);
+  emit(s,'EventToolStarted');
+  return step(s,'a-policy','policy.execute','开始单个工具调用',{
+    edges:['a-execute',...(s.index ? ['a-next'] : [])], from:'Agent.executeBatchWithState → tool.Tool.Execute',
+    input:{tool:call.Name, args:call.Arguments, step:s.round}, output:{Status:'running'},
+    reason:'整批已授权。Agent 创建工具子 context；策略再约束逻辑调用，默认 MaxAttempts=1。', source:extra.callStart
+  });
+}
+function packAgentCall(s, content, cause) {
+  const current = s.calls[s.index];
+  const event = toolMessage(current.CallID, content);
+  current.Status = cause ? 'errored' : 'returned';
+  current.Result = event;
+  s.batchResults.push(event);
+  emit(s,'EventToolCompleted');
+  return step(s,'a-pack','history.pack','形成工具消息',{
+    edges:[s.index ? 'a-remotepack' : 'a-localret'], from:'Agent.executeBatchWithState',
+    input:{content, err:cause}, output:event, source:extra.callEnd,
+    reason:cause ? '普通工具错误已转为受控文本。该消息仍与原 CallID 配对。' : '工具返回内容与原始模型 CallID 配对。'
+  });
+}
+function interruptAgentCall(s, error, failureClass) {
+  s.calls[s.index].Status = 'unconfirmed';
+  emit(s,'EventToolCompleted');
+  s.toolStop = {error,failureClass};
+  return step(s,'a-toolstop','history.pack','工具调用结果未确认',{
+    edges:['a-remoteret','a-remotepack'], from:'Agent.executeBatchWithState',
+    input:{err:error}, output:{Status:'unconfirmed', 'batch results':null, err:error},
+    reason:'取消或超时使整批返回错误。之前已经 returned 的调用仍留在快照，但整批结果不会加入历史。',
+    source:extra.callEnd, tone:'error'
+  });
+}
+function agentInput(s) {
+  return step(s,'a-input','input.input','宿主发起请求',{edges:['b-input'],from:'assembly.Runtime.Agent',input:{ctx:'Principal{ID:"reader"}',input:s.config.prompt},output:'调用 Run(ctx, input)'});
+}
+const agentTransitions = {
+  start(s) {
+    s.phase = 'assembly';
+    return step(s,'a-build','build.build','宿主装配 Runtime',{
+      from:'宿主 · Day 14 参考装配', input:{Visible:[local,remote], MaxSteps:s.maxSteps, Transport:'内存 wireProbe → DemoServer',
+        Rules:s.config.access === 'deny' ? {[local]:'read'} : {[local]:'read',[remote]:'read'}, Grants:{reader:['read']}},
+      reason:'初始化发生在请求入口之前。'
+    });
+  },
+  'a-build'(s) {
+    s.session='ready';
+    return step(s,'a-init','build.initialize','初始化 MCP 会话',{
+      from:'assembly.Build', input:{Transport:'内存夹具'},
+      output:{ProtocolVersion:'2025-06-18', 'Client.state':'ready'},
+      reason:'先完成 initialize / notifications/initialized。'
+    });
+  },
+  'a-init'(s) { return step(s,'a-discover','discover.discover','枚举远端工具',{edges:['b-dis'],from:'assembly.Build',input:{caller:'*mcp.Client',prefix:'knowledge',maxPages:4},output:[remote]}); },
+  'a-discover'(s) { return step(s,'a-register','registry.register','登记本地与远端能力',{edges:['b-reg'],from:'assembly.Build',input:[local,remote],output:'nil'}); },
+  'a-register'(s) { return step(s,'a-tools','registry.tools','创建工具适配快照',{from:'assembly.Build',output:{[local]:'*legacyAdapter',[remote]:'*legacyAdapter'},reason:'Build 随后包装 WithPolicy 并构造 CapabilityAuthorizer。'}); },
+  'a-tools'(s) { return step(s,'a-new','new.new','创建 Agent',{edges:['b-new'],from:'assembly.Build',input:{m:s.config.mode==='model-error'?'*model.Mock':'*weekModel',tools:[local,remote],maxSteps:s.maxSteps},reason:s.config.mode==='model-error'?'Mock 不实现 ToolBinder，直接返回 Agent。':'配置可见定义、授权者和工具超时。'}); },
+  'a-new'(s) { if (s.config.mode==='model-error') return agentInput(s); return step(s,'a-bind','binder.with','绑定两个可见工具定义',{edges:['b-binder'],from:'agent.New',input:{defs:[local,remote]},output:'(*weekModel, nil)', source:extra.binder}); },
+  'a-bind':agentInput,
+  'a-input'(s) { return step(s,'a-run','agent.run','进入 Agent.Run',{edges:['a-in'],from:'宿主',input:{ctx:'原始请求 context',input:s.config.prompt},output:'委托 RunWithState'}); },
+  'a-run'(s) {
+    s.phase='created';
+    s.messages=[description('user',s.config.prompt)];
+    return step(s,'a-record','record.create','建立请求观测记录',{edges:['a-init'],from:'Agent.Run → RunWithState',input:{input:s.config.prompt},output:{RunID:'<模拟随机 ID>',Status:s.phase,Messages:s.messages}});
+  },
+  'a-record'(s) {
+    s.phase='running';
+    emit(s,'EventRunStarted');
+    return step(s,'a-ready','agent.state','运行状态开始',{from:'Agent.RunWithState',input:{Status:'created'},output:{Status:s.phase, event:'EventRunStarted'},cancel:true});
+  },
+  'a-ready'(s, action) { return action === 'cancel' ? agentBeforeModelCancel(s) : agentGenerate(s); },
+  'a-generate'(s, action) {
+    emit(s,'EventModelCompleted');
+    if (action === 'cancel') return finishAgent(s,'context.Canceled','cancelled','模型返回后检查 ctx.Err()。取消优先于该轮模型响应。',['a-modelerr']);
+    if (s.config.mode==='model-error') return finishAgent(s,'mock: exhausted responses','run_error','Generate 返回错误，Run 不追加响应或调度工具，也不重试模型。',['a-modelerr']);
+    if (s.round === 1 && s.config.mode !== 'direct') {
+      s.batch = [
+        request('local-read',local,'local-1'),
+        request(s.config.mode === 'duplicate' ? 'local-read' : 'remote-read',remote,s.config.effect === 'business' ? 'missing' : 'remote-1')
+      ];
+      s.messages.push(assistant('',s.batch));
+    } else {
+      s.batch = [];
+      s.output = s.config.mode === 'direct' ? '这次无需读取文档。' : 'scripted final';
+      s.messages.push(assistant(s.output));
+    }
+    return step(s,'a-response','response.branch','验证并分派模型响应',{
+      edges:['a-response'],from:'Model.Generate → Agent.RunWithState',
+      input:{Message:s.messages.at(-1)}, output:{toolCalls:s.batch.length}, source:extra.modelReturn,
+      reason:s.batch.length ? 'Role == assistant 且包含 ToolCalls。' : 'ToolCalls 为空，Content 成为最终文本。'
+    });
+  },
+  'a-response'(s) {
+    if (!s.batch.length) return finishAgent(s,null,null,'模型返回纯文本。defer 生成快照并发出 EventRunFinished。',['a-direct']);
+    s.calls = s.batch.map((c,i) => ({Step:s.round,Index:i,CallID:c.ID,ToolName:c.Name,Status:'planned',Result:null}));
+    return step(s,'a-batch','batch.batch','记录并预检工具批次',{
+      edges:['a-batch'],from:'Agent.RunWithState',input:{calls:s.batch,step:s.round},
+      output:{Calls:s.calls},reason:'先计划整批，逐项验证 CallID 和工具注册。'
+    });
+  },
+  'a-batch'(s) {
+    if (s.config.mode === 'duplicate') return finishAgent(s,'agent: missing or duplicate tool call ID','run_error','第 2 项重用了 CallID，预检失败，整批未授权、未执行。',['a-invalid']);
+    s.authIndex=0;
+    return step(s,'a-pre','grant.check','进入整批授权',{edges:['a-pre'],from:'Agent.executeBatchWithState',input:{calls:s.batch,step:s.round,Principal:'reader'},reason:'ID 和注册名均通过预检。',cancel:true});
+  },
+  'a-pre'(s, action) {
+    const c=s.batch[s.authIndex];
+    const error=action === 'cancel' ? 'context.Canceled' : s.authIndex && s.config.access === 'deny' ? 'tool.ErrForbidden' : null;
+    s.authErr=error;
+    emit(s,error ? 'EventToolDenied' : 'EventToolAuthorized');
+    return step(s,'a-auth','auth.authorize',error ? '授权未通过' : '单项授权通过',{
+      edges:['a-auth'],from:'Agent.authorizeBatch → tool.Authorizer',
+      input:{Principal:'reader', Call:c},output:{err:error},
+      reason:error === 'context.Canceled' ? '已取消的 context 优先返回。' : error ? '宿主没有为 MCP 别名分类。' : '已分类为 read，reader 有 read 能力。',
+      tone:error ? 'error' : undefined
+    });
+  },
+  'a-auth'(s) {
+    if (s.authErr) return finishAgent(s,'agent: authorization failed: '+s.authErr,s.authErr === 'context.Canceled' ? 'cancelled' : 'run_error','首次授权错误使整批提前结束。未调用任何工具，planned 归为 blocked。',['a-auth-ret','a-deny']);
+    if (!s.authIndex) {
+      s.authIndex++;
+      return step(s,'a-pre','grant.check','继续核对远端权限',{edges:['a-auth-ret'],from:'CapabilityAuthorizer.Authorize',input:{call:s.batch[1]},output:'上一项 nil',reason:'前一项获准后继续检查下一项。',cancel:true});
+    }
+    s.index=0;
+    s.batchResults=[];
+    return step(s,'a-allowed','grant.check','整批授权完成',{edges:['a-auth-ret'],from:'CapabilityAuthorizer.Authorize',output:'nil',reason:'两项都通过，执行循环可以开始。',cancel:true});
+  },
+  'a-allowed'(s, action) {
+    if (action === 'cancel') return finishAgent(s,'context.Canceled','cancelled','逐项执行前检查 ctx，尚未开始的调用归为 blocked。',['a-deny']);
+    return agentCallStart(s);
+  },
+  'a-policy'(s) { return step(s,'a-adapt','legacy.execute','委托给工具适配器',{edges:['a-adapt'],from:'policyTool.Execute',input:{args:s.batch[s.index].Arguments},reason:'策略包装器调用注册记录对应的 legacyAdapter。'}); },
+  'a-adapt'(s) {
+    if (s.index) return step(s,'a-remote','remote.invoke','进入 MCP 工具适配器',{edges:['a-remote'],from:'legacyAdapter.Execute → Invokable.Invoke',input:{alias:remote,args:s.batch[s.index].Arguments},reason:'将模型看到的别名换成远端 get_document。'});
+    s.localResult=JSON.stringify({id:'local-1',summary:'',content:'local reference'});
+    return step(s,'a-local','doc.invoke','读取本地文档',{edges:['a-doc'],from:'legacyAdapter.Execute → Invokable.Invoke',input:{args:s.batch[0].Arguments},output:{result:s.localResult,err:null}});
+  },
+  'a-local'(s) { return packAgentCall(s,s.localResult,null); },
+  'a-remote'(s) {
+    return step(s,'a-client','client.tool','构造 tools/call 请求',{edges:['a-mcp'],from:'remoteTool.Invoke → Caller.CallTool',input:{name:local,args:s.batch[1].Arguments},output:'委托 Client.rpc',reason:'会话 ready，且协商出工具能力。'});
+  },
+  'a-client'(s) {
+    return step(s,'a-transport','client.send','发送内存 JSON-RPC 请求',{from:'Client.rpc → Transport.Send',input:{jsonrpc:'2.0',id:3,method:'tools/call',params:{name:local,arguments:JSON.parse(s.batch[1].Arguments)}},reason:'RPC 请求号独立于模型的 remote-read，Transport 由宿主提供。',cancel:true,source:extra.clientRpc});
+  },
+  'a-transport'(s, action) {
+    if (action === 'cancel' || s.config.effect === 'timeout') {
+      s.session='failed';
+      return interruptAgentCall(s,action === 'cancel' ? 'context.Canceled' : 'context.DeadlineExceeded',action === 'cancel' ? 'cancelled' : 'deadline_exceeded');
+    }
+    const effect=s.config.effect;
+    let result;
+    if (effect === 'business') result={IsError:true,Content:[{type:'text',text:'document tool failed'}]};
+    else if (effect === 'corrupt') {
+      s.session='failed';
+      result={err:'mcp.ErrProtocol',detail:'version or request ID mismatch'};
+    } else result={IsError:false,Content:[{type:'text',text:JSON.stringify({id:'remote-1',summary:'',content:'remote reference'})}]};
+    s.rpcResult=result;
+    return step(s,'a-rpc-result','remote.invoke','处理 MCP 响应',{
+      edges:['a-remoteret'],from:'Client.CallTool → remoteTool.Invoke',
+      input:result, output:{'Client.state':s.session},
+      reason:effect === 'corrupt' ? '响应 ID 损坏使会话失败。对端先前执行的效果未知于 Agent 快照，且不会重发。' : '合法的 MCP 工具结果可以携带 IsError。',source:effect === 'corrupt' ? extra.clientRpc : extra.fake
+    });
+  },
+  'a-rpc-result'(s) {
+    const messages={
+      business:'remote tool execution failed', corrupt:'remote tool request failed', budget:'tool result exceeds byte budget'
+    };
+    const error=messages[s.config.effect];
+    const projected=s.rpcResult.Content && JSON.stringify({text:s.rpcResult.Content.map(block=>block.text)});
+    if (s.config.effect==='budget') {
+      return step(s,'a-budget-result','policy.execute','策略拒绝超出预算的返回值',{
+        from:'remoteTool.Invoke → policyTool.Execute',input:{result:projected,MaxResultBytes:8},
+        output:{result:'',err:'execution_failed: tool result exceeds byte budget'},
+        reason:'比较字符串字节数，返回受控错误。工具已被调用一次。',source:extra.remotePolicy
+      });
+    }
+    const content=error ? 'execution_failed: '+error : projected;
+    return packAgentCall(s,content,error ? '*tool.Error' : null);
+  },
+  'a-budget-result'(s) { return packAgentCall(s,'execution_failed: tool result exceeds byte budget','*tool.Error'); },
+  'a-pack'(s) {
+    if (!s.index) {
+      s.index++;
+      return agentCallStart(s);
+    }
+    s.messages.push(...s.batchResults);
+    return step(s,'a-history','history.update','将整批工具结果写入历史',{
+      from:'Agent.executeBatchWithState → RunWithState', input:{results:s.batchResults,err:null},
+      output:{'Messages.length':s.messages.length},
+      reason:s.round === s.maxSteps ? '消息已追加，下一次循环判断将耗尽预算。' : '下一轮 Generate 接收 user、assistant 和按原序排列的 tool 消息。',
+      cancel:s.round < s.maxSteps
+    });
+  },
+  'a-history'(s, action) {
+    if (s.round >= s.maxSteps) return finishAgent(s,'agent.ErrMaxSteps','max_steps','整批结果已写入，Step 复位为 maxSteps 后返回预算错误。',['a-exit']);
+    return action === 'cancel' ? agentBeforeModelCancel(s) : agentGenerate(s);
+  },
+  'a-toolstop'(s) { return finishAgent(s,s.toolStop.error,s.toolStop.failureClass,'defer 清理并生成终态快照，Run.Output 清空。',['a-exit']); },
+  'a-finish'(s) {
+    return step(s,'done','result.result',s.err ? '返回错误与观测快照' : '返回最终响应',{
+      edges:['a-end'],from:'Agent.RunWithState → Agent.Run',
+      output:{Output:s.output, err:s.err, Snapshot:{RunID:'<模拟随机 ID>',Status:s.phase,Step:s.round,Messages:s.messages,Calls:s.calls,FailureClass:s.failureClass}},
+      reason:'RunWithState 提供完整快照；外层 Run 只返回 Output 和 err。'
+    });
+  }
+};
+
+function hostState(s) {
+  return structuredClone({
+    RunID:'r27',Phase:s.phase,Step:s.round,MaxSteps:s.maxSteps,Messages:s.messages,
+    Pending:s.pending.length ? s.pending : null,Result:s.output,Failure:s.hostFailure || ''
+  });
+}
+function hostApply(s,event) {
+  const invalid='runstate.ErrTransition';
+  const before=s.phase;
+  if (['completed','failed','cancelled'].includes(before)) return invalid;
+  if (s.hostCancelled) event={Kind:'Cancel'};
+  switch (event.Kind) {
+    case 'StartModel':
+      if (before!=='ready') return invalid;
+      if (s.round >= s.maxSteps) return 'runstate.ErrMaxSteps';
+      s.phase='model_running'; s.round++; break;
+    case 'ModelReturned': {
+      const message=event.Response?.Message;
+      if (before!=='model_running' || message?.Role!=='assistant') return invalid;
+      const calls=message.ToolCalls || [];
+      const ids=new Set();
+      for (const call of calls) {
+        if (!call.ID || !call.Name.trim() || ids.has(call.ID)) return invalid;
+        ids.add(call.ID);
+      }
+      s.messages.push(message);
+      s.pending=calls;
+      s.phase=calls.length ? 'tools_pending' : 'completed';
+      if (!calls.length) s.output=message.Content;
+      break;
+    }
+    case 'StartTools':
+      if (before!=='tools_pending') return invalid;
+      s.phase='tools_running';
+      break;
+    case 'ToolsReturned':
+      if (before!=='tools_running' || event.Results?.length!==s.pending.length ||
+        event.Results.some((msg,i)=>msg.Role!=='tool' || msg.ToolCallID!==s.pending[i].ID)) return invalid;
+      s.messages.push(...event.Results); s.pending=[]; s.phase='ready'; break;
+    case 'Abort':
+      if (!event.Reason?.trim()) return invalid;
+      s.phase='failed'; s.hostFailure=event.Reason; break;
+    case 'Cancel':
+      s.phase='cancelled'; s.hostFailure='cancelled'; break;
+    default: return invalid;
+  }
+  if (['completed','failed','cancelled'].includes(s.phase)) {
+    s.pauseRequest=null; s.decision=null;
+  }
+  s.change=before+' → '+s.phase;
+  return s.hostCancelled ? 'context.Canceled' : null;
+}
+function hostStartModel(s) {
+  s.err=hostApply(s,{Kind:'StartModel'});
+  return step(s,'h-start','hrun.apply','提交 StartModel',{
+    edges:['h-apply','h-advance','h-state',...(s.round > 1 ? ['h-next'] : [])],
+    from:'宿主 → PauseGate.Apply → Run.Apply → Advance',input:{Kind:'StartModel'},
+    output:{Phase:s.phase,Step:s.round},reason:'在 Ready 且有预算时增加 Step。',source:extra.advanceStart,cancel:true
+  });
+}
+function hostCancel(s) {
+  const from = s.at==='h-resolve-wait' ? 'PauseGate.ResolveDecision' : 'PauseGate.Apply';
+  s.hostCancelled=true;
+  s.err=hostApply(s,{Kind:'Cancel'});
+  return step(s,'h-end','hrun.apply','提交原始请求取消',{
+    edges:['h-apply','h-advance','h-state'],from,input:{'Run.Context().Err()':s.err},
+    output:{State:hostState(s),err:s.err},reason:'Run.Apply 观察到原始 context 取消，提交 Cancel。终态清理暂停与审批。',source:extra.applyCancel,tone:'error'
+  });
+}
+function hostStepResult(s, reason, edges=[]) {
+  return step(s,'done','hresult.result',s.err ? '返回当前状态与错误' : '读取请求结果',{edges,from:'宿主 · 当前 State',output:{State:hostState(s),err:s.err},reason});
+}
+function hostWrite(s, via, edges, results=s.pending.map(call=>toolMessage(call.ID,'body '+call.ID))) {
+  s.err=hostApply(s,{Kind:'ToolsReturned',Results:results});
+  return step(s,'h-write','hwrite.write','提交整批工具结果',{
+    edges:[...edges,'h-advance','h-state'],from:via,input:{Kind:'ToolsReturned',Results:results},output:{Phase:s.phase,Step:s.round,Pending:null,Messages:s.messages},reason:'结果按原调用顺序匹配。回填时保留 Step，下一轮 StartModel 才会增加。',
+    cancel:true
+  });
+}
+const hostTransitions={
+  start(s) {
+    s.phase='ready';
+    s.messages=[description('user', s.config.prompt)];
+    return step(s,'h-new','hnew.new','创建独立 Run',{from:'测试式宿主驱动',input:{ctx:'原始执行 context',runID:'r27',input:s.config.prompt,maxSteps:s.maxSteps},output:hostState(s)});
+  },
+  'h-new'(s) { return step(s,'h-gate','hgate.new','装配唯一的暂停门禁',{edges:['h-init'],from:'宿主',input:'*Run',output:'(*PauseGate, nil)',cancel:true}); },
+  'h-gate'(s, action) { return action === 'cancel' ? hostCancel(s) : hostStartModel(s); },
+  'h-start'(s, action) {
+    if (action === 'cancel') return hostCancel(s);
+    const needTools=s.round === 1 && s.config.mode !== 'direct';
+    const calls=needTools ? [request('call-1',local,'doc-1'),request('call-2',local,'doc-2')] : [];
+    s.modelResponse={Message:assistant(needTools ? '' : '摘要',calls)};
+    return step(s,'h-model','hmodel.gen','宿主取得模型响应',{
+      edges:['h-start'],from:'宿主 · 锁外 I/O 边界',
+      input:{ctx:'原始执行 context', messages:s.messages},output:s.modelResponse,reason:'Day 27 测试直接提供脚本响应，运行时模型实现由宿主选择。',cancel:true
+    });
+  },
+  'h-model'(s, action) {
+    if (action === 'cancel') return hostCancel(s);
+    const event={Kind:'ModelReturned',Response:s.modelResponse};
+    s.err=hostApply(s,event);
+    return step(s,'h-response','hresponse.branch','提交模型响应',{edges:['h-response','h-apply','h-advance','h-state'],from:'宿主 → PauseGate.Apply',input:event,output:{Phase:s.phase, Pending:s.pending.length ? s.pending : null, Result:s.output},reason:s.pending.length ? '合法工具请求进入 ToolsPending。' : '无工具请求，状态机直接完成。',cancel:!!s.pending.length});
+  },
+  'h-response'(s, action) {
+    if (action === 'cancel') return hostCancel(s);
+    if (s.phase === 'completed') return hostStepResult(s,'ModelReturned 已提交 completed，Result 为 assistant 内容。',['h-direct']);
+    s.checkpoint={Boundary:'before_tools',State:hostState(s)};
+    s.pauseRequest={ID:'pause-1',Reason:'review',Checkpoint:s.checkpoint};
+    return step(s,'h-pause','pause.pause','工具开始前暂停',{
+      edges:['h-pause','h-cp'],from:'宿主 → PauseGate.Pause → Run.Checkpoint',
+      input:{id:'pause-1',reason:'review'}, output:s.pauseRequest,
+      reason:'Checkpoint 在 ToolsPending 捕获。门禁持有暂停，普通 Apply 会得到 ErrPaused。',
+      cancel:true
+    });
+  },
+  'h-pause'(s, action) {
+    if (action === 'cancel') return hostCancel(s);
+    if (s.config.checkpoint) {
+      s.stored={Version:1,Checkpoint:structuredClone(s.checkpoint)};
+      return step(s,'h-save','hstore.save','保存 Checkpoint 候选',{
+        edges:['h-save'],from:'宿主 · MemoryCheckpointStore',
+        input:{Checkpoint:s.checkpoint,expected:0},output:s.stored,
+        reason:'宿主独立保存。expected=0 仅允许创建，版本变为 1。暂停仍然有效。',cancel:true
+      });
+    }
+    return hostWaitApproval(s);
+  },
+  'h-save'(s, action) {
+    if (action === 'cancel') return hostCancel(s);
+    return step(s,'h-review','review.review','请求只读恢复审查',{edges:['h-review','h-plan'],from:'宿主 → assembly.ReviewWeek03',input:{runID:'r27',store:'MemoryCheckpointStore',source:'宿主证据夹具'},reason:'读取保存的运行位置，按需生成重放建议。',cancel:true});
+  },
+  'h-review'(s, action) {
+    if (action === 'cancel') return hostCancel(s);
+    return step(s,'h-recovery','recovery.plan','分类 Checkpoint',{edges:['h-load'],from:'ReviewWeek03 → PlanRecovery → CheckpointStore.Load',input:{RunID:'r27'},output:{Position:'review_pending',Record:s.stored},reason:'ToolsPending 存档需要宿主提供证据。',cancel:true});
+  },
+  'h-recovery'(s, action) {
+    if (action === 'cancel') return hostCancel(s);
+    return step(s,'h-replay','replay.plan','生成只读重放建议',{edges:['h-replay'],from:'ReviewWeek03 → ReplayEvidenceSource → PlanReplay',input:{RunID:'r27',Version:1,Evidence:'每项 Unknown'},output:{Blocked:true,Steps:s.pending.map(Call=>({Call,Action:'hold'}))},reason:'Unknown 阻塞整批。此报告只描述保存记录，不改变当前 Run。',cancel:true});
+  },
+  'h-replay'(s, action) { return action === 'cancel' ? hostCancel(s) : hostWaitApproval(s); },
+  'h-wait'(s, action) {
+    if (action === 'cancel') return hostCancel(s);
+    s.decision={RunID:'r27',RequestID:'pause-1',Actor:'reviewer',Outcome:action,Reason:action==='approve'?'reviewed':'review rejected'};
+    return step(s,'h-recorded','decision.decide','记录首份审批决定',{
+      edges:['h-decide'],from:'宿主 → PauseGate.Decide',input:s.decision,output:{Decision:s.decision,err:null},
+      reason:'RunID 与 RequestID 都匹配；Decide 完成后仍是 ToolsPending，门禁仍暂停。',cancel:true
+    });
+  },
+  'h-recorded'(s, action) {
+    if (action === 'cancel') return hostCancel(s);
+    if (s.config.checkpoint) return step(s,'h-snapshot','snapshot.snap','捕获独立 PauseSnapshot',{
+      edges:['h-snap'],from:'宿主 → PauseGate.PauseSnapshot',
+      input:{request:'pause-1',decision:s.decision.Outcome},output:{SchemaVersion:1,Request:s.pauseRequest,Decision:s.decision},
+      reason:'在同一门禁锁内复制请求和决定。PauseSnapshot 与 CheckpointStore 的 CAS 版本各自独立。',cancel:true
+    });
+    return hostWaitResolve(s);
+  },
+  'h-snapshot'(s, action) {
+    if (action === 'cancel') return hostCancel(s);
+    return step(s,'h-codec','snapshot.codec','模拟 Gob 往返',{from:'宿主 → EncodePauseSnapshot → DecodePauseSnapshot',input:{SchemaVersion:1},output:{SchemaVersion:1,Arguments:s.pending.map(c=>c.Arguments)},reason:'教学模拟保留候选字段和原参数字节。源码执行 Gob 编解码，捕获和编码不会写入 Store。',cancel:true});
+  },
+  'h-codec'(s, action) { return action === 'cancel' ? hostCancel(s) : hostWaitResolve(s,['h-snapret']); },
+  'h-resolve-wait'(s, action) {
+    if (action === 'cancel') return hostCancel(s);
+    const approval=s.decision.Outcome==='approve';
+    const event=approval ? {Kind:'StartTools'} : {Kind:'Abort',Reason:s.decision.Reason};
+    s.err=hostApply(s,event);
+    s.pauseRequest=null; s.decision=null;
+    return step(s,'h-resolve','decision.resolve',approval?'批准，进入工具阶段':'拒绝，提交 Failed',{
+      edges:['h-advance','h-state'],from:'PauseGate.ResolveDecision → Run.Apply',input:{runID:'r27',requestID:'pause-1',event},
+      output:{Phase:s.phase,Failure:s.hostFailure || '',err:null},
+      reason:approval?'消费已记录决定并提交 StartTools。宿主在 nil error 且 ToolsRunning 时才有机会调用工具。':'宿主拒绝被转换为 Abort，返回 Failed 状态和 nil error。没有执行工具。',
+      cancel:approval
+    });
+  },
+  'h-resolve'(s, action) {
+    if (action === 'cancel') return hostCancel(s);
+    if (s.phase === 'failed') return hostStepResult(s,'拒绝理由保留在 State.Failure。',['h-reject']);
+    return step(s,'h-io','hostio.io','宿主接管工具 I/O',{
+      edges:['h-io'],from:'宿主 · 原始执行 context',
+      input:{Pending:s.pending}, output:'选择宿主收到的结果或只读核验情形',
+      reason:'Day 27 的测试夹具提供工具回执。',wait:'outcome',choices:outcomeChoices,cancel:true
+    });
+  },
+  'h-io'(s, action) {
+    if (action === 'cancel') return hostCancel(s);
+    if (action === 'normal') return hostWrite(s,'宿主 → PauseGate.Apply → Run.Apply',['h-normal','h-apply']);
+    s.outcome=action;
+    s.observed=hostState(s);
+    return step(s,'h-query','recon.query','观察同一个存活 Run',{edges:['h-confirm','h-inspect'],from:'宿主 → PauseGate.ReconcileToolResults',input:{queryCtx:'独立查询 context', observed:s.observed},reason:'保存当前观察，再于门禁锁外调用 InspectToolOutcomes。',cancel:true});
+  },
+  'h-query'(s, action) {
+    if (action === 'cancel') s.hostCancelled=true;
+    s.lookupIndex=0;
+    s.evidence=[];
+    return hostLookup(s);
+  },
+  'h-lookup'(s, action) {
+    if (action === 'cancel') s.hostCancelled=true;
+    if (s.outcome==='source-error' || s.outcome==='query-cancel') {
+      s.err=s.outcome==='query-cancel' ? 'context.Canceled (queryCtx)' : 'outcome source unavailable';
+      return hostStepResult(s,'核验失败返回当前 State，没有调用 Run.Apply。工具阶段保持 ToolsRunning。',['h-report','h-stop']);
+    }
+    const call=s.pending[s.lookupIndex];
+    const basis = s.lookupIndex === 0 && ['unknown','not-started'].includes(s.outcome) ? s.outcome==='unknown' ? 'unknown' : 'not_started' : 'result_known';
+    const result=basis==='result_known' ? toolMessage(call.ID,'body '+call.ID) : null;
+    s.evidence.push({Call:call,Basis:basis,Result:result});
+    if (++s.lookupIndex < s.pending.length) return hostLookup(s);
+    s.known=s.evidence.every(entry=>entry.Basis==='result_known');
+    return step(s,'h-report','inspect.inspect','检查整批证据',{
+      edges:['h-report','h-report2'],from:'InspectToolOutcomes → ReconcileToolResults',
+      input:s.evidence,output:{AllResultsKnown:s.known,Results:s.known?s.evidence.map(x=>x.Result):null},
+      reason:s.known?'匹配完整结果后才进入锁内比较。':'Unknown 或 NotStarted 都意味着没有整批 Results。',
+      cancel:!s.hostCancelled,source:extra.outcome
+    });
+  },
+  'h-report'(s, action) {
+    if (action === 'cancel') s.hostCancelled=true;
+    if (!s.known) {
+      s.err='runstate.ErrOutcomeIncomplete';
+      return hostStepResult(s,'没有提交半批，也没有重新执行工具。State 仍为 tools_running。',['h-stop']);
+    }
+    if (s.outcome === 'conflict' && !s.hostCancelled) {
+      hostWrite(s,'另一个宿主动作先经同一 PauseGate.Apply 提交',['h-normal','h-apply']);
+      s.at='h-other-commit';
+      s.view.cancel=false;
+      return s;
+    }
+    return hostCompare(s);
+  },
+  'h-other-commit'(s) { return hostCompare(s); },
+  'h-compare'(s, action) {
+    if (action === 'cancel') s.hostCancelled=true;
+    if (s.conflict) {
+      s.err='runstate.ErrOutcomeConflict';
+      return hostStepResult(s,'当前状态已有变更，旧观察不再匹配。返回当前 Ready 与 ErrOutcomeConflict，旧结果没有再次写入。',['h-stop']);
+    }
+    if (s.hostCancelled) {
+      s.err=hostApply(s,{Kind:'ToolsReturned',Results:s.evidence.map(x=>x.Result)});
+      return step(s,'h-end','hrun.apply','原始请求取消阻止回填',{edges:['h-write','h-advance','h-state'],from:'ReconcileToolResults → Run.Apply',input:{event:'ToolsReturned','Run.Context().Err()':s.err},output:{State:hostState(s),err:s.err},reason:'即使查询 context 有效，提交仍使用原始执行 context。观察到取消后只提交 Cancel。',source:extra.applyCancel});
+    }
+    return hostWrite(s,'ReconcileToolResults → Run.Apply',['h-write'],s.evidence.map(x=>x.Result));
+  },
+  'h-write'(s, action) { return action === 'cancel' ? hostCancel(s) : hostStartModel(s); },
+  'h-end'(s) { return hostStepResult(s,'原始运行已结束，Pending 如实保留供观察。',['h-stop']); }
+};
+function hostWaitApproval(s) {
+  return step(s,'h-wait','decision.decide','等待宿主审批',{
+    edges:['h-decide'],from:'PauseGate 暂停期间', input:{RunID:'r27',RequestID:'pause-1'},
+    reason:'审批动作提交一份与持有请求匹配的 ApprovalDecision。',wait:'approval',choices:approvalChoices,cancel:true
+  });
+}
+function hostWaitResolve(s, edges=[]) {
+  return step(s,'h-resolve-wait','decision.resolve','决定已记录，等待消费',{
+    edges,from:'宿主 · 当前暂停',input:s.decision,reason:'显式调用 ResolveDecision 后才推进状态。',
+    wait:'resolve',choices:[['resolve','消费决定','调用 ResolveDecision']],cancel:true
+  });
+}
+function hostLookup(s) {
+  s.queries++;
+  return step(s,'h-lookup','source.lookup','查询第 '+(s.lookupIndex+1)+' 项工具结果',{
+    edges:['h-lookup'],from:'InspectToolOutcomes',input:{queryCtx:'独立查询 context',ToolAttempt:{RunID:'r27',Step:s.round,Call:s.pending[s.lookupIndex]}},
+    reason:'只读查询该逻辑调用，按 Pending 的原顺序逐项处理。',cancel:!s.hostCancelled
+  });
+}
+function hostCompare(s) {
+  s.conflict=JSON.stringify(hostState(s)) !== JSON.stringify(s.observed);
+  return step(s,'h-compare','recon.commit','在同一门禁锁内复核状态',{
+    from:'PauseGate.ReconcileToolResults',input:{observed:s.observed,current:hostState(s)},output:{DeepEqual:!s.conflict},
+    reason:s.conflict?'当前完整 State 已改变，旧观察无法提交。':'完整 State 一致，可以委托 Run.Apply。',
+    cancel:!s.hostCancelled && !s.conflict
+  });
+}
+function next(previous, choice) {
+  const copy=structuredClone(previous);
+  delete copy.view;
+  const transitions=copy.config.track==='agent' ? agentTransitions : hostTransitions;
+  return transitions[copy.at](copy,choice);
+}
+const $ = id => document.getElementById(id);
+const svgNS='http://www.w3.org/2000/svg';
+const repo='https://github.com/linko-zhao/mini-agent-runtime';
+const {nodes,edges,sources}=architecture;
+const icons={
+  sliders:'<path d="M4 7h16M4 12h16M4 17h16"/><circle cx="8" cy="7" r="2" fill="var(--panel)"/><circle cx="15" cy="12" r="2" fill="var(--panel)"/><circle cx="10" cy="17" r="2" fill="var(--panel)"/>',
+  inspect:'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M10 4v16m4-11h3m-3 4h3"/>',
+  chevron:'<path d="m7 9 5 5 5-5"/>',
+  play:'<path d="m8 5 12 7-12 7z" fill="currentColor" stroke="none"/>',
+  pause:'<path d="M9 6v12m6-12v12" stroke-width="2.4"/>',
+  prev:'<path d="M6 6v12m12-12-8 6 8 6z"/>',
+  next:'<path d="M18 6v12M6 6l8 6-8 6z"/>',
+  reset:'<path d="M5 11a7 7 0 1 1 2 6m-2-6V5m0 6h6"/>',
+  fit:'<path d="M4 9V4h5m6 0h5v5m0 6v5h-5m-6 0H4v-5"/><rect x="8" y="8" width="8" height="8" rx="1"/>',
+  stop:'<rect x="6" y="6" width="12" height="12" rx="2"/>',
+  plus:'<path d="M5 12h14m-7-7v14"/>',
+  minus:'<path d="M5 12h14"/>',
+  theme:'<path d="M20 14a8 8 0 0 1-10-10 8 8 0 1 0 10 10z"/>',
+  light:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>'
+};
+function icon(id) {
+  const el=document.createElement('template');
+  el.innerHTML='<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+icons[id]+'</svg>';
+  return el.content.firstElementChild;
+}
+document.querySelectorAll('[data-icon]').forEach(el=>el.prepend(icon(el.dataset.icon)));
+$('version').textContent=architecture.version;
+$('commit').textContent=architecture.commit.slice(0,7);
+$('commit').title=architecture.commit;
+$('commit').href=repo+'/commit/'+architecture.commit;
+const canvas=$('canvas'), viewport=$('viewport'), cards=$('cards'), guides=$('guides'), connections=$('connections');
+const WIDTH=202, ROW=18;
+const cardInfo=new Map(), edgeInfo=new Map();
+const view={x:0,y:0,scale:1};
+let fitMode=true, fitOnNextResize=true;
+let trail=[], index=0, playback=null, selection=null, resumeAfterChoice=false;
+const now=()=>trail[index];
+
+function el(tag, cls, value) {
+  const node=document.createElement(tag);
+  if (cls) node.className=cls;
+  if (value !== undefined) node.textContent=value;
+  return node;
+}
+function svg(tag,attributes={},value) {
+  const node=document.createElementNS(svgNS,tag);
+  for (const [name,data] of Object.entries(attributes)) node.setAttribute(name,data);
+  if (value !== undefined) node.textContent=value;
+  return node;
+}
+function refParts(ref) {
+  const [id,method]=ref.split('.');
+  const node=nodes[id];
+  return {id,node,method:node.methods.find(m=>m.id===method)};
+}
+function dimensions(node) {
+  const methodTop=64+node.fields.length*ROW+(node.fields.length && node.methods.length ? 5 : 0);
+  return {methodTop,height:methodTop+node.methods.length*ROW+7};
+}
+function makeText(parent,cls,x,y,value) {
+  const item=svg('text',{class:cls,x,y},value);
+  parent.append(item);
+  return item;
+}
+function drawCard(id) {
+  const node=nodes[id];
+  const {methodTop,height}=dimensions(node);
+  const card=svg('g',{class:'node',transform:'translate('+node.x+' '+node.y+')','data-id':id,'data-kind':node.kind});
+  card.append(svg('rect',{class:'node-frame',width:WIDTH,height,rx:7}));
+  const header=svg('g',{tabindex:'0',role:'button','aria-label':node.title});
+  header.append(svg('rect',{width:WIDTH,height:node.methods.length ? methodTop : height,fill:'transparent',rx:7}));
+  makeText(header,'node-tag',11,16,node.namespace);
+  const title=makeText(header,'node-title',11,37,node.title);
+  if (title.getComputedTextLength?.() > WIDTH-23) title.setAttribute('font-size','13');
+  makeText(header,'node-desc',11,54,node.desc);
+  if (node.kind==='decision') header.append(svg('path',{d:'M183 11l6 6-6 6-6-6z',fill:'none',stroke:'var(--edge)','stroke-width':1.4}));
+  if (node.fields.length) {
+    header.append(svg('path',{class:'node-rule',d:'M0 61h202'}));
+    node.fields.forEach((field,i)=>makeText(header,'node-field',11,75+i*ROW,field));
+  }
+  bindSelection(header,id);
+  card.append(header);
+  if (node.methods.length) card.append(svg('path',{class:'node-rule',d:'M0 '+(methodTop-2)+'h202'}));
+  const methods=new Map();
+  node.methods.forEach((method,i)=>{
+    const g=svg('g',{class:'node-method',transform:'translate(3 '+(methodTop+i*ROW)+')',tabindex:'0',role:'button','aria-label':node.title+' '+method.short});
+    g.append(svg('rect',{x:0,y:0,width:WIDTH-6,height:17,rx:3}));
+    const name=makeText(g,'','8',12,method.short);
+    bindSelection(g,id+'.'+method.id);
+    card.append(g);
+    methods.set(method.id,{g,name});
+  });
+  const flag=makeText(card,'node-flag',WIDTH-8,height-9,'');
+  flag.setAttribute('text-anchor','end');
+  cards.append(card);
+  if (title.getComputedTextLength()>WIDTH-22) {
+    title.style.fontSize='13.3px';
+    if (title.getComputedTextLength()>WIDTH-22) {
+      title.setAttribute('textLength',WIDTH-22);
+      title.setAttribute('lengthAdjust','spacingAndGlyphs');
+    }
+  }
+  for (const {name} of methods.values()) {
+    if (name.getComputedTextLength()>WIDTH-23) {
+      name.setAttribute('textLength',WIDTH-23);
+      name.setAttribute('lengthAdjust','spacingAndGlyphs');
+    }
+  }
+  cardInfo.set(id,{card,methods,flag});
+}
+function bindSelection(element,ref) {
+  element.addEventListener('click',()=>{
+    if (!dragMoved) chooseNode(ref);
+  });
+  element.addEventListener('keydown',event=>{
+    if (event.key==='Enter'||event.key===' ') {event.preventDefault(); chooseNode(ref);}
+  });
+}
+function chooseNode(ref) {
+  selection=ref;
+  showPanel('inspector',true);
+  render();
+}
+function anchor(ref,side) {
+  const {node,method}=refParts(ref);
+  const {height,methodTop}=dimensions(node);
+  const methodIndex=node.methods.indexOf(method);
+  const y=method ? methodTop+methodIndex*ROW+8 : 34;
+  if (side==='l') return [node.x,node.y+y];
+  if (side==='r') return [node.x+WIDTH,node.y+y];
+  if (side==='t') return [node.x+WIDTH/2,node.y];
+  return [node.x+WIDTH/2,node.y+height];
+}
+function edgePoints(edge) {
+  const start=anchor(edge.a,edge.ports[0]), finish=anchor(edge.b,edge.ports[1]);
+  if (edge.via.length) return [start,...edge.via,finish];
+  if (start[0]===finish[0] || start[1]===finish[1]) return [start,finish];
+  if (edge.ports==='rl'||edge.ports==='lr') {
+    const middle=(start[0]+finish[0])/2;
+    return [start,[middle,start[1]],[middle,finish[1]],finish];
+  }
+  const middle=(start[1]+finish[1])/2;
+  return [start,[start[0],middle],[finish[0],middle],finish];
+}
+function drawLink(id,edge) {
+  const points=edgePoints(edge);
+  const path=svg('path',{class:'edge '+edge.kind,d:'M'+points.map(p=>p.join(' ')).join('L'),'data-edge':id});
+  if (edge.label) path.append(svg('title',{},edge.label));
+  connections.append(path);
+  edgeInfo.set(id,{path,edge,points});
+}
+function drawLinkText(entry) {
+  if (!entry.edge.label) return;
+  const {points,edge}=entry;
+  const first=points[0],last=points.at(-1);
+  const [x,y]=edge.at || [(first[0]+last[0])/2,Math.min(first[1],last[1])-3];
+  const text=makeText(connections,'edge-note',x,y-5,edge.label);
+  text.setAttribute('text-anchor','middle');
+  entry.text=text;
+}
+function drawGraph(track) {
+  cardInfo.clear();
+  edgeInfo.clear();
+  cards.replaceChildren();
+  guides.replaceChildren();
+  connections.replaceChildren();
+  const labels=track==='agent' ? [[25,'初始化装配'],[217,'单次请求执行']] : [[25,'宿主初始化与状态转换'],[236,'单次请求执行']];
+  for (const [y,label] of labels) {
+    const title=makeText(guides,'graph-title',24,y,label);
+    guides.append(svg('path',{class:'graph-divider',d:'M'+(36+title.getComputedTextLength())+' '+(y-4)+'H1146'}));
+  }
+  const ids=new Set(architecture.tracks[track]);
+  for (const [id,edge] of Object.entries(edges)) {
+    if (ids.has(refParts(edge.a).id) && ids.has(refParts(edge.b).id)) drawLink(id,edge);
+  }
+  edgeInfo.forEach(drawLinkText);
+  ids.forEach(drawCard);
+}
+function transform() {
+  viewport.setAttribute('transform','translate('+view.x+' '+view.y+') scale('+view.scale+')');
+  $('zoom-value').textContent=Math.round(view.scale*100)+'%';
+}
+function fit() {
+  const w=canvas.clientWidth,h=canvas.clientHeight;
+  const narrow=w<=680;
+  // Use the expanded footprints here. Toggling a panel never refits the diagram.
+  const left=narrow ? 11 : w<=1100 ? 208 : 263;
+  const right=w-(narrow ? 11 : w<=1100 ? 240 : 319);
+  const top=narrow ? 90 : 18;
+  const bottom=h-(narrow ? 75 : 77);
+  const world={x:1,y:7,w:1171,h:803};
+  view.scale=Math.max(.13,Math.min(1.22,(right-left)/world.w,(bottom-top)/world.h));
+  view.x=left+(right-left-world.w*view.scale)/2-world.x*view.scale;
+  view.y=top+(bottom-top-world.h*view.scale)/2-world.y*view.scale;
+  fitMode=true;
+  transform();
+}
+function zoom(scale,x,y) {
+  const actual=Math.max(.13,Math.min(3.2,scale));
+  const factor=actual/view.scale;
+  view.x=x-(x-view.x)*factor;
+  view.y=y-(y-view.y)*factor;
+  view.scale=actual;
+  fitMode=false;
+  transform();
+}
+function centerZoom(factor) {
+  const center=canvas.clientWidth<=680 ? canvas.clientWidth/2 : (canvas.clientWidth-55)/2;
+  zoom(view.scale*factor,center,canvas.clientHeight/2);
+}
+$('zoom-in').onclick=()=>centerZoom(1.2);
+$('zoom-out').onclick=()=>centerZoom(1/1.2);
+$('fit').onclick=fit;
+$('reset-view').onclick=()=>{
+  view.scale=1;
+  view.x=canvas.clientWidth/2-585;
+  view.y=canvas.clientHeight/2-410;
+  fitMode=false;
+  transform();
+};
+window.addEventListener('resize',()=>{if (fitMode || fitOnNextResize) fit();});
+canvas.addEventListener('wheel',e=>{
+  e.preventDefault();
+  zoom(view.scale*Math.exp(-e.deltaY*(e.deltaMode ? .03 : .002)),e.clientX,e.clientY);
+},{passive:false});
+const pointers=new Map();
+let dragging=false, dragMoved=false, dragOrigin=null;
+function pointerCenter() {
+  const positioned=[...pointers.values()];
+  if (positioned.length===1) return {...positioned[0],dist:0};
+  const [a,b]=positioned;
+  return {x:(a.x+b.x)/2,y:(a.y+b.y)/2,dist:Math.hypot(a.x-b.x,a.y-b.y)};
+}
+canvas.addEventListener('pointerdown',e=>{
+  if (e.button!==0 && e.button!==1) return;
+  if (!pointers.size) {
+    dragMoved=false;
+    dragging=false;
+    dragOrigin={x:e.clientX,y:e.clientY};
+  }
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+});
+canvas.addEventListener('pointermove',e=>{
+  if (!pointers.has(e.pointerId)) return;
+  const a=pointerCenter();
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  const b=pointerCenter();
+  if (!dragging && (pointers.size>1 || Math.hypot(b.x-dragOrigin.x,b.y-dragOrigin.y)>4)) {
+    dragging=true;
+    dragMoved=true;
+    canvas.classList.add('drag');
+    for (const id of pointers.keys()) canvas.setPointerCapture(id);
+  }
+  if (!dragging) return;
+  view.x+=b.x-a.x;
+  view.y+=b.y-a.y;
+  fitMode=false;
+  if (a.dist>0 && b.dist>0) zoom(view.scale*b.dist/a.dist,b.x,b.y);
+  else transform();
+});
+function releasePointer(e) {
+  pointers.delete(e.pointerId);
+  if (!pointers.size) {
+    dragging=false;
+    canvas.classList.remove('drag');
+  }
+}
+canvas.addEventListener('pointerup',releasePointer);
+canvas.addEventListener('pointercancel',releasePointer);
+canvas.addEventListener('pointerleave',e=>{if (!dragging) releasePointer(e);});
+
+function showPanel(id,open) {
+  const panel=$(id);
+  const button=panel.querySelector('[data-panel]');
+  panel.classList.toggle('collapsed',!open);
+  button.setAttribute('aria-expanded',String(open));
+  button.style.transform=open?'':'rotate(-90deg)';
+  const title=(open?'折叠':'展开')+panel.getAttribute('aria-label');
+  button.setAttribute('aria-label',title);
+  button.title=title;
+}
+document.querySelectorAll('[data-panel]').forEach(button=>{
+  button.append(icon('chevron'));
+  button.onclick=()=>showPanel(button.dataset.panel,button.getAttribute('aria-expanded')!=='true');
+});
+if (canvas.clientWidth<=680) {
+  showPanel('controls',false);
+  showPanel('inspector',false);
+}
+let savedTheme;
+try {savedTheme=localStorage.getItem('agent-runtime-theme');} catch {}
+function changeTheme(theme) {
+  document.documentElement.dataset.theme=theme;
+  $('theme').replaceChildren(icon(theme==='dark'?'light':'theme'));
+  $('theme').setAttribute('aria-pressed',String(theme==='dark'));
+  try {localStorage.setItem('agent-runtime-theme',theme);} catch {}
+}
+changeTheme(savedTheme || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'));
+$('theme').onclick=()=>changeTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');
+
+function readConfig() {
+  return {
+    track:$('track').value, prompt:$('prompt').value, mode:$('model-mode').value,
+    access:$('access').value, effect:$('effect').value, checkpoint:$('checkpoint').checked
+  };
+}
+function setModes(track) {
+  const options=track==='agent' ?
+    [['tool','请求工具调用'],['direct','直接回答'],['budget','工具调用 · 单轮预算'],['duplicate','工具调用 · 重复 CallID'],['model-error','模型调用报错']] :
+    [['tool','请求工具调用'],['direct','直接回答']];
+  $('model-mode').replaceChildren(...options.map(([id,label])=>new Option(label,id)));
+}
+function configureTrack() {
+  const track=$('track').value;
+  $('prompt').value=prompts[track];
+  setModes(track);
+  drawGraph(track);
+  reset();
+  fit();
+}
+$('track').onchange=configureTrack;
+for (const id of ['prompt','model-mode','access','effect','checkpoint']) {
+  $(id).addEventListener('change',()=>reset(index?'配置已更新，已回到起点':undefined));
+}
+function reset(message) {
+  stop();
+  resumeAfterChoice=false;
+  const state=initial(readConfig());
+  if (message) state.status=message;
+  trail=[state];
+  index=0;
+  selection=null;
+  render();
+}
+function stop() {
+  if (playback !== null) clearTimeout(playback);
+  playback=null;
+}
+function advance(choice) {
+  if (now().at === 'done' || (now().view?.wait && !choice)) return;
+  if (index===0 && !choice) trail[index]=initial(readConfig());
+  const result=next(now(),choice);
+  trail.splice(index+1,trail.length,result);
+  index++;
+  selection=null;
+  const resume=!!choice && choice!=='cancel' && resumeAfterChoice;
+  if (choice) resumeAfterChoice=false;
+  if (result.view.wait) {
+    resumeAfterChoice=playback!==null;
+    stop();
+    showPanel('controls',true);
+  } else if (result.at==='done') stop();
+  else if (resume) schedule();
+  render();
+}
+function schedule() {
+  playback=setTimeout(()=>{
+    advance();
+    if (playback!==null) schedule();
+  },650);
+}
+function run() {
+  if (now().at==='done' || now().view?.wait || playback!==null) return;
+  schedule();
+  advance();
+  render();
+}
+$('play').onclick=run;
+$('pause-run').onclick=()=>{stop();render();};
+$('rerun').onclick=()=>{reset();run();};
+$('prev').onclick=()=>{
+  if (index<1) return;
+  stop();resumeAfterChoice=false;index--;selection=null;render();
+};
+$('next').onclick=()=>{stop();resumeAfterChoice=false;advance();};
+$('cancel-request').onclick=()=>{
+  if (now().view?.cancel) {
+    stop();
+    advance('cancel');
+  }
+};
+$('follow').onclick=()=>{selection=null;render();};
+
+function runStatus(s) {
+  if (s.phase==='idle') return ['',s.status];
+  if (s.view?.wait) return ['wait', s.view.wait==='approval' ? '等待审批' : s.view.wait==='resolve' ? '等待消费决定' : '等待工具结果情形'];
+  if (s.phase==='failed') return ['error','失败 · '+(s.hostFailure ? '审批拒绝' : s.failureClass==='max_steps' ? '轮次耗尽' : '请求结束')];
+  if (s.phase==='cancelled') return ['error','已取消 · '+(s.failureClass==='deadline_exceeded'?'工具超时':'原始请求')];
+  if (s.phase==='completed') return ['success','已完成'];
+  if (s.at==='done' && s.err) return [s.phase==='ready'?'error':'wait',phaseNames[s.phase]+' · 核验未提交'];
+  return ['active',phaseNames[s.phase]];
+}
+function updateCanvas(s) {
+  const activated=new Set();
+  for (const entry of trail.slice(1,index+1)) for (const edge of entry.view.edges || []) activated.add(edge);
+  for (const [id,{path,text}] of edgeInfo) {
+    const active=activated.has(id);
+    path.classList.toggle('visited',active);
+    text?.classList.toggle('visited',active);
+  }
+  const ref=selection || s.view?.ref;
+  const selected=ref ? refParts(ref) : {};
+  const live=s.view ? refParts(s.view.ref) : {};
+  const [status]=runStatus(s);
+  for (const [id,{card,methods,flag}] of cardInfo) {
+    const active=live.id===id;
+    card.classList.toggle('selected',selected.id===id);
+    card.classList.toggle('active',active);
+    card.classList.toggle('waiting',active && status==='wait');
+    card.classList.toggle('completed',active && status==='success' && s.at==='done');
+    card.classList.toggle('ended-error',active && (status==='error' || s.view?.tone==='error'));
+    const [glyph,label]=!active ? ['',null] : status==='wait' ? ['ǁ','等待'] : status==='success' && s.at==='done' ? ['✓','完成'] : status==='error'||s.view?.tone==='error' ? ['×','错误'] : ['▶','当前步骤'];
+    flag.textContent=glyph;
+    if (label) card.setAttribute('aria-description',label);
+    else card.removeAttribute('aria-description');
+    for (const [methodId,{g}] of methods) {
+      g.classList.toggle('method-live',active && live.method?.id===methodId);
+      g.classList.toggle('method-selected',selected.id===id && selected.method?.id===methodId);
+    }
+  }
+}
+function renderChoices(s) {
+  const tools=usesTools($('model-mode').value);
+  const agent=s.config.track==='agent';
+  const prechecked=tools && $('model-mode').value!=='duplicate';
+  $('access-field').hidden=!agent || !prechecked;
+  $('effect-field').hidden=!agent || !prechecked || $('access').value==='deny';
+  $('checkpoint-field').hidden=agent || !tools;
+  $('cancel-request').hidden=!s.view?.cancel;
+  const view=s.view;
+  const choiceBox=$('choices');
+  $('decision-box').hidden=!view?.wait;
+  choiceBox.replaceChildren();
+  if (view?.wait) {
+    $('decision-label').textContent=view.title;
+    if (view.wait==='outcome') {
+      const menu=el('select');
+      menu.setAttribute('aria-label','工具结果情形');
+      menu.id='outcome-menu';
+      menu.append(...view.choices.map(([id,label])=>new Option(label,id)));
+      const submit=el('button',null,'提交情形');
+      submit.type='button';
+      submit.onclick=()=>advance(menu.value);
+      choiceBox.append(menu,submit);
+    } else {
+      for (const [id,label,description] of view.choices) {
+        const button=el('button',null,label);
+        button.type='button';
+        button.title=description;
+        button.onclick=()=>advance(id);
+        choiceBox.append(button);
+      }
+    }
+  }
+}
+function expandable(label,content,open=false) {
+  const detail=el('details','details');
+  detail.open=open;
+  detail.append(el('summary',null,label),content);
+  return detail;
+}
+function valueField(label,value,open) {
+  const lines=typeof value==='string'?value:JSON.stringify(value,null,2);
+  return expandable(label,el('pre','value',lines),open);
+}
+function sourceLink(source) {
+  const path=source.path+':'+source.start+(source.end===source.start?'':'–'+source.end);
+  const link=el('a','source-link',path);
+  link.href=repo+'/blob/'+architecture.commit+'/'+source.path+'#L'+source.start+(source.end===source.start?'':'-L'+source.end);
+  link.target='_blank'; link.rel='noreferrer';
+  return link;
+}
+function sourceField(id) {
+  const source=sources[id];
+  const body=el('div');
+  const code=source.code.split('\n').map((line,i)=>String(i+source.start).padStart(3)+'  '+line).join('\n');
+  body.append(el('pre','source-code',code));
+  return expandable('源码片段',body);
+}
+function summary(s,detail) {
+  detail.append(el('div','detail-kicker',s.config.track==='agent'?'Agent.RunWithState':'runstate.PauseGate'));
+  detail.append(el('h3','detail-title',s.at==='start'?'一次请求的生命周期':'运行状态'));
+  if (s.at==='start') {
+    detail.append(el('p','detail-text',s.config.track==='agent'?'从宿主装配到模型、整批授权与 MCP 调用。':
+      '宿主通过独立门禁推进状态、消费审批并核验工具结果。'));
+  }
+  const metrics=el('div','metrics');
+  for (const [label,value] of [['模型轮次',s.round+' / '+s.maxSteps],['历史消息',s.messages.length]]) {
+    const box=el('div','metric'); box.append(el('b',null,value),el('span',null,label)); metrics.append(box);
+  }
+  detail.append(metrics);
+  if (s.at==='start') {
+    detail.append(el('p','detail-text','运行或单步推进。点击节点或方法可独立查看源码。'));
+    detail.append(valueField('请求输入',s.config.prompt,false));
+  }
+}
+function showInspector(s) {
+  const [tone,status]=runStatus(s);
+  $('run-status').className='status '+tone;
+  $('run-status').textContent=status;
+  $('follow').hidden=!selection;
+  const detail=$('detail');
+  detail.replaceChildren();
+  const live=!selection ? s.view : null;
+  const ref=selection||live?.ref;
+  if (!ref) {summary(s,detail);return;}
+  const {node,method}=refParts(ref);
+  detail.append(el('div','detail-kicker',node.namespace+' · '+node.title));
+  detail.append(el('h3','detail-title',live ? live.title : method ? method.short : node.title));
+  if (method) detail.append(el('pre','signature',method.full));
+  detail.append(el('p','detail-text',method?.desc || node.desc));
+  if (live?.from) {
+    const from=el('div','from');
+    from.append(el('b',null,'调用来源 '),document.createTextNode(live.from));
+    detail.append(from);
+  }
+  if (live?.reason) detail.append(el('p','detail-text',live.reason));
+  const sourceId=live?.source || method?.source || node.source;
+  if (sourceId) detail.append(sourceLink(sources[sourceId]));
+  if (live && 'input' in live) detail.append(valueField('输入',live.input,!('output' in live)));
+  if (live && 'output' in live) detail.append(valueField('返回 / 当前结果',live.output,true));
+  if (live) {
+    const state={Phase:s.phase,Step:s.round,MaxSteps:s.maxSteps,Messages:s.messages.length};
+    if (s.config.track==='agent') {
+      delete state.Phase;
+      state.Status=s.phase;
+      if (s.calls.length) state.Calls=s.calls.map(({CallID,Status})=>({CallID,Status}));
+      if (s.session) state.MCP=s.session;
+      if (s.events.length) state.Event=s.events.at(-1);
+      if (s.failureClass) state.FailureClass=s.failureClass;
+    } else {
+      if (s.change) state.Transition=s.change;
+      if (s.pending.length) state.Pending=s.pending.map(c=>c.ID);
+      if (s.pauseRequest) state.Interrupt=s.pauseRequest.ID;
+      if (s.decision) state.Decision=s.decision.Outcome;
+      if (s.queries) state.Lookups=s.queries;
+      if (s.hostCancelled) state.ExecutionContext='context.Canceled';
+    }
+    if (s.err) state.Err=s.err;
+    detail.append(valueField('状态变化',state,false));
+    if (s.at!=='done') detail.append(expandable('后续步骤',el('p',null,live.wait?'等待宿主选择下一步动作。':next(s).view.title)));
+  } else if (node.fields.length) {
+    detail.append(expandable('关键字段',el('pre','value',node.fields.join('\n'))));
+  }
+  if (!method && node.methods.length) {
+    const list=el('div');
+    for (const item of node.methods) {
+      const button=el('button','preview-link',item.short);
+      button.style.display='block';
+      button.onclick=()=>chooseNode(refParts(ref).id+'.'+item.id);
+      list.append(button);
+    }
+    detail.append(expandable('方法',list));
+  }
+  if (sourceId) detail.append(sourceField(sourceId));
+}
+
+function render() {
+  const s=now();
+  if (!s) return;
+  $('step-index').textContent='步骤 '+index;
+  $('prev').disabled=index===0;
+  $('next').disabled=s.at==='done'||!!s.view?.wait;
+  $('play').disabled=playback!==null||s.at==='done'||!!s.view?.wait;
+  $('pause-run').disabled=playback===null;
+  renderChoices(s);
+  showInspector(s);
+  updateCanvas(s);
+}
+configureTrack();
+fitOnNextResize=false;
+</script>
+</body>
+</html>
