@@ -106,6 +106,8 @@ a {color:var(--blue);text-underline-offset:3px}
 .toolbar .indicator {border-left:1px solid var(--line);padding:0 9px 0 10px;margin-left:3px;font:11px var(--mono);color:var(--muted)}
 .canvasbar {bottom:18px;right:18px;padding:4px;display:flex;align-items:center;gap:2px}
 .canvasbar button {display:grid;place-items:center;min-width:28px;height:29px;padding:0 6px;background:transparent;border-color:transparent;color:var(--muted);font-size:11px}
+.canvasbar #all-relations {padding-inline:8px;white-space:nowrap}
+.canvasbar #all-relations[aria-pressed=true] {background:var(--blue-soft);color:var(--blue);border-color:var(--blue-line)}
 .canvasbar output {min-width:40px;text-align:center;font:11px var(--mono);color:var(--muted)}
 .legend {left:18px;bottom:18px;padding:7px 9px;display:flex;align-items:center;gap:8px;font-size:10px;color:var(--muted)}
 .legend span {display:flex;align-items:center;gap:4px}
@@ -114,8 +116,7 @@ a {color:var(--blue);text-underline-offset:3px}
 .legend .dep {border-top:2px dotted var(--edge)}
 .canvas {position:absolute;inset:0;display:block;width:100%;height:100%;touch-action:none;cursor:grab;background-color:var(--canvas);background-image:radial-gradient(var(--dot) 1px,transparent 1px);background-size:19px 19px}
 .canvas.drag {cursor:grabbing}
-.graph-title {font:700 14px var(--sans);fill:var(--ink)}
-.graph-divider {stroke:var(--line);stroke-width:1}
+.graph-title {font:700 14px var(--sans);fill:var(--muted);paint-order:stroke;stroke:var(--canvas);stroke-width:5;pointer-events:none}
 .node {cursor:pointer;outline:none}
 .node-frame {fill:var(--panel);stroke:var(--line);stroke-width:1.35;filter:url(#node-shadow)}
 .node:hover .node-frame,.node:focus .node-frame,.node.selected .node-frame {stroke:var(--blue-line);stroke-width:2}
@@ -142,10 +143,13 @@ a {color:var(--blue);text-underline-offset:3px}
 .edge {fill:none;stroke:var(--edge);stroke-width:1.35;marker-end:url(#arrow);opacity:.82}
 .edge.data {stroke-dasharray:5 4}
 .edge.dep {stroke-dasharray:1 3.6;stroke-linecap:round;stroke-width:1.8;marker-end:url(#open-arrow)}
-.edge.visited {stroke:var(--blue);marker-end:url(#arrow-blue);opacity:1;stroke-width:2.2}
-.edge.dep.visited {marker-end:url(#open-arrow-blue)}
-.edge-note {font:10.5px var(--sans);fill:var(--muted);paint-order:stroke;stroke:var(--canvas);stroke-width:5;stroke-linejoin:round;pointer-events:none}
-.edge-note.visited {fill:var(--blue);font-weight:700}
+.edge.visited,.edge.current {stroke:var(--blue);marker-end:url(#arrow-blue)}
+.edge.visited {opacity:.46}
+.edge.current {opacity:1;stroke-width:2.4}
+.edge.dep.visited,.edge.dep.current {marker-end:url(#open-arrow-blue)}
+.edge-note {font:11px var(--sans);fill:var(--muted);paint-order:stroke;stroke:var(--canvas);stroke-width:4;stroke-linejoin:round;pointer-events:none}
+.edge-note.visited {opacity:.65}
+.edge-note.current {fill:var(--blue)}
 @media (max-width:1100px) {
   #controls,.brand {left:10px}
   #inspector,.canvasbar {right:10px}
@@ -156,7 +160,7 @@ a {color:var(--blue);text-underline-offset:3px}
   .action span {display:none}
   .toolbar .action {padding-inline:8px}
 }
-@media (max-width:680px) {
+@media (max-width:800px) {
   .brand {top:9px;min-width:0;padding:7px 9px}
   .brand-mark {width:27px;height:27px}
   .brand h1 {font-size:13px}
@@ -164,11 +168,14 @@ a {color:var(--blue);text-underline-offset:3px}
   #inspector {top:9px;width:min(215px,45vw);max-height:calc(100% - 155px)}
   #controls .panel-body {max-height:calc(100vh - 195px)}
   .toolbar {bottom:10px;left:10px;transform:none}
-  .canvasbar {bottom:10px}
+  .canvasbar {bottom:57px}
   .canvasbar button {min-width:24px;padding-inline:3px}
 
 }
-@media (max-width:390px) { .canvasbar {bottom:57px} }
+@media (max-width:360px) {
+  .brand {gap:6px}
+  .brand-mark {width:23px;height:23px}
+}
 @media (prefers-reduced-motion: reduce) { * {scroll-behavior:auto!important} }
 </style>
 </head>
@@ -216,24 +223,26 @@ a {color:var(--blue);text-underline-offset:3px}
   <output id="step-index" class="indicator" aria-label="当前步骤">步骤 0</output>
 </div>
 <div class="canvasbar" role="group" aria-label="画布控制">
+  <button id="all-relations" type="button" aria-pressed="false" aria-controls="viewport">全部关系</button>
   <button id="theme" type="button" data-icon="theme" title="切换主题" aria-label="切换主题"></button>
   <button id="zoom-out" type="button" data-icon="minus" title="缩小" aria-label="缩小"></button>
   <output id="zoom-value" aria-label="缩放比例">100%</output>
   <button id="zoom-in" type="button" data-icon="plus" title="放大" aria-label="放大"></button>
-  <button id="fit" type="button" data-icon="fit" title="适应画布" aria-label="适应画布"></button>
+  <button id="fit" type="button" data-icon="fit" title="适应当前视图" aria-label="适应当前视图"></button>
   <button id="reset-view" type="button" data-icon="reset" title="重置视图" aria-label="重置视图"></button>
 </div>
 <noscript>启用 JavaScript 后可查看和操作离线画布。</noscript>
 
-<!-- Reference data and source excerpts pinned to the commit below. -->
+<!-- Reference data and source excerpts pinned to the commit below. Each edge's via points
+     reserve an orthogonal lane in graph coordinates, with separate ports for shared cards. -->
 <script type="application/json" id="reference-data">
 {
   "commit": "c2a87ce1593082555e7bf1ca4eee45bd26652c51",
   "version": "Day 28",
   "nodes": {
     "build": {
-      "x": 24,
-      "y": 50,
+      "x": 64,
+      "y": 62,
       "namespace": "assembly · func",
       "title": "Build",
       "desc": "初始化 MCP 并装配 Runtime",
@@ -258,8 +267,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "function"
     },
     "discover": {
-      "x": 254,
-      "y": 50,
+      "x": 342,
+      "y": 62,
       "namespace": "mcptool · func",
       "title": "Discover",
       "desc": "枚举远端工具并生成本地别名",
@@ -277,8 +286,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "function"
     },
     "registry": {
-      "x": 484,
-      "y": 50,
+      "x": 620,
+      "y": 62,
       "namespace": "tool · struct",
       "title": "Registry",
       "desc": "登记能力并创建执行集合",
@@ -305,8 +314,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "type"
     },
     "new": {
-      "x": 714,
-      "y": 50,
+      "x": 898,
+      "y": 62,
       "namespace": "agent · func",
       "title": "New",
       "desc": "创建 Agent 并绑定可见定义",
@@ -324,8 +333,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "function"
     },
     "binder": {
-      "x": 944,
-      "y": 50,
+      "x": 1176,
+      "y": 62,
       "namespace": "model · interface",
       "title": "ToolBinder",
       "desc": "按能力绑定工具定义",
@@ -343,8 +352,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "type"
     },
     "input": {
-      "x": 24,
-      "y": 234,
+      "x": 64,
+      "y": 280,
       "namespace": "宿主 · 预设请求",
       "title": "用户输入",
       "desc": "比较本地与远端文档",
@@ -362,8 +371,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "boundary"
     },
     "agent": {
-      "x": 254,
-      "y": 234,
+      "x": 342,
+      "y": 280,
       "namespace": "agent · struct",
       "title": "Agent",
       "desc": "管理推理轮次与批量工具调用",
@@ -393,8 +402,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "type"
     },
     "model": {
-      "x": 484,
-      "y": 234,
+      "x": 620,
+      "y": 280,
       "namespace": "model · interface",
       "title": "Model",
       "desc": "从当前历史生成 assistant 消息",
@@ -412,8 +421,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "type"
     },
     "response": {
-      "x": 714,
-      "y": 234,
+      "x": 898,
+      "y": 280,
       "namespace": "Agent.RunWithState · 判断",
       "title": "有 ToolCalls？",
       "desc": "先验证 assistant，再追加消息",
@@ -431,8 +440,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "decision"
     },
     "batch": {
-      "x": 944,
-      "y": 234,
+      "x": 898,
+      "y": 552,
       "namespace": "Agent · private method",
       "title": "executeBatchWithState",
       "desc": "记录并预检整批工具调用",
@@ -450,8 +459,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "function"
     },
     "result": {
-      "x": 24,
-      "y": 438,
+      "x": 1176,
+      "y": 280,
       "namespace": "agent · struct",
       "title": "RunResult",
       "desc": "返回文本与独立观测快照",
@@ -472,8 +481,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "type"
     },
     "record": {
-      "x": 254,
-      "y": 438,
+      "x": 1176,
+      "y": 552,
       "namespace": "agent · struct",
       "title": "runRecord",
       "desc": "管理 RunSnapshot 的观测状态",
@@ -500,8 +509,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "type"
     },
     "history": {
-      "x": 484,
-      "y": 438,
+      "x": 64,
+      "y": 552,
       "namespace": "Agent.RunWithState · 回填",
       "title": "追加 tool 消息",
       "desc": "按序回填并更新下一轮历史",
@@ -526,8 +535,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "boundary"
     },
     "grant": {
-      "x": 714,
-      "y": 438,
+      "x": 620,
+      "y": 552,
       "namespace": "Agent.authorizeBatch · 判断",
       "title": "整批授权通过？",
       "desc": "任一项拒绝即结束请求",
@@ -545,8 +554,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "decision"
     },
     "auth": {
-      "x": 944,
-      "y": 438,
+      "x": 342,
+      "y": 552,
       "namespace": "tool · interface / struct",
       "title": "Authorizer",
       "desc": "依宿主身份与能力规则授权",
@@ -564,8 +573,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "type"
     },
     "doc": {
-      "x": 24,
-      "y": 624,
+      "x": 64,
+      "y": 770,
       "namespace": "knowledge · struct",
       "title": "GetDocument",
       "desc": "从文档 Store 读取数据",
@@ -585,8 +594,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "type"
     },
     "legacy": {
-      "x": 254,
-      "y": 624,
+      "x": 342,
+      "y": 770,
       "namespace": "tool · struct",
       "title": "legacyAdapter",
       "desc": "将 Execute 委托给 Invokable",
@@ -606,8 +615,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "type"
     },
     "remote": {
-      "x": 484,
-      "y": 624,
+      "x": 898,
+      "y": 770,
       "namespace": "mcptool · struct",
       "title": "remoteTool",
       "desc": "转换名称并投影 MCP 结果",
@@ -628,8 +637,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "type"
     },
     "client": {
-      "x": 714,
-      "y": 624,
+      "x": 1176,
+      "y": 770,
       "namespace": "mcp · struct",
       "title": "Client",
       "desc": "串行发送 JSON-RPC 请求",
@@ -657,8 +666,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "type"
     },
     "policy": {
-      "x": 944,
-      "y": 624,
+      "x": 620,
+      "y": 770,
       "namespace": "tool · struct",
       "title": "policyTool",
       "desc": "约束工具期限、结果与重试",
@@ -679,8 +688,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "type"
     },
     "hnew": {
-      "x": 24,
-      "y": 50,
+      "x": 64,
+      "y": 62,
       "namespace": "runstate · func",
       "title": "NewRun",
       "desc": "创建独立的请求状态",
@@ -698,8 +707,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "function"
     },
     "hgate": {
-      "x": 254,
-      "y": 50,
+      "x": 354,
+      "y": 62,
       "namespace": "runstate · struct",
       "title": "PauseGate",
       "desc": "串行协调同一个 Run 的推进",
@@ -728,8 +737,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "type"
     },
     "hrun": {
-      "x": 484,
-      "y": 50,
+      "x": 644,
+      "y": 62,
       "namespace": "runstate · struct",
       "title": "Run",
       "desc": "持有原始 context 与当前状态",
@@ -757,8 +766,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "type"
     },
     "advance": {
-      "x": 714,
-      "y": 50,
+      "x": 934,
+      "y": 62,
       "namespace": "runstate · func",
       "title": "Advance",
       "desc": "根据事件计算下一份 State",
@@ -776,8 +785,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "function"
     },
     "hstate": {
-      "x": 944,
-      "y": 50,
+      "x": 1224,
+      "y": 62,
       "namespace": "runstate · struct",
       "title": "State",
       "desc": "记录阶段、轮次、历史与结果",
@@ -793,8 +802,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "type"
     },
     "hmodel": {
-      "x": 24,
-      "y": 246,
+      "x": 64,
+      "y": 316,
       "namespace": "model · interface",
       "title": "Model",
       "desc": "宿主在锁外提供模型响应",
@@ -812,8 +821,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "type"
     },
     "hresponse": {
-      "x": 254,
-      "y": 246,
+      "x": 354,
+      "y": 316,
       "namespace": "Advance · ModelReturned",
       "title": "有 ToolCalls？",
       "desc": "零调用进入 completed",
@@ -831,8 +840,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "decision"
     },
     "pause": {
-      "x": 484,
-      "y": 246,
+      "x": 644,
+      "y": 316,
       "namespace": "PauseGate · method",
       "title": "Pause",
       "desc": "在 ToolsPending 建立暂停",
@@ -850,8 +859,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "function"
     },
     "decision": {
-      "x": 714,
-      "y": 246,
+      "x": 934,
+      "y": 316,
       "namespace": "PauseGate · methods",
       "title": "Decide / ResolveDecision",
       "desc": "先记录决定，再消费并推进",
@@ -876,8 +885,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "function"
     },
     "snapshot": {
-      "x": 944,
-      "y": 246,
+      "x": 644,
+      "y": 511,
       "namespace": "runstate · struct",
       "title": "PauseSnapshot",
       "desc": "捕获 schema v1 暂停候选",
@@ -905,8 +914,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "type"
     },
     "hresult": {
-      "x": 24,
-      "y": 448,
+      "x": 1224,
+      "y": 316,
       "namespace": "runstate · 宿主读取",
       "title": "State.Result / Failure",
       "desc": "最终响应或当前退出原因",
@@ -924,8 +933,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "boundary"
     },
     "hwrite": {
-      "x": 254,
-      "y": 448,
+      "x": 64,
+      "y": 511,
       "namespace": "Advance · ToolsReturned",
       "title": "回填并返回 Ready",
       "desc": "校验整批结果，保留当前轮次",
@@ -943,8 +952,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "boundary"
     },
     "recon": {
-      "x": 484,
-      "y": 448,
+      "x": 354,
+      "y": 747,
       "namespace": "PauseGate · method",
       "title": "ReconcileToolResults",
       "desc": "在同一存活 Run 回填已知结果",
@@ -969,8 +978,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "function"
     },
     "inspect": {
-      "x": 714,
-      "y": 448,
+      "x": 644,
+      "y": 747,
       "namespace": "runstate · func",
       "title": "InspectToolOutcomes",
       "desc": "核对一批逻辑调用的证据",
@@ -988,8 +997,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "function"
     },
     "source": {
-      "x": 944,
-      "y": 448,
+      "x": 934,
+      "y": 747,
       "namespace": "runstate · interface",
       "title": "ToolOutcomeSource",
       "desc": "受信宿主的只读查询端口",
@@ -1007,8 +1016,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "type"
     },
     "hstore": {
-      "x": 24,
-      "y": 636,
+      "x": 64,
+      "y": 942,
       "namespace": "runstate · interface",
       "title": "CheckpointStore",
       "desc": "保存或读取带 CAS 版本的候选",
@@ -1033,8 +1042,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "type"
     },
     "review": {
-      "x": 254,
-      "y": 636,
+      "x": 354,
+      "y": 942,
       "namespace": "assembly · func",
       "title": "ReviewWeek03",
       "desc": "宿主选择对保存记录做审查",
@@ -1052,8 +1061,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "function"
     },
     "recovery": {
-      "x": 484,
-      "y": 636,
+      "x": 644,
+      "y": 942,
       "namespace": "runstate · func",
       "title": "PlanRecovery",
       "desc": "分类已保存的 Checkpoint",
@@ -1071,8 +1080,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "function"
     },
     "replay": {
-      "x": 714,
-      "y": 636,
+      "x": 934,
+      "y": 942,
       "namespace": "runstate · func",
       "title": "PlanReplay",
       "desc": "生成 Hold / Invoke / Reuse 建议",
@@ -1090,8 +1099,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "function"
     },
     "hostio": {
-      "x": 944,
-      "y": 636,
+      "x": 934,
+      "y": 511,
       "namespace": "宿主 · I/O 边界",
       "title": "工具结果交还宿主",
       "desc": "由宿主提供有序 tool 消息",
@@ -1109,8 +1118,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "boundary"
     },
     "week04": {
-      "x": 24,
-      "y": 840,
+      "x": 64,
+      "y": 1137,
       "namespace": "assembly · host",
       "title": "Week04Host",
       "desc": "第四周宿主组合入口",
@@ -1146,8 +1155,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "function"
     },
     "week04exec": {
-      "x": 254,
-      "y": 840,
+      "x": 354,
+      "y": 1137,
       "namespace": "assembly · callback",
       "title": "ToolBatchExecutor",
       "desc": "原ctx下的一次业务I/O",
@@ -1165,8 +1174,8 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "interface"
     },
     "week04report": {
-      "x": 484,
-      "y": 840,
+      "x": 644,
+      "y": 1137,
       "namespace": "assembly · value",
       "title": "Week04Report",
       "desc": "保留已完成阶段与执行原因",
@@ -1189,11 +1198,7 @@ a {color:var(--blue);text-underline-offset:3px}
       "ports": "rl",
       "kind": "call",
       "label": "握手成功后发现工具",
-      "via": [],
-      "at": [
-        237,
-        46
-      ]
+      "via": []
     },
     "b-reg": {
       "a": "discover.discover",
@@ -1201,10 +1206,15 @@ a {color:var(--blue);text-underline-offset:3px}
       "ports": "rl",
       "kind": "data",
       "label": "候选能力",
-      "via": [],
-      "at": [
-        468,
-        46
+      "via": [
+        [
+          606,
+          134
+        ],
+        [
+          606,
+          157
+        ]
       ]
     },
     "b-new": {
@@ -1213,10 +1223,15 @@ a {color:var(--blue);text-underline-offset:3px}
       "ports": "rl",
       "kind": "data",
       "label": "策略包装",
-      "via": [],
-      "at": [
-        698,
-        46
+      "via": [
+        [
+          884,
+          175
+        ],
+        [
+          884,
+          134
+        ]
       ]
     },
     "b-binder": {
@@ -1225,31 +1240,27 @@ a {color:var(--blue);text-underline-offset:3px}
       "ports": "rl",
       "kind": "call",
       "label": "实现接口时",
-      "via": [],
-      "at": [
-        928,
-        46
-      ]
+      "via": []
     },
     "b-input": {
       "a": "new.new",
       "b": "input",
-      "ports": "bt",
+      "ports": "bl",
       "kind": "data",
       "label": "*Agent",
       "via": [
         [
-          815,
-          202
+          999,
+          244
         ],
         [
-          125,
-          202
+          50,
+          244
+        ],
+        [
+          50,
+          314
         ]
-      ],
-      "at": [
-        444,
-        202
       ]
     },
     "a-in": {
@@ -1258,30 +1269,45 @@ a {color:var(--blue);text-underline-offset:3px}
       "ports": "rl",
       "kind": "call",
       "label": "",
-      "via": [],
-      "at": null
+      "via": [
+        [
+          328,
+          352
+        ],
+        [
+          328,
+          429
+        ]
+      ]
     },
     "a-init": {
       "a": "agent.state",
       "b": "record.create",
-      "ports": "bl",
+      "ports": "br",
       "kind": "call",
       "label": "",
       "via": [
         [
-          355,
-          417
+          443,
+          524
         ],
         [
-          231,
-          417
+          1156,
+          524
         ],
         [
-          231,
-          528
+          1156,
+          706
+        ],
+        [
+          1392,
+          706
+        ],
+        [
+          1392,
+          647
         ]
-      ],
-      "at": null
+      ]
     },
     "a-model": {
       "a": "agent.state",
@@ -1289,39 +1315,36 @@ a {color:var(--blue);text-underline-offset:3px}
       "ports": "rl",
       "kind": "dep",
       "label": "ctx, Messages",
-      "via": [],
-      "at": [
-        552,
-        369
+      "via": [
+        [
+          606,
+          447
+        ],
+        [
+          606,
+          352
+        ]
       ]
     },
     "a-loop": {
       "a": "history.update",
       "b": "model.generate",
-      "ports": "bt",
+      "ports": "lt",
       "kind": "data",
       "label": "下一轮 · Step ≤ maxSteps",
       "via": [
         [
-          585,
-          590
+          22,
+          624
         ],
         [
-          692,
-          590
+          22,
+          266
         ],
         [
-          692,
-          220
-        ],
-        [
-          585,
-          220
+          721,
+          266
         ]
-      ],
-      "at": [
-        593,
-        220
       ]
     },
     "a-response": {
@@ -1330,128 +1353,105 @@ a {color:var(--blue);text-underline-offset:3px}
       "ports": "rl",
       "kind": "data",
       "label": "*Response",
-      "via": [],
-      "at": [
-        699,
-        230
-      ]
+      "via": []
     },
     "a-batch": {
       "a": "response.branch",
       "b": "batch.batch",
-      "ports": "rl",
+      "ports": "bt",
       "kind": "call",
       "label": "有调用",
-      "via": [],
-      "at": [
-        930,
-        230
-      ]
+      "via": []
     },
     "a-direct": {
       "a": "response",
       "b": "record.finish",
-      "ports": "bl",
+      "ports": "rt",
       "kind": "data",
       "label": "无调用 · Content",
       "via": [
         [
-          815,
-          413
+          1162,
+          314
         ],
         [
-          237,
-          413
+          1162,
+          524
         ],
         [
-          237,
-          545
+          1277,
+          524
         ]
-      ],
-      "at": [
-        616,
-        413
       ]
     },
     "a-pre": {
       "a": "batch.batch",
       "b": "grant.check",
-      "ports": "bt",
+      "ports": "lr",
       "kind": "call",
       "label": "",
-      "via": [
-        [
-          1045,
-          404
-        ],
-        [
-          815,
-          404
-        ]
-      ],
-      "at": null
+      "via": []
     },
     "a-auth": {
       "a": "grant.check",
       "b": "auth.authorize",
-      "ports": "rl",
+      "ports": "lr",
       "kind": "dep",
       "label": "",
-      "via": [],
-      "at": null
+      "via": []
     },
     "a-auth-ret": {
       "a": "auth",
       "b": "grant",
-      "ports": "bt",
+      "ports": "tr",
       "kind": "data",
       "label": "error / nil",
       "via": [
         [
-          1045,
-          566
+          443,
+          538
         ],
         [
-          927,
-          566
+          836,
+          538
         ],
         [
-          927,
-          423
-        ],
-        [
-          815,
-          423
+          836,
+          586
         ]
-      ],
-      "at": [
-        951,
-        558
       ]
     },
     "a-deny": {
       "a": "grant",
       "b": "record",
-      "ports": "br",
+      "ports": "bl",
       "kind": "data",
       "label": "拒绝 · 整批退出",
       "via": [
         [
-          815,
-          582
+          728,
+          655
         ],
         [
-          468,
-          582
+          1128,
+          655
         ],
         [
-          468,
-          545
+          1128,
+          594
+        ],
+        [
+          1162,
+          594
+        ],
+        [
+          1162,
+          586
         ]
       ],
-      "at": [
-        637,
-        582
+      "offsets": [
+        7,
+        0
       ]
     },
     "a-execute": {
@@ -1462,42 +1462,34 @@ a {color:var(--blue);text-underline-offset:3px}
       "label": "允许 · 逐项执行",
       "via": [
         [
-          815,
-          605
+          714,
+          748
         ],
         [
-          1045,
-          605
+          728,
+          748
         ]
       ],
-      "at": [
-        973,
-        605
+      "offsets": [
+        -7,
+        7
       ]
     },
     "a-adapt": {
       "a": "policy.execute",
       "b": "legacy.execute",
-      "ports": "bl",
+      "ports": "lr",
       "kind": "dep",
       "label": "target.Execute(ctx, args)",
       "via": [
         [
-          1045,
-          793
+          558,
+          883
         ],
         [
-          237,
-          793
-        ],
-        [
-          237,
-          695
+          558,
+          865
         ]
-      ],
-      "at": [
-        716,
-        793
       ]
     },
     "a-doc": {
@@ -1506,22 +1498,31 @@ a {color:var(--blue);text-underline-offset:3px}
       "ports": "lr",
       "kind": "dep",
       "label": "本地",
-      "via": [],
-      "at": [
-        235,
-        621
-      ]
+      "via": []
     },
     "a-remote": {
       "a": "legacy.execute",
       "b": "remote.invoke",
-      "ports": "rl",
+      "ports": "br",
       "kind": "dep",
       "label": "MCP",
-      "via": [],
-      "at": [
-        469,
-        621
+      "via": [
+        [
+          443,
+          914
+        ],
+        [
+          1114,
+          914
+        ],
+        [
+          1114,
+          888
+        ]
+      ],
+      "offsets": [
+        0,
+        5
       ]
     },
     "a-mcp": {
@@ -1530,10 +1531,19 @@ a {color:var(--blue);text-underline-offset:3px}
       "ports": "rl",
       "kind": "call",
       "label": "远端名",
-      "via": [],
-      "at": [
-        704,
-        621
+      "via": [
+        [
+          1162,
+          878
+        ],
+        [
+          1162,
+          883
+        ]
+      ],
+      "offsets": [
+        -5,
+        0
       ]
     },
     "a-localret": {
@@ -1544,164 +1554,167 @@ a {color:var(--blue);text-underline-offset:3px}
       "label": "本地结果",
       "via": [
         [
-          125,
-          603
+          165,
+          678
         ],
         [
-          585,
-          603
+          151,
+          678
         ]
       ],
-      "at": [
-        447,
-        603
+      "offsets": [
+        0,
+        -14
       ]
     },
     "a-remoteret": {
       "a": "client",
       "b": "remote",
-      "ports": "bt",
+      "ports": "lr",
       "kind": "data",
       "label": "ToolResult / error",
-      "via": [
-        [
-          815,
-          767
-        ],
-        [
-          700,
-          767
-        ],
-        [
-          700,
-          612
-        ],
-        [
-          585,
-          612
-        ]
-      ],
-      "at": [
-        788,
-        767
-      ]
+      "via": []
     },
     "a-remotepack": {
       "a": "remote",
       "b": "history.pack",
-      "ports": "tl",
+      "ports": "tb",
       "kind": "data",
       "label": "",
       "via": [
         [
-          585,
-          616
+          999,
+          673
         ],
         [
-          472,
-          616
-        ],
-        [
-          472,
-          510
+          179,
+          673
         ]
       ],
-      "at": null
+      "offsets": [
+        0,
+        14
+      ]
     },
     "a-next": {
       "a": "history",
       "b": "policy",
-      "ports": "br",
+      "ports": "bt",
       "kind": "data",
       "label": "批内还有调用",
       "via": [
         [
-          585,
-          577
+          165,
+          673
         ],
         [
-          1160,
-          577
+          176,
+          673
         ],
         [
-          1160,
-          660
+          176,
+          678
+        ],
+        [
+          179,
+          678
+        ],
+        [
+          179,
+          756
+        ],
+        [
+          714,
+          756
         ]
       ],
-      "at": [
-        1050,
-        577
+      "offsets": [
+        0,
+        -7
       ]
     },
     "a-exit": {
       "a": "history.pack",
       "b": "record.finish",
-      "ports": "lr",
+      "ports": "tb",
       "kind": "data",
       "label": "",
-      "via": [],
-      "at": null
+      "via": [
+        [
+          165,
+          538
+        ],
+        [
+          330,
+          538
+        ],
+        [
+          330,
+          720
+        ],
+        [
+          1277,
+          720
+        ]
+      ]
     },
     "a-modelerr": {
       "a": "model",
       "b": "record.finish",
-      "ports": "bl",
+      "ports": "bt",
       "kind": "data",
       "label": "模型错误 / 取消",
       "via": [
         [
-          585,
-          386
+          721,
+          510
         ],
         [
-          230,
-          386
-        ],
-        [
-          230,
-          545
+          1263,
+          510
         ]
       ],
-      "at": [
-        542,
-        386
+      "offsets": [
+        0,
+        -14
       ]
     },
     "a-invalid": {
       "a": "batch",
       "b": "record.finish",
-      "ports": "br",
+      "ports": "rl",
       "kind": "data",
       "label": "预检错误",
       "via": [
         [
-          1045,
-          392
+          1142,
+          586
         ],
         [
-          475,
-          392
-        ],
-        [
-          475,
-          545
+          1142,
+          665
         ]
-      ],
-      "at": [
-        956,
-        392
       ]
     },
     "a-end": {
       "a": "record.finish",
       "b": "result.result",
-      "ports": "lr",
+      "ports": "tb",
       "kind": "data",
       "label": "Snapshot",
-      "via": [],
-      "at": [
-        237,
-        435
+      "via": [
+        [
+          1291,
+          424
+        ],
+        [
+          1277,
+          424
+        ]
+      ],
+      "offsets": [
+        14,
+        0
       ]
     },
     "h-init": {
@@ -1710,10 +1723,15 @@ a {color:var(--blue);text-underline-offset:3px}
       "ports": "rl",
       "kind": "data",
       "label": "*Run",
-      "via": [],
-      "at": [
-        237,
-        46
+      "via": [
+        [
+          340,
+          134
+        ],
+        [
+          340,
+          193
+        ]
       ]
     },
     "h-apply": {
@@ -1722,8 +1740,16 @@ a {color:var(--blue);text-underline-offset:3px}
       "ports": "rl",
       "kind": "call",
       "label": "",
-      "via": [],
-      "at": null
+      "via": [
+        [
+          630,
+          211
+        ],
+        [
+          630,
+          175
+        ]
+      ]
     },
     "h-advance": {
       "a": "hrun.apply",
@@ -1731,10 +1757,15 @@ a {color:var(--blue);text-underline-offset:3px}
       "ports": "rl",
       "kind": "call",
       "label": "Event",
-      "via": [],
-      "at": [
-        698,
-        46
+      "via": [
+        [
+          920,
+          175
+        ],
+        [
+          920,
+          134
+        ]
       ]
     },
     "h-state": {
@@ -1743,10 +1774,15 @@ a {color:var(--blue);text-underline-offset:3px}
       "ports": "rl",
       "kind": "data",
       "label": "State",
-      "via": [],
-      "at": [
-        928,
-        46
+      "via": [
+        [
+          1210,
+          134
+        ],
+        [
+          1210,
+          96
+        ]
       ]
     },
     "h-start": {
@@ -1757,21 +1793,21 @@ a {color:var(--blue);text-underline-offset:3px}
       "label": "StartModel · Messages",
       "via": [
         [
-          585,
-          218
+          738,
+          300
         ],
         [
-          12,
-          218
+          50,
+          300
         ],
         [
-          12,
-          315
+          50,
+          388
         ]
       ],
-      "at": [
-        125,
-        205
+      "offsets": [
+        -7,
+        0
       ]
     },
     "h-response": {
@@ -1780,8 +1816,7 @@ a {color:var(--blue);text-underline-offset:3px}
       "ports": "rl",
       "kind": "data",
       "label": "",
-      "via": [],
-      "at": null
+      "via": []
     },
     "h-pause": {
       "a": "hresponse.branch",
@@ -1789,11 +1824,7 @@ a {color:var(--blue);text-underline-offset:3px}
       "ports": "rl",
       "kind": "data",
       "label": "ToolsPending",
-      "via": [],
-      "at": [
-        470,
-        243
-      ]
+      "via": []
     },
     "h-cp": {
       "a": "pause.pause",
@@ -1802,9 +1833,9 @@ a {color:var(--blue);text-underline-offset:3px}
       "kind": "call",
       "label": "before_tools",
       "via": [],
-      "at": [
-        638,
-        213
+      "offsets": [
+        7,
+        7
       ]
     },
     "h-decide": {
@@ -1813,122 +1844,107 @@ a {color:var(--blue);text-underline-offset:3px}
       "ports": "rl",
       "kind": "data",
       "label": "RequestID",
-      "via": [],
-      "at": [
-        700,
-        243
+      "via": [
+        [
+          920,
+          388
+        ],
+        [
+          920,
+          383
+        ]
+      ],
+      "offsets": [
+        0,
+        -5
       ]
     },
     "h-snap": {
       "a": "decision.decide",
       "b": "snapshot.snap",
-      "ports": "rl",
+      "ports": "bt",
       "kind": "data",
       "label": "可选捕获",
-      "via": [],
-      "at": [
-        929,
-        243
+      "via": [
+        [
+          1028,
+          497
+        ],
+        [
+          745,
+          497
+        ]
+      ],
+      "offsets": [
+        -7,
+        0
       ]
     },
     "h-snapret": {
       "a": "snapshot",
       "b": "decision.resolve",
-      "ports": "bl",
+      "ports": "rt",
       "kind": "data",
       "label": "候选副本",
       "via": [
         [
-          1045,
-          413
+          904,
+          545
         ],
         [
-          696,
-          413
+          904,
+          302
         ],
         [
-          696,
-          327
+          1035,
+          302
         ]
-      ],
-      "at": [
-        922,
-        413
       ]
     },
     "h-reject": {
       "a": "decision",
       "b": "hresult",
-      "ports": "bl",
+      "ports": "rl",
       "kind": "data",
       "label": "Abort · Failed",
-      "via": [
-        [
-          815,
-          426
-        ],
-        [
-          12,
-          426
-        ],
-        [
-          12,
-          477
-        ]
-      ],
-      "at": [
-        325,
-        426
-      ]
+      "via": []
     },
     "h-direct": {
       "a": "hresponse",
       "b": "hresult",
-      "ports": "bl",
+      "ports": "tt",
       "kind": "data",
       "label": "零调用 · Completed",
       "via": [
         [
-          355,
-          396
+          455,
+          286
         ],
         [
-          12,
-          396
-        ],
-        [
-          12,
-          496
+          1325,
+          286
         ]
-      ],
-      "at": [
-        153,
-        396
       ]
     },
     "h-io": {
       "a": "decision.resolve",
       "b": "hostio.io",
-      "ports": "br",
+      "ports": "bt",
       "kind": "data",
       "label": "StartTools · ToolsRunning",
       "via": [
         [
-          815,
-          399
+          1042,
+          497
         ],
         [
-          1163,
-          399
-        ],
-        [
-          1163,
-          707
+          1035,
+          497
         ]
       ],
-      "at": [
-        932,
-        400
+      "offsets": [
+        7,
+        0
       ]
     },
     "h-confirm": {
@@ -1939,21 +1955,21 @@ a {color:var(--blue);text-underline-offset:3px}
       "label": "缺少结果 · 同一个存活 Run",
       "via": [
         [
-          1045,
-          779
+          1042,
+          734
         ],
         [
-          470,
-          779
+          340,
+          734
         ],
         [
-          470,
-          518
+          340,
+          819
         ]
       ],
-      "at": [
-        945,
-        779
+      "offsets": [
+        7,
+        0
       ]
     },
     "h-inspect": {
@@ -1962,10 +1978,19 @@ a {color:var(--blue);text-underline-offset:3px}
       "ports": "rl",
       "kind": "call",
       "label": "锁外查证",
-      "via": [],
-      "at": [
-        699,
-        445
+      "via": [
+        [
+          630,
+          814
+        ],
+        [
+          630,
+          819
+        ]
+      ],
+      "offsets": [
+        -5,
+        0
       ]
     },
     "h-lookup": {
@@ -1974,176 +1999,189 @@ a {color:var(--blue);text-underline-offset:3px}
       "ports": "rl",
       "kind": "dep",
       "label": "每项一次",
-      "via": [],
-      "at": [
-        928,
-        445
-      ]
+      "via": []
     },
     "h-report": {
       "a": "source",
       "b": "inspect",
-      "ports": "br",
+      "ports": "bl",
       "kind": "data",
       "label": "Evidence",
       "via": [
         [
-          1045,
-          586
+          1035,
+          860
         ],
         [
-          931,
-          586
+          610,
+          860
         ],
         [
-          931,
-          474
+          610,
+          781
         ]
-      ],
-      "at": [
-        1009,
-        586
       ]
     },
     "h-report2": {
       "a": "inspect",
       "b": "recon.commit",
-      "ports": "br",
+      "ports": "bl",
       "kind": "data",
       "label": "Report",
       "via": [
         [
-          815,
-          574
+          745,
+          874
         ],
         [
-          700,
-          574
+          340,
+          874
         ],
         [
-          700,
-          528
+          340,
+          842
         ]
       ],
-      "at": [
-        765,
-        574
+      "offsets": [
+        0,
+        5
       ]
     },
     "h-write": {
       "a": "recon.commit",
       "b": "hwrite.write",
-      "ports": "lr",
+      "ports": "lt",
       "kind": "call",
       "label": "一致 · 全已知",
-      "via": [],
-      "at": [
-        470,
-        445
+      "via": [
+        [
+          280,
+          832
+        ],
+        [
+          280,
+          497
+        ],
+        [
+          165,
+          497
+        ]
+      ],
+      "offsets": [
+        -5,
+        0
       ]
     },
     "h-normal": {
       "a": "hostio",
       "b": "hwrite",
-      "ports": "tl",
+      "ports": "bl",
       "kind": "data",
       "label": "正常取得 Results",
       "via": [
         [
-          1045,
-          610
+          1028,
+          673
         ],
         [
-          234,
-          610
+          50,
+          673
         ],
         [
-          234,
-          507
+          50,
+          550
         ]
       ],
-      "at": [
-        933,
-        610
+      "offsets": [
+        -7,
+        5
       ]
     },
     "h-next": {
       "a": "hwrite",
       "b": "hmodel",
-      "ports": "bt",
+      "ports": "lt",
       "kind": "data",
       "label": "Ready → StartModel",
       "via": [
         [
-          355,
-          591
+          22,
+          540
         ],
         [
-          239,
-          591
+          22,
+          286
         ],
         [
-          239,
-          229
-        ],
-        [
-          125,
-          229
+          165,
+          286
         ]
       ],
-      "at": [
-        210,
-        229
+      "offsets": [
+        -5,
+        0
       ]
     },
     "h-stop": {
       "a": "recon",
       "b": "hresult.result",
-      "ports": "bl",
+      "ports": "br",
       "kind": "data",
       "label": "不完整 / 冲突 / 取消",
       "via": [
         [
-          585,
-          594
+          455,
+          888
         ],
         [
-          12,
-          594
+          1440,
+          888
         ],
         [
-          12,
-          530
+          1440,
+          388
         ]
-      ],
-      "at": [
-        417,
-        594
       ]
     },
     "h-save": {
       "a": "pause",
       "b": "hstore.save",
-      "ports": "bl",
+      "ports": "tr",
       "kind": "data",
       "label": "可选 · Checkpoint",
       "via": [
         [
-          585,
-          384
+          738,
+          302
         ],
         [
-          8,
-          384
+          750,
+          302
         ],
         [
-          8,
-          707
+          750,
+          300
+        ],
+        [
+          862,
+          300
+        ],
+        [
+          862,
+          483
+        ],
+        [
+          302,
+          483
+        ],
+        [
+          302,
+          1014
         ]
       ],
-      "at": [
-        442,
-        384
+      "offsets": [
+        -7,
+        0
       ]
     },
     "h-review": {
@@ -2152,10 +2190,15 @@ a {color:var(--blue);text-underline-offset:3px}
       "ports": "rl",
       "kind": "data",
       "label": "Version",
-      "via": [],
-      "at": [
-        237,
-        634
+      "via": [
+        [
+          340,
+          976
+        ],
+        [
+          340,
+          1014
+        ]
       ]
     },
     "h-plan": {
@@ -2164,11 +2207,7 @@ a {color:var(--blue);text-underline-offset:3px}
       "ports": "rl",
       "kind": "call",
       "label": "分类",
-      "via": [],
-      "at": [
-        470,
-        634
-      ]
+      "via": []
     },
     "h-load": {
       "a": "recovery",
@@ -2178,21 +2217,17 @@ a {color:var(--blue);text-underline-offset:3px}
       "label": "Load 一次",
       "via": [
         [
-          585,
-          752
+          745,
+          1063
         ],
         [
-          14,
-          752
+          50,
+          1063
         ],
         [
-          14,
-          725
+          50,
+          1032
         ]
-      ],
-      "at": [
-        400,
-        752
       ]
     },
     "h-replay": {
@@ -2201,72 +2236,76 @@ a {color:var(--blue);text-underline-offset:3px}
       "ports": "rl",
       "kind": "data",
       "label": "review_pending",
-      "via": [],
-      "at": [
-        700,
-        634
-      ]
+      "via": []
     },
     "w4-new": {
       "a": "week04.build",
       "b": "hnew.new",
-      "ports": "tl",
+      "ports": "ll",
       "kind": "call",
       "label": "创建原Run",
       "via": [
         [
-          125,
-          818
+          8,
+          1268
         ],
         [
           8,
-          818
-        ],
-        [
-          8,
-          83
+          134
         ]
       ]
     },
     "w4-decision": {
       "a": "week04.continue",
       "b": "decision.decide",
-      "ports": "tl",
+      "ports": "bl",
       "kind": "call",
       "label": "记录/消费",
       "via": [
         [
-          125,
-          818
+          179,
+          1335
         ],
         [
-          704,
-          818
+          316,
+          1335
         ],
         [
-          704,
-          318
+          316,
+          692
+        ],
+        [
+          920,
+          692
+        ],
+        [
+          920,
+          393
         ]
+      ],
+      "offsets": [
+        14,
+        5
       ]
     },
     "w4-snapshot": {
       "a": "week04.continue",
       "b": "snapshot.snap",
-      "ports": "tl",
+      "ports": "bl",
       "kind": "call",
       "label": "候选往返",
       "via": [
         [
-          125,
-          818
+          165,
+          1336
         ],
         [
-          934,
-          818
+          36,
+          1336
         ],
         [
-          934,
-          318
+          36,
+          624
         ]
       ]
     },
@@ -2276,52 +2315,77 @@ a {color:var(--blue);text-underline-offset:3px}
       "ports": "rl",
       "kind": "dep",
       "label": "批准后执行一次",
-      "via": []
+      "via": [
+        [
+          340,
+          1299
+        ],
+        [
+          340,
+          1209
+        ]
+      ],
+      "offsets": [
+        -5,
+        0
+      ]
     },
     "w4-reconcile": {
       "a": "week04.continue",
       "b": "recon.query",
-      "ports": "tl",
+      "ports": "br",
       "kind": "call",
       "label": "仅执行error时",
       "via": [
         [
-          125,
-          818
+          151,
+          1350
         ],
         [
-          474,
-          818
+          582,
+          1350
         ],
         [
-          474,
-          520
+          582,
+          832
+        ],
+        [
+          570,
+          832
+        ],
+        [
+          570,
+          824
         ]
+      ],
+      "offsets": [
+        -14,
+        5
       ]
     },
     "w4-report": {
       "a": "week04.continue",
       "b": "week04report",
-      "ports": "rl",
+      "ports": "rb",
       "kind": "data",
       "label": "组合报告",
       "via": [
         [
-          236,
-          1007
+          280,
+          1309
         ],
         [
-          236,
-          1044
+          280,
+          1364
         ],
         [
-          474,
-          1044
-        ],
-        [
-          474,
-          874
+          745,
+          1364
         ]
+      ],
+      "offsets": [
+        5,
+        0
       ]
     }
   },
@@ -3008,7 +3072,7 @@ a {color:var(--blue);text-underline-offset:3px}
       "examples/internal/assembly/week04_test.go"
     ],
     "scope": "examples only; root internal/cmd excluded",
-    "note": "Prior examples source blobs unchanged. Preserve all old node/method IDs, coordinates and existing reducers. Day28 adds an opt-in host composition simulation; no live backend execution."
+    "note": "Prior examples source blobs unchanged. Preserve all old node/method IDs and existing reducers. Day28 adds an opt-in host composition simulation; no live backend execution."
   }
 }
 </script>
@@ -3650,9 +3714,29 @@ $('commit').title=architecture.commit;
 $('commit').href=repo+'/commit/'+architecture.commit;
 const canvas=$('canvas'), viewport=$('viewport'), cards=$('cards'), guides=$('guides'), connections=$('connections');
 const WIDTH=202, ROW=18;
-const cardInfo=new Map(), edgeInfo=new Map();
+const graphSections={
+  agent:[
+    {title:'初始化装配', ids:['build','discover','registry','new','binder']},
+    {title:'请求主流程', ids:['input','agent','model','response','result','record'], focus:['input','agent','model','response','result']},
+    {title:'工具执行 · 本地与 MCP', ids:['auth','history','grant','batch','doc','legacy','policy','remote','client']}
+  ],
+  host:[
+    {title:'初始化与状态转换', ids:['hnew','hgate','hrun','advance','hstate']},
+    {title:'请求主流程', ids:['hmodel','hresponse','pause','decision','hresult','hwrite','hostio'], focus:['hmodel','hresponse','pause','decision','hresult']},
+    {title:'暂停快照', ids:['snapshot']},
+    {title:'工具结果核验', ids:['recon','inspect','source']},
+    {title:'Checkpoint 与恢复审查', ids:['hstore','review','recovery','replay']},
+    {title:'第四周宿主组合', ids:['week04','week04exec','week04report']}
+  ]
+};
+const agentToolEdges=['a-batch','a-pre','a-auth','a-auth-ret','a-execute','a-adapt','a-doc','a-remote','a-mcp','a-localret','a-remoteret','a-remotepack','a-exit','a-loop'];
+const hostToolEdges=['h-pause','h-decide','h-io','h-normal','h-next'];
+const checkpointEdges=['h-snap','h-snapret','h-cp','h-save','h-review','h-plan','h-load','h-replay'];
+const paths=svg('g'), linkLabels=svg('g');
+connections.append(paths,linkLabels);
+const cardInfo=new Map(), edgeInfo=new Map(), sectionInfo=[];
 const view={x:0,y:0,scale:1};
-let fitMode=true, fitOnNextResize=true;
+let fitMode=true, allRelations=false;
 let trail=[], index=0, playback=null, selection=null, resumeAfterChoice=false;
 const now=()=>trail[index];
 
@@ -3676,6 +3760,17 @@ function refParts(ref) {
 function dimensions(node) {
   const methodTop=64+node.fields.length*ROW+(node.fields.length && node.methods.length ? 5 : 0);
   return {methodTop,height:methodTop+node.methods.length*ROW+7};
+}
+function cardBounds(id) {
+  const node=nodes[id];
+  return {x:node.x,y:node.y,width:WIDTH,height:dimensions(node).height};
+}
+function enclosingBounds(boxes) {
+  const x=Math.min(...boxes.map(box=>box.x));
+  const y=Math.min(...boxes.map(box=>box.y));
+  const right=Math.max(...boxes.map(box=>box.x+box.width));
+  const bottom=Math.max(...boxes.map(box=>box.y+box.height));
+  return {x,y,width:right-x,height:bottom-y};
 }
 function makeText(parent,cls,x,y,value) {
   const item=svg('text',{class:cls,x,y},value);
@@ -3729,6 +3824,9 @@ function drawCard(id) {
   cardInfo.set(id,{card,methods,flag});
 }
 function bindSelection(element,ref) {
+  element.addEventListener('focus',()=>{
+    if (element.matches(':focus-visible')) revealCard(ref);
+  });
   element.addEventListener('click',()=>{
     if (!dragMoved) chooseNode(ref);
   });
@@ -3741,18 +3839,18 @@ function chooseNode(ref) {
   showPanel('inspector',true);
   render();
 }
-function anchor(ref,side) {
+function anchor(ref,side,offset=0) {
   const {node,method}=refParts(ref);
   const {height,methodTop}=dimensions(node);
   const methodIndex=node.methods.indexOf(method);
   const y=method ? methodTop+methodIndex*ROW+8 : 34;
-  if (side==='l') return [node.x,node.y+y];
-  if (side==='r') return [node.x+WIDTH,node.y+y];
-  if (side==='t') return [node.x+WIDTH/2,node.y];
-  return [node.x+WIDTH/2,node.y+height];
+  if (side==='l') return [node.x,node.y+y+offset];
+  if (side==='r') return [node.x+WIDTH,node.y+y+offset];
+  if (side==='t') return [node.x+WIDTH/2+offset,node.y];
+  return [node.x+WIDTH/2+offset,node.y+height];
 }
 function edgePoints(edge) {
-  const start=anchor(edge.a,edge.ports[0]), finish=anchor(edge.b,edge.ports[1]);
+  const start=anchor(edge.a,edge.ports[0],edge.offsets?.[0]), finish=anchor(edge.b,edge.ports[1],edge.offsets?.[1]);
   if (edge.via.length) return [start,...edge.via,finish];
   if (start[0]===finish[0] || start[1]===finish[1]) return [start,finish];
   if (edge.ports==='rl'||edge.ports==='lr') {
@@ -3766,54 +3864,116 @@ function drawLink(id,edge) {
   const points=edgePoints(edge);
   const path=svg('path',{class:'edge '+edge.kind,d:'M'+points.map(p=>p.join(' ')).join('L'),'data-edge':id});
   if (edge.label) path.append(svg('title',{},edge.label));
-  connections.append(path);
-  edgeInfo.set(id,{path,edge,points});
+  paths.append(path);
+  edgeInfo.set(id,{path,edge,points,ids:[refParts(edge.a).id,refParts(edge.b).id]});
 }
-function drawLinkText(entry) {
-  if (!entry.edge.label) return;
+function boxesOverlap(a,b) {
+  return a.x<b.x+b.width && a.x+a.width>b.x && a.y<b.y+b.height && a.y+a.height>b.y;
+}
+function drawLinkText(entry,obstacles,segments) {
   const {points,edge}=entry;
-  const first=points[0],last=points.at(-1);
-  const [x,y]=edge.at || [(first[0]+last[0])/2,Math.min(first[1],last[1])-3];
-  const text=makeText(connections,'edge-note',x,y-5,edge.label);
+  if (!edge.label) return;
+  const text=makeText(linkLabels,'edge-note',0,0,edge.label);
   text.setAttribute('text-anchor','middle');
-  entry.text=text;
+  const measured=text.getBBox();
+  const width=measured.width+8, height=measured.height+6;
+  const candidates=[];
+  for (let i=1;i<points.length;i++) {
+    const [x,y]=points[i-1], [nextX,nextY]=points[i];
+    if (y===nextY && Math.abs(nextX-x)>=width+8) {
+      for (const position of [.5,.3,.7]) {
+        const center=Math.max(Math.min(x,nextX)+width/2+4,Math.min(x+(nextX-x)*position,Math.max(x,nextX)-width/2-4));
+        candidates.push({x:center,y:y-7,priority:Math.abs(nextX-x)});
+        candidates.push({x:center,y:y+17,priority:Math.abs(nextX-x)-10});
+      }
+    } else if (x===nextX && Math.abs(nextY-y)>=height+12) {
+      for (const position of [.5,.3,.7]) {
+        const middle=y+(nextY-y)*position+4;
+        candidates.push({x:x+width/2+5,y:middle,priority:0},{x:x-width/2-5,y:middle,priority:0});
+      }
+    }
+  }
+  candidates.sort((a,b)=>b.priority-a.priority);
+  for (const {x,y} of candidates) {
+    const box={x:x-width/2,y:y+measured.y-3,width,height};
+    if (obstacles.some(other=>boxesOverlap(box,other)) || segments.some(segment=>boxesOverlap(box,segment))) continue;
+    text.setAttribute('x',x);
+    text.setAttribute('y',y);
+    obstacles.push(box);
+    entry.text=text;
+    return;
+  }
+  text.remove();
 }
 function drawGraph(track) {
   cardInfo.clear();
   edgeInfo.clear();
+  sectionInfo.length=0;
   cards.replaceChildren();
   guides.replaceChildren();
-  connections.replaceChildren();
-  const labels=track==='agent' ? [[25,'初始化装配'],[217,'单次请求执行']] : [[25,'宿主初始化与状态转换'],[236,'单次请求执行']];
-  for (const [y,label] of labels) {
-    const title=makeText(guides,'graph-title',24,y,label);
-    guides.append(svg('path',{class:'graph-divider',d:'M'+(36+title.getComputedTextLength())+' '+(y-4)+'H1146'}));
+  paths.replaceChildren();
+  linkLabels.replaceChildren();
+  for (const {title,ids} of graphSections[track]) {
+    const bounds=enclosingBounds(ids.map(cardBounds));
+    const heading=makeText(guides,'graph-title',bounds.x,bounds.y-26,title);
+    sectionInfo.push({heading,ids});
   }
-  if(track==='host') makeText(guides,'graph-title',24,820,'第四周宿主组合 · 可选教学路径');
   const ids=new Set(architecture.tracks[track]);
   for (const [id,edge] of Object.entries(edges)) {
     if (ids.has(refParts(edge.a).id) && ids.has(refParts(edge.b).id)) drawLink(id,edge);
   }
-  edgeInfo.forEach(drawLinkText);
   ids.forEach(drawCard);
+  const obstacles=[...ids].map(cardBounds);
+  for (const {heading} of sectionInfo) obstacles.push(heading.getBBox());
+  const wires=[...edgeInfo.values()].flatMap(({points})=>points.slice(1).map(([x,y],i)=>{
+    const [previousX,previousY]=points[i];
+    return {x:Math.min(x,previousX)-1,y:Math.min(y,previousY)-1,width:Math.abs(x-previousX)+2,height:Math.abs(y-previousY)+2};
+  }));
+  for (const entry of edgeInfo.values()) drawLinkText(entry,obstacles,wires);
 }
 function transform() {
   viewport.setAttribute('transform','translate('+view.x+' '+view.y+') scale('+view.scale+')');
   $('zoom-value').textContent=Math.round(view.scale*100)+'%';
 }
-function fit() {
+function canvasArea() {
   const w=canvas.clientWidth,h=canvas.clientHeight;
-  const narrow=w<=680;
-  // Use the expanded footprints here. Toggling a panel never refits the diagram.
-  const left=narrow ? 11 : w<=1100 ? 208 : 263;
-  const right=w-(narrow ? 11 : w<=1100 ? 240 : 319);
-  const top=narrow ? 90 : 18;
-  const bottom=h-(narrow ? 75 : 77);
-  const world={x:1,y:7,w:1171,h:$('track').value==='host'?1055:803};
-  view.scale=Math.max(.13,Math.min(1.22,(right-left)/world.w,(bottom-top)/world.h));
-  view.x=left+(right-left-world.w*view.scale)/2-world.x*view.scale;
-  view.y=top+(bottom-top-world.h*view.scale)/2-world.y*view.scale;
-  fitMode=true;
+  if (w<=800) return {left:16,right:w-16,top:123,bottom:h-105};
+  return {
+    left:$('controls').getBoundingClientRect().right+20,
+    right:$('inspector').getBoundingClientRect().left-20,
+    top:25,bottom:h-77
+  };
+}
+function focusBounds() {
+  const track=$('track').value;
+  const {focus}=graphSections[track].find(section=>section.focus);
+  const bounds=enclosingBounds(focus.map(cardBounds));
+  const loop=edgeInfo.get(track==='agent' ? 'a-loop' : 'h-next');
+  const left=loop.path.hasAttribute('hidden') ? bounds.x : Math.min(...loop.points.map(([x])=>x));
+  return {x:left-6,y:bounds.y-45,width:bounds.x+bounds.width-left+12,height:bounds.height+50};
+}
+function frameGraph(actualSize=false) {
+  const {left,right,top,bottom}=canvasArea();
+  const world=allRelations&&!actualSize ? viewport.getBBox() : focusBounds();
+  const fitScale=Math.min((right-left)/world.width,(bottom-top)/world.height,1);
+  const minScale=allRelations ? .13 : canvas.clientWidth<=800 ? .9 : .78;
+  view.scale=actualSize ? 1 : Math.max(minScale,fitScale);
+  view.x=left+Math.max(0,(right-left-world.width*view.scale)/2)-world.x*view.scale;
+  view.y=top+(allRelations&&!actualSize ? Math.max(0,(bottom-top-world.height*view.scale)/2) : 0)-world.y*view.scale;
+  fitMode=!actualSize;
+  transform();
+}
+function revealCard(ref) {
+  if (!ref || allRelations) return;
+  const {left,right,top,bottom}=canvasArea();
+  const {x,y,width,height}=cardBounds(refParts(ref).id);
+  const x1=view.x+x*view.scale, y1=view.y+y*view.scale;
+  const x2=x1+width*view.scale, y2=y1+height*view.scale;
+  const dx=x1<left || x2-x1>right-left ? left-x1 : Math.min(0,right-x2);
+  const dy=y1<top || y2-y1>bottom-top ? top-y1 : Math.min(0,bottom-y2);
+  if (!dx && !dy) return;
+  view.x+=dx;
+  view.y+=dy;
   transform();
 }
 function zoom(scale,x,y) {
@@ -3826,20 +3986,19 @@ function zoom(scale,x,y) {
   transform();
 }
 function centerZoom(factor) {
-  const center=canvas.clientWidth<=680 ? canvas.clientWidth/2 : (canvas.clientWidth-55)/2;
-  zoom(view.scale*factor,center,canvas.clientHeight/2);
+  const {left,right,top,bottom}=canvasArea();
+  zoom(view.scale*factor,(left+right)/2,(top+bottom)/2);
 }
 $('zoom-in').onclick=()=>centerZoom(1.2);
 $('zoom-out').onclick=()=>centerZoom(1/1.2);
-$('fit').onclick=fit;
-$('reset-view').onclick=()=>{
-  view.scale=1;
-  view.x=canvas.clientWidth/2-585;
-  view.y=canvas.clientHeight/2-410;
-  fitMode=false;
-  transform();
-};
-window.addEventListener('resize',()=>{if (fitMode || fitOnNextResize) fit();});
+$('fit').onclick=()=>frameGraph();
+$('reset-view').onclick=()=>frameGraph(true);
+window.addEventListener('resize',()=>{
+  if (fitMode) {
+    frameGraph();
+    revealCard(selection || now()?.view?.ref);
+  }
+});
 canvas.addEventListener('wheel',e=>{
   e.preventDefault();
   zoom(view.scale*Math.exp(-e.deltaY*(e.deltaMode ? .03 : .002)),e.clientX,e.clientY);
@@ -3904,7 +4063,7 @@ document.querySelectorAll('[data-panel]').forEach(button=>{
   button.append(icon('chevron'));
   button.onclick=()=>showPanel(button.dataset.panel,button.getAttribute('aria-expanded')!=='true');
 });
-if (canvas.clientWidth<=680) {
+if (canvas.clientWidth<=800) {
   showPanel('controls',false);
   showPanel('inspector',false);
 }
@@ -3937,11 +4096,21 @@ function configureTrack() {
   setModes(track);
   drawGraph(track);
   reset();
-  fit();
+  frameGraph();
 }
 $('track').onchange=configureTrack;
+$('all-relations').onclick=()=>{
+  allRelations=!allRelations;
+  $('all-relations').setAttribute('aria-pressed',String(allRelations));
+  updateCanvas(now());
+  frameGraph();
+  revealCard(selection || now().view?.ref);
+};
 for (const id of ['prompt','model-mode','access','effect','checkpoint','week04']) {
-  $(id).addEventListener('change',()=>reset(index?'配置已更新，已回到起点':undefined));
+  $(id).addEventListener('change',()=>{
+    reset(index?'配置已更新，已回到起点':undefined);
+    frameGraph();
+  });
 }
 function reset(message) {
   stop();
@@ -3973,6 +4142,7 @@ function advance(choice) {
   } else if (result.at==='done') stop();
   else if (resume) schedule();
   render();
+  revealCard(result.view.ref);
 }
 function schedule() {
   playback=setTimeout(()=>{
@@ -3992,6 +4162,8 @@ $('rerun').onclick=()=>{reset();run();};
 $('prev').onclick=()=>{
   if (index<1) return;
   stop();resumeAfterChoice=false;index--;selection=null;render();
+  if (index===0 && !allRelations) frameGraph();
+  else revealCard(now().view?.ref);
 };
 $('next').onclick=()=>{stop();resumeAfterChoice=false;advance();};
 $('cancel-request').onclick=()=>{
@@ -4000,7 +4172,7 @@ $('cancel-request').onclick=()=>{
     advance('cancel');
   }
 };
-$('follow').onclick=()=>{selection=null;render();};
+$('follow').onclick=()=>{selection=null;render();revealCard(now().view?.ref);};
 
 function runStatus(s) {
   if (s.phase==='idle') return ['',s.status];
@@ -4011,20 +4183,58 @@ function runStatus(s) {
   if (s.at==='done' && s.err) return [s.phase==='ready'?'error':'wait',phaseNames[s.phase]+' · 核验未提交'];
   return ['active',phaseNames[s.phase]];
 }
-function updateCanvas(s) {
-  const activated=new Set();
-  for (const entry of trail.slice(1,index+1)) for (const edge of entry.view.edges || []) activated.add(edge);
-  for (const [id,{path,text}] of edgeInfo) {
-    const active=activated.has(id);
-    path.classList.toggle('visited',active);
-    text?.classList.toggle('visited',active);
+function scenarioEdges(config) {
+  const {track,mode,access,checkpoint,week04}=config;
+  const tools=usesTools(mode);
+  if (track==='agent') {
+    const links=['a-in','a-model','a-response','a-end'];
+    if (mode==='direct') links.push('a-direct');
+    else if (mode==='model-error') links.push('a-modelerr');
+    else if (mode==='duplicate') links.push('a-batch','a-invalid');
+    else if (access==='deny') links.push('a-batch','a-pre','a-auth','a-auth-ret','a-deny');
+    else if (tools) links.push(...agentToolEdges);
+    return links;
   }
+  const links=['h-response'];
+  if (tools) {
+    links.push(...hostToolEdges);
+    if (checkpoint) links.push(...checkpointEdges);
+    else if (week04) links.push('h-snap','h-snapret');
+  } else links.push('h-direct');
+  if (week04) links.push('w4-execute','w4-report');
+  return links;
+}
+function updateCanvas(s) {
+  const current=new Set(s.view?.edges);
+  const visited=new Set(trail.slice(1,index).flatMap(entry=>entry.view.edges || []));
+  const visibleEdges=new Set([...scenarioEdges(s.config),...visited,...current]);
+  const visibleCards=new Set(s.config.track==='agent' ? ['input','agent','model','response','result'] : ['hmodel','hresponse','hresult']);
   const ref=selection || s.view?.ref;
   const selected=ref ? refParts(ref) : {};
   const live=s.view ? refParts(s.view.ref) : {};
+  if (selected.id) visibleCards.add(selected.id);
+  if (live.id) visibleCards.add(live.id);
+  for (const [id,{path,text,ids}] of edgeInfo) {
+    const visible=allRelations || visibleEdges.has(id);
+    const active=current.has(id);
+    const past=!active && visited.has(id);
+    if (visible) ids.forEach(nodeId=>visibleCards.add(nodeId));
+    for (const element of [path,text]) {
+      if (!element) continue;
+      element.toggleAttribute('hidden',!visible);
+      element.classList.toggle('current',active);
+      element.classList.toggle('visited',past);
+    }
+    // Keep the current step above earlier lines where two paths cross.
+    if (active) paths.append(path);
+  }
+  for (const {heading,ids} of sectionInfo) {
+    heading.toggleAttribute('hidden',!ids.some(id=>visibleCards.has(id)));
+  }
   const [status]=runStatus(s);
   for (const [id,{card,methods,flag}] of cardInfo) {
     const active=live.id===id;
+    card.toggleAttribute('hidden',!visibleCards.has(id));
     card.classList.toggle('selected',selected.id===id);
     card.classList.toggle('active',active);
     card.classList.toggle('waiting',active && status==='wait');
@@ -4190,7 +4400,6 @@ function render() {
   updateCanvas(s);
 }
 configureTrack();
-fitOnNextResize=false;
 </script>
 </body>
 </html>
