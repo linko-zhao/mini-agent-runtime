@@ -24,12 +24,12 @@ func (g *PauseGate) ReconcileToolResults(queryCtx context.Context, source ToolOu
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	s := g.Snapshot()
-	if queryCtx.Err() != nil {
+	if g.run.ctx.Err() != nil {
 		next, transitionErr := Advance(s, Event{Kind: Cancel})
 		if transitionErr != nil {
 			return s, transitionErr
 		}
-		return next, err
+		return next, g.run.ctx.Err()
 	}
 	if !reflect.DeepEqual(observed, s) {
 		return s, ErrOutcomeConflict
